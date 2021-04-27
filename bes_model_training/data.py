@@ -1,13 +1,20 @@
-from pathlib import Path
 import numpy as np
 import h5py
 import tensorflow as tf
 
 
+try:
+    from . import paths
+    print('Package-level relative import')
+except ImportError:
+    import paths
+    print('Direct import')
+
+
 class Data(object):
 
     def __init__(self,
-                 datafile=Path('data/labeled-elm-events-smithdr.hdf5'),
+                 datafiles=None,
                  super_window_size=250,
                  signal_window_size=8,
                  label_look_ahead=0,
@@ -16,12 +23,15 @@ class Data(object):
                  fraction_test = 0.15,  # test data for post-training evaluation
                  training_batch_size=4,
                  super_window_shuffle_seed=None,
-                 make_logits=False,
                  transition_halfwidth=3,
                  signal_dtype='float32',
                  ):
 
-        self.datafile = datafile
+        self.datafiles = datafiles
+        if self.datafiles is None:
+            self.datafiles = list(paths.data_dir.glob('*.hdf5'))
+        if not isinstance(self.datafiles, list):
+            self.datafiles = [self.datafiles]
         self.super_window_size = super_window_size
         self.signal_window_size = signal_window_size
         self.label_look_ahead = label_look_ahead
@@ -30,7 +40,6 @@ class Data(object):
         self.fraction_test = fraction_test
         self.training_batch_size = training_batch_size
         self.super_window_shuffle_seed = super_window_shuffle_seed
-        self.make_logits = make_logits
         self.transition_halfwidth = transition_halfwidth
         self.signal_dtype = signal_dtype
 
@@ -39,6 +48,7 @@ class Data(object):
         self.valid_t0 = None
         self.valid_indices = None
         self.label_fractions = None
+        self.training_label_fractions = None
         self.n_super_windows = None
         self.n_train = None
         self.n_validate = None
@@ -56,53 +66,58 @@ class Data(object):
         self.partition_and_make_datasets()
 
     def read_data_into_tensors(self):
-        print(f'Datafile: {self.datafile.as_posix()}')
         total_signal_window = self.signal_window_size + self.label_look_ahead
-        assert(self.datafile.exists())
         transition = np.linspace(0, 1, 2 * self.transition_halfwidth + 3)
-        with h5py.File(self.datafile, 'r') as hf:
-            print(f'Number of ELM events in datafile: {len(hf)}')
-            print('Reading ELM event data into `super windows`')
-            # loop over ELM events
-            for ielm, elm_event in enumerate(hf.values()):
-                if self.max_elms and ielm >= self.max_elms:
-                    print(f'Limiting data read to {self.max_elms} ELM events')
-                    break
-                # partition data into `super windows` to enable shuffling of time-series windows
-                n_super_windows = elm_event['labels'].size // self.super_window_size
-                # load BES signals and reshape into super windows
-                signals_np = np.array(elm_event['signals'][..., 0:n_super_windows * self.super_window_size],
-                                      dtype=self.signal_dtype)
-                signals_np = signals_np.T.reshape(n_super_windows, self.super_window_size, 8, 8)
-                # load ELM labels and reshape into super windows
-                labels_np = np.array(elm_event['labels'][0:n_super_windows * self.super_window_size],
-                                     dtype=self.signal_dtype)
-                # apply transition as ELM turns on and off
-                i_ones = np.nonzero(labels_np)[0]
-                for direction, idx in zip([1,-1], [i_ones[0], i_ones[-1]]):
-                    idx0 = idx - self.transition_halfwidth - 1
-                    idx1 = idx + self.transition_halfwidth + 2
-                    labels_np[idx0:idx1] = transition[::direction]
-                labels_np = labels_np.reshape(n_super_windows, self.super_window_size)
-                labels_np[labels_np == 0] = 1e-3
-                labels_np[labels_np == 1] = 1.0 - 1e-3
-                # construct valid_t0 mask;
-                valid_t0_np = np.ones(labels_np.shape, dtype=np.int8)
-                valid_t0_np[:, (self.super_window_size-total_signal_window):self.super_window_size] = 0
-                # convert to tensors
-                signals_tmp = tf.convert_to_tensor(signals_np)
-                labels_tmp = tf.convert_to_tensor(labels_np)
-                valid_t0_tmp = tf.convert_to_tensor(valid_t0_np)
-                if ielm == 0:
-                    # initialize tensors
-                    signals = signals_tmp
-                    labels = labels_tmp
-                    valid_t0 = valid_t0_tmp
-                else:
-                    # concat on dim 0 (super windows)
-                    signals = tf.concat([signals, signals_tmp], 0)
-                    labels = tf.concat([labels, labels_tmp], 0)
-                    valid_t0 = tf.concat([valid_t0, valid_t0_tmp], 0)
+        print('Applying transition: ', transition)
+        for i_dfile, datafile in enumerate(self.datafiles):
+            print(f'Datafile: {datafile.as_posix()}')
+            assert(datafile.exists())
+            with h5py.File(datafile, 'r') as hf:
+                print(f'  Number of ELM events in datafile: {len(hf)}')
+                print('  Reading ELM event data into `super windows`')
+                # loop over ELM events
+                for ielm, elm_event in enumerate(hf.values()):
+                    if self.max_elms and ielm >= self.max_elms:
+                        print(f'  Limiting data read to {self.max_elms} ELM events')
+                        break
+                    # partition data into `super windows` to enable shuffling of time-series windows
+                    n_super_windows = elm_event['labels'].size // self.super_window_size
+                    # load BES signals and reshape into super windows
+                    signals_np = np.array(elm_event['signals'][..., 0:n_super_windows * self.super_window_size],
+                                          dtype=self.signal_dtype)
+                    signals_np = signals_np.T.reshape(n_super_windows, self.super_window_size, 8, 8)
+                    # load ELM labels
+                    labels_np = np.array(elm_event['labels'][0:n_super_windows * self.super_window_size],
+                                         dtype=self.signal_dtype)
+                    # apply transition as ELM turns on and off
+                    i_ones = np.nonzero(labels_np)[0]
+                    for direction, idx in zip([1,-1], [i_ones[0], i_ones[-1]]):
+                        idx0 = idx - self.transition_halfwidth - 1
+                        idx1 = idx + self.transition_halfwidth + 2
+                        labels_np[idx0:idx1] = transition[::direction]
+                    # reshape labels into super windows
+                    labels_np = labels_np.reshape(n_super_windows, self.super_window_size)
+                    # convert to finite probabilities
+                    labels_np[labels_np == 0] = 1e-3
+                    labels_np[labels_np == 1] = 1.0 - 1e-3
+                    # construct valid_t0 mask;
+                    valid_t0_np = np.ones(labels_np.shape, dtype=np.int8)
+                    valid_t0_np[:, (self.super_window_size-total_signal_window):self.super_window_size] = 0
+                    # convert to tensors
+                    signals_tmp = tf.convert_to_tensor(signals_np)
+                    labels_tmp = tf.convert_to_tensor(labels_np)
+                    valid_t0_tmp = tf.convert_to_tensor(valid_t0_np)
+                    if ielm == 0 and i_dfile == 0:
+                        # initialize tensors
+                        signals = signals_tmp
+                        labels = labels_tmp
+                        valid_t0 = valid_t0_tmp
+                    else:
+                        # concat on dim 0 (super windows)
+                        signals = tf.concat([signals, signals_tmp], 0)
+                        labels = tf.concat([labels, labels_tmp], 0)
+                        valid_t0 = tf.concat([valid_t0, valid_t0_tmp], 0)
+        print('Finished reading data files')
 
         # active/inactive ELM summary
         n_times = np.prod(labels.shape)
@@ -114,16 +129,15 @@ class Data(object):
         for key, value in self.label_fractions.items():
             print(f'Label {key} fraction: {value:.3f}')
 
+        self.n_super_windows = labels.shape[0]
+
         self.signals = signals
         self.labels = labels
         self.valid_t0 = valid_t0
-        self.n_super_windows = self.labels.shape[0]
 
         print('Data tensors: signals, labels, valid_t0')
         for tensor in [self.signals, self.labels, self.valid_t0]:
-            tmp = f'  shape {tensor.shape} dtype {tensor.dtype} device {tensor.device[-5:]} '
-            tmp += f'min {np.min(tensor):.3f} max {np.max(tensor):.3f}'
-            print(tmp)
+            self._tensor_summary(tensor)
 
     def normalize_signals(self):
         print('Normalizing signals to max=1')
@@ -151,12 +165,16 @@ class Data(object):
         self.valid_t0 = apply_shuffle(self.valid_t0)
 
         for tensor in [self.signals, self.labels, self.valid_t0]:
-            tmp = f'  shape {tensor.shape} dtype {tensor.dtype} device {tensor.device[-5:]} '
-            tmp += f'min {np.min(tensor):.3f} max {np.max(tensor):.3f}'
-            print(tmp)
+            self._tensor_summary(tensor)
+
+    @staticmethod
+    def _tensor_summary(tensor):
+        tmp = f'  shape {tensor.shape} dtype {tensor.dtype} device {tensor.device[-5:]} '
+        tmp += f'min {np.min(tensor):.3f} max {np.max(tensor):.3f}'
+        print(tmp)
 
     def _apply_partition_flatten_and_make_valid_indices(self, ind0, ind1,
-                                                        shuffle_valid_indices=False,
+                                                        is_training_data=False,
                                                         save_test_superwindows=False):
         # partition
         signals = self.signals[ind0:ind1, ...]
@@ -166,6 +184,34 @@ class Data(object):
         if save_test_superwindows:
             self.test_signals_superwindows = np.array(signals)
             self.test_labels_superwindows = np.array(labels)
+
+        # oversample superwindows with ELMs
+        if is_training_data:
+            print('Oversampling training data super-windows with ELMs')
+            elming_oversample = 6
+            n_super_windows = labels.shape[0]
+            print(signals.shape, labels.shape)
+            for i in np.arange(n_super_windows):
+                if np.any(labels[i, :] >= 0.1):
+                    tmp = tf.tile(signals[i:i+1, :, :, :], [elming_oversample, 1, 1, 1])
+                    signals = tf.concat([signals, tmp], axis=0)
+                    tmp = tf.tile(labels[i:i+1, :], [elming_oversample, 1])
+                    labels = tf.concat([labels, tmp], axis=0)
+                    tmp = tf.tile(valid_t0[i:i+1, :], [elming_oversample, 1])
+                    valid_t0 = tf.concat([valid_t0, tmp], axis=0)
+
+            n_times = np.prod(labels.shape)
+            n_elm_times = np.count_nonzero(np.array(labels) >= 0.5)
+            print(f'Total time points: {n_times}')
+            self.training_label_fractions = {0: (n_times - n_elm_times) / n_times,
+                                             1: n_elm_times / n_times,
+                                             }
+            for key, value in self.training_label_fractions.items():
+                print(f'Training label {key} fraction: {value:.3f}')
+
+            print('  signals, labels, valid_t0:')
+            for tensor in [signals, labels, valid_t0]:
+                self._tensor_summary(tensor)
 
         # flatten
         signals = tf.reshape(signals, [-1,8,8])
@@ -190,15 +236,13 @@ class Data(object):
         max_index = np.max(valid_indices)+self.signal_window_size+self.label_look_ahead
         assert(max_index == signals.shape[0]-1)
 
-        if shuffle_valid_indices:
+        if is_training_data:
             print('  Shuffling valid indices')
             valid_indices = tf.random.shuffle(valid_indices)
 
-        print('  signals, labels, valid_t0, valid_indices:')
+        print('Flat tensors: signals, labels, valid_t0, valid_indices:')
         for tensor in [signals, labels, valid_t0, valid_indices]:
-            tmp = f'  shape {tensor.shape} dtype {tensor.dtype} device {tensor.device[-5:]} '
-            tmp += f'min {np.min(tensor):.3f} max {np.max(tensor):.3f}'
-            print(tmp)
+            self._tensor_summary(tensor)
 
         # Note: `valid_t0` arrays are no longer needed after this point
 
@@ -233,7 +277,7 @@ class Data(object):
         train_tensors = self._apply_partition_flatten_and_make_valid_indices(
             0,
             self.n_train,
-            shuffle_valid_indices=True,
+            is_training_data=True,
             )
 
         print('Validation tensors')
@@ -272,10 +316,10 @@ class Data(object):
             prefetch(tf.data.AUTOTUNE)
         # shuffle(2000, reshuffle_each_iteration=True).\
         self.ds_validate = self.ds_validate.\
-            batch(16).\
+            batch(32).\
             prefetch(tf.data.AUTOTUNE)
         self.ds_test = self.ds_test.\
-            batch(16).\
+            batch(32).\
             prefetch(tf.data.AUTOTUNE)
 
 
@@ -294,4 +338,4 @@ if __name__ == '__main__':
     for device in tf.config.get_visible_devices():
         print(f'  {device.device_type} {device.name}')
 
-    data = Data(max_elms=10)
+    data = Data(max_elms=None)

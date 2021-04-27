@@ -5,8 +5,17 @@ import pickle
 import tensorflow as tf
 import datetime
 from tensorflow import keras
-import model
-import data
+
+try:
+    from . import model
+    from . import data
+    from . import paths
+    print('Package-level relative import')
+except ImportError:
+    import model
+    import data
+    import paths
+    print('Direct import')
 
 
 class Exp_Learning_Rate_Schedule(keras.optimizers.schedules.LearningRateSchedule):
@@ -80,7 +89,7 @@ def train_model(
 
     folder = prefix + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S")
 
-    model_dir = Path('models') / folder
+    model_dir = paths.model_dir / folder
     model_dir.mkdir(parents=True)
 
     if save_std_to_file:

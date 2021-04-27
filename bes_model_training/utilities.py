@@ -1,6 +1,8 @@
 import numpy as np
 import h5py
 
+import paths
+
 
 def traverse_h5py(input_filename):
     # private function to print attributes, if any
@@ -36,4 +38,4 @@ def traverse_h5py(input_filename):
 
 
 if __name__=='__main__':
-    traverse_h5py('data/labeled-elm-events-smithdr.hdf5')
+    traverse_h5py(paths.data_dir / 'labeled-elm-events-smithdr.hdf5')
