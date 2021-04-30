@@ -1,13 +1,16 @@
+"""
+Data class to package BES data for training
+"""
+
 import numpy as np
 import h5py
 import tensorflow as tf
 
-
 try:
-    from . import paths
+    from . import utilities
     print('Package-level relative import')
 except ImportError:
-    import paths
+    import utilities
     print('Direct import')
 
 
@@ -25,11 +28,12 @@ class Data(object):
                  super_window_shuffle_seed=None,
                  transition_halfwidth=3,
                  signal_dtype='float32',
+                 elming_oversample=6,
                  ):
 
         self.datafiles = datafiles
         if self.datafiles is None:
-            self.datafiles = list(paths.data_dir.glob('*.hdf5'))
+            self.datafiles = list(utilities.data_dir.glob('*.hdf5'))
         if not isinstance(self.datafiles, list):
             self.datafiles = [self.datafiles]
         self.super_window_size = super_window_size
@@ -42,6 +46,7 @@ class Data(object):
         self.super_window_shuffle_seed = super_window_shuffle_seed
         self.transition_halfwidth = transition_halfwidth
         self.signal_dtype = signal_dtype
+        self.elming_oversample = elming_oversample
 
         self.signals = None
         self.labels = None
@@ -184,18 +189,17 @@ class Data(object):
             self.test_labels_superwindows = np.array(labels)
 
         # oversample superwindows with ELMs
-        if is_training_data:
-            print('Oversampling training data super-windows with ELMs')
-            elming_oversample = 6
+        if is_training_data and self.elming_oversample:
+            print(f'Oversampling factor for training data with ELMs: {self.elming_oversample}')
             n_super_windows = labels.shape[0]
             print(signals.shape, labels.shape)
             for i in np.arange(n_super_windows):
                 if np.any(labels[i, :] >= 0.1):
-                    tmp = tf.tile(signals[i:i+1, :, :, :], [elming_oversample, 1, 1, 1])
+                    tmp = tf.tile(signals[i:i+1, :, :, :], [self.elming_oversample, 1, 1, 1])
                     signals = tf.concat([signals, tmp], axis=0)
-                    tmp = tf.tile(labels[i:i+1, :], [elming_oversample, 1])
+                    tmp = tf.tile(labels[i:i+1, :], [self.elming_oversample, 1])
                     labels = tf.concat([labels, tmp], axis=0)
-                    tmp = tf.tile(valid_t0[i:i+1, :], [elming_oversample, 1])
+                    tmp = tf.tile(valid_t0[i:i+1, :], [self.elming_oversample, 1])
                     valid_t0 = tf.concat([valid_t0, tmp], axis=0)
 
             n_times = np.prod(labels.shape)
@@ -312,7 +316,6 @@ class Data(object):
         self.ds_train = self.ds_train.\
             batch(self.training_batch_size).\
             prefetch(tf.data.AUTOTUNE)
-        # shuffle(2000, reshuffle_each_iteration=True).\
         self.ds_validate = self.ds_validate.\
             batch(32).\
             prefetch(tf.data.AUTOTUNE)
@@ -323,15 +326,10 @@ class Data(object):
 
 if __name__ == '__main__':
 
-    # make last GPU visible and limit GPU memory growth
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        tf.config.set_visible_devices(gpus[-1], 'GPU')
+    # turn off GPU visibility
+    tf.config.set_visible_devices([], 'GPU')
 
     print('TF version:', tf.__version__)
-
     print('Visible devices:')
     for device in tf.config.get_visible_devices():
         print(f'  {device.device_type} {device.name}')

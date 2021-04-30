@@ -1,15 +1,27 @@
+"""
+Package utilities
+"""
+
+from pathlib import Path
 import numpy as np
 import h5py
 import tensorflow as tf
 
-try:
-    from . import paths
-    print('Package-level relative import')
-except ImportError:
-    import paths
-    print('Direct import')
+
+# package directories
+
+package_dir = Path(__file__).parent
+
+repo_dir = package_dir.parent
+
+data_dir = repo_dir / 'data'
+data_dir.mkdir(exist_ok=True)
+
+model_dir = repo_dir / 'models'
+model_dir.mkdir(exist_ok=True)
 
 
+# custom learning rate schedule with exponential decay
 class Exp_Learning_Rate_Schedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 
     def __init__(self,
@@ -46,6 +58,9 @@ class Exp_Learning_Rate_Schedule(tf.keras.optimizers.schedules.LearningRateSched
         return config
 
 
+
+# print contents of HDF5 file
+
 def traverse_h5py(input_filename):
     # private function to print attributes, if any
     # groups or datasets may have attributes
@@ -77,7 +92,3 @@ def traverse_h5py(input_filename):
         # loop over key/value pairs at file root;
         # values may be a group or dataset
         recursively_print_info(file)
-
-
-if __name__=='__main__':
-    traverse_h5py(paths.data_dir / 'labeled-elm-events-smithdr.hdf5')

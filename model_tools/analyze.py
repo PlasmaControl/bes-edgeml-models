@@ -1,17 +1,14 @@
-from pathlib import Path
 import pickle
 import numpy as np
-import scipy as sp
 import matplotlib.pyplot as plt
 import seaborn as sn
 import tensorflow as tf
 
 try:
     from . import utilities
-    from . import paths
 except:
     import utilities
-    import paths
+
 
 # TF environment
 print('TF version:', tf.__version__)
@@ -36,9 +33,9 @@ for device in tf.config.get_visible_devices():
 # train_dir = 'multitrain-01_20210422_110440'
 # train_dir = 'trained_model_20210428_095838/'
 # train_dir = 'trained_model_20210429_130740'
-train_dir = 'trained_model_20210429_175555'
+train_dir = 'trained_model_20210430_134400'
 
-model_dir = paths.model_dir / train_dir
+model_dir = utilities.model_dir / train_dir
 
 model = tf.keras.models.load_model(model_dir/'saved_model.tf',
                                    custom_objects={
@@ -55,7 +52,7 @@ with test_data.open('rb') as f:
 signals = np.array(data['signals'])
 labels = np.array(data['labels'])
 
-signal_window_size = 16
+signal_window_size = data['signal_window_size']
 
 labels_trimmed = labels[:, (signal_window_size-1):]
 
@@ -75,9 +72,6 @@ for i in range(n_valid_t0):
     pred_tmp = model.predict(data, batch_size=16)
     prediction[:, i] = np.squeeze(pred_tmp)
 
-# convert logits to probabilities
-prediction = sp.special.expit(prediction)
-
 
 print('Test dataset results')
 
@@ -85,7 +79,7 @@ print('Test dataset results')
 cross_entropy = tf.keras.losses.binary_crossentropy(
     labels_trimmed,
     prediction,
-    from_logits=False,
+    from_logits=True,
 )
 cross_entropy = np.mean(cross_entropy)
 print(f'  Cross entropy: {cross_entropy:.4f}')

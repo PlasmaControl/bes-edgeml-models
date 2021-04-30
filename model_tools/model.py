@@ -1,8 +1,11 @@
+"""
+TF models
+"""
+
 import tensorflow as tf
 
 
 tf.keras.mixed_precision.set_global_policy('mixed_float16')
-
 
 def fully_connected_layers(
         x,
@@ -89,7 +92,7 @@ def cnn_model(
 
     print(f'  Final output shape: {x.shape}')
 
-    model = tf.keras.Model(inputs=inputs, outputs=x)
+    model = tf.keras.Model(inputs=inputs, outputs=x, name='BES_CNN_Model')
     model.summary()
     return model
 
@@ -147,25 +150,20 @@ def feature_model(
 
     print(f'  Final output shape: {x.shape}')
 
-    model = tf.keras.Model(inputs=inputs, outputs=x)
+    model = tf.keras.Model(inputs=inputs, outputs=x, name='BES_Feature_Model')
     model.summary()
     return model
 
 
 if __name__=='__main__':
 
-    # make last GPU visible and limit GPU memory growth
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        tf.config.set_visible_devices(gpus[-1], 'GPU')
+    # turn off GPU visibility
+    tf.config.set_visible_devices([], 'GPU')
 
     print('TF version:', tf.__version__)
-
     print('Visible devices:')
     for device in tf.config.get_visible_devices():
         print(f'  {device.device_type} {device.name}')
 
-    # test_model = cnn_model()
-    test_model = feature_model()
+    test_model_1 = cnn_model()
+    test_model_2 = feature_model()
