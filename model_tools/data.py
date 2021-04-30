@@ -15,10 +15,10 @@ class Data(object):
 
     def __init__(self,
                  datafiles=None,
-                 super_window_size=250,
                  signal_window_size=8,
                  label_look_ahead=0,
-                 max_elms=None,
+                 super_window_size=250,
+                 max_elms_per_datafile=None,
                  fraction_validate = 0.15,  # validation data for post-epoch evaluation
                  fraction_test = 0.15,  # test data for post-training evaluation
                  training_batch_size=4,
@@ -35,7 +35,7 @@ class Data(object):
         self.super_window_size = super_window_size
         self.signal_window_size = signal_window_size
         self.label_look_ahead = label_look_ahead
-        self.max_elms = max_elms
+        self.max_elms = max_elms_per_datafile
         self.fraction_validate = fraction_validate
         self.fraction_test = fraction_test
         self.training_batch_size = training_batch_size
@@ -97,9 +97,6 @@ class Data(object):
                         labels_np[idx0:idx1] = transition[::direction]
                     # reshape labels into super windows
                     labels_np = labels_np.reshape(n_super_windows, self.super_window_size)
-                    # convert to finite probabilities
-                    labels_np[labels_np == 0] = 1e-3
-                    labels_np[labels_np == 1] = 1.0 - 1e-3
                     # construct valid_t0 mask;
                     valid_t0_np = np.ones(labels_np.shape, dtype=np.int8)
                     valid_t0_np[:, (self.super_window_size-total_signal_window):self.super_window_size] = 0
@@ -123,9 +120,10 @@ class Data(object):
         n_times = np.prod(labels.shape)
         n_elm_times = np.count_nonzero(np.array(labels) >= 0.5)
         print(f'Total time points: {n_times}')
-        self.label_fractions = {0: (n_times - n_elm_times) / n_times,
-                                1: n_elm_times / n_times,
-                                }
+        self.label_fractions = {
+            0: (n_times - n_elm_times) / n_times,
+            1: n_elm_times / n_times,
+            }
         for key, value in self.label_fractions.items():
             print(f'Label {key} fraction: {value:.3f}')
 
@@ -338,4 +336,4 @@ if __name__ == '__main__':
     for device in tf.config.get_visible_devices():
         print(f'  {device.device_type} {device.name}')
 
-    data = Data(max_elms=None)
+    data = Data(max_elms_per_datafile=None)

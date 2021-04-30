@@ -1,71 +1,43 @@
 import sys
-from pathlib import Path
 import inspect
 import pickle
-import tensorflow as tf
 import datetime
+import tensorflow as tf
 from tensorflow import keras
 
 try:
     from . import model
     from . import data
     from . import paths
+    from . import utilities
     print('Package-level relative import')
 except ImportError:
     import model
     import data
     import paths
+    import utilities
     print('Direct import')
-
-
-class Exp_Learning_Rate_Schedule(keras.optimizers.schedules.LearningRateSchedule):
-
-    def __init__(self,
-                 initial_learning_rate=1e-3,
-                 minimum_learning_rate_factor=10,
-                 epochs_per_halving=1,
-                 batches_per_epoch=10000,
-                 ):
-        super(Exp_Learning_Rate_Schedule, self).__init__()
-
-        self.initial_learning_rate = initial_learning_rate
-        self.minimum_learning_rate_factor = minimum_learning_rate_factor
-        self.epochs_per_halving = epochs_per_halving
-        self.batches_per_epoch = batches_per_epoch
-
-        self.minimum_learning_rate = self.initial_learning_rate / self.minimum_learning_rate_factor
-        self.batches_per_halving = self.epochs_per_halving * self.batches_per_epoch
-        print(f'Learning rate halves every {self.epochs_per_halving} epochs ({self.batches_per_epoch} batches per epoch)')
-
-    def __call__(self, step):
-        decay_factor = tf.math.pow(0.5, step / self.batches_per_halving)
-        learning_rate = self.initial_learning_rate * decay_factor
-        output_rate = tf.math.maximum(learning_rate, self.minimum_learning_rate)
-        return output_rate
-
-    def get_config(self):
-        config = {'initial_learning_rate': self.initial_learning_rate,
-                  'minimum_learning_rate_factor': self.minimum_learning_rate_factor,
-                  'epochs_per_halving': self.epochs_per_halving,
-                  'batches_per_epoch': self.batches_per_epoch,
-                  }
-        return config
 
 
 def train_model(
         # data kwargs
-        max_elms=None,
+        label_look_ahead=0,
+        signal_window_size=8,
+        super_window_size=250,
+        max_elms_per_datafile=None,
         super_window_shuffle_seed=None,
         fraction_validate=0.15,  # validation data for post-epoch evaluation
         fraction_test=0.15,  # test data for post-training evaluation
+        transition_halfwidth=3,
+        training_batch_size=4,
         # model kwargs
-        n_filters_1=16,
-        n_filters_2=24,
-        n_dense_1=80,
-        n_dense_2=30,
+        conv_size=3,
+        cnn_layers=(4, 8),
+        dense_layers=(40, 20),
         dropout_rate=0.2,
         l2_factor=2e-3,
         relu_negative_slope=0.002,
+        use_sigmoid=False,
         # optimization kwargs
         epochs_per_halving=3,
         initial_learning_rate=3e-5,
@@ -84,7 +56,7 @@ def train_model(
         # save stdout/stderr to file?
         save_std_to_file=False,
         # gpu
-        i_gpu=-1,
+        i_gpu=None,
         ):
 
     folder = prefix + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S")
@@ -99,7 +71,6 @@ def train_model(
         sys.stderr = open(stderr_file, 'w')
 
 
-
     # TF environment
     print('TF version:', tf.__version__)
     for gpu_device in tf.config.list_physical_devices('GPU'):
@@ -110,7 +81,7 @@ def train_model(
 
     # set GPU visibility
     gpus = tf.config.list_physical_devices('GPU')
-    if i_gpu == -1:
+    if i_gpu is None:
         i_gpu = len(gpus)-1
     gpu_device = gpus[i_gpu]
     gpu_tag = f'/GPU:{i_gpu}'
@@ -119,7 +90,6 @@ def train_model(
     print('Visible devices:')
     for device in tf.config.get_visible_devices():
         print(f'  {device.device_type}, {device.name}')
-
 
 
     print('Inputs and defaults')
@@ -136,10 +106,15 @@ def train_model(
 
     # get data
     d = data.Data(
-        max_elms=max_elms,
+        signal_window_size=signal_window_size,
+        label_look_ahead=label_look_ahead,
+        super_window_size=super_window_size,
+        max_elms_per_datafile=max_elms_per_datafile,
         super_window_shuffle_seed=super_window_shuffle_seed,
         fraction_validate=fraction_validate,
         fraction_test=fraction_test,
+        training_batch_size=training_batch_size,
+        transition_halfwidth=transition_halfwidth,
         )
 
     test_file = model_dir / 'test_data.pickle'
@@ -151,19 +126,20 @@ def train_model(
 
     # define model
     m = model.cnn_model(
-        n_filters_1=n_filters_1,
-        n_filters_2=n_filters_2,
-        n_dense_1=n_dense_1,
-        n_dense_2=n_dense_2,
+        signal_window_size=signal_window_size,
+        conv_size=conv_size,
+        cnn_layers=cnn_layers,
+        dense_layers=dense_layers,
         dropout_rate=dropout_rate,
         l2_factor=l2_factor,
         relu_negative_slope=relu_negative_slope,
+        use_sigmoid=use_sigmoid,
         )
 
 
     # optimizer
     optimizer = keras.optimizers.SGD(
-        learning_rate=Exp_Learning_Rate_Schedule(
+        learning_rate=utilities.Exp_Learning_Rate_Schedule(
             initial_learning_rate=initial_learning_rate,
             minimum_learning_rate_factor=minimum_learning_rate_factor,
             batches_per_epoch=d.n_training_batches,
@@ -174,26 +150,9 @@ def train_model(
         )
 
 
-    metrics = [
-        keras.metrics.BinaryCrossentropy(),
-        keras.metrics.BinaryAccuracy(),
-        # keras.metrics.FalseNegatives(),
-        # keras.metrics.FalsePositives(),
-        # keras.metrics.TrueNegatives(),
-        # keras.metrics.TruePositives(),
-        ]
-
-    # weighted_metrics = [
-    #     keras.metrics.BinaryCrossentropy(),
-    #     keras.metrics.BinaryAccuracy(),
-    #     ]
-    weighted_metrics = None
-
     m.compile(
         optimizer=optimizer,
-        loss=keras.losses.BinaryCrossentropy(),
-        metrics=metrics,
-        weighted_metrics=weighted_metrics,
+        loss=keras.losses.BinaryCrossentropy(from_logits=True),
         )
 
 
@@ -243,7 +202,6 @@ def train_model(
         validation_data=d.ds_validate,
         workers=2,
         use_multiprocessing=True,
-        # class_weight=d.class_weights,
         callbacks=callbacks,
         )
 
@@ -269,6 +227,7 @@ def train_model(
             print(f'  {key}, {value:.4f}')
 
     save_file = model_dir / 'saved_model.tf'
+    print(f'Saving model: {save_file.as_posix()}')
     m.save(save_file)
 
     if save_std_to_file:
@@ -282,20 +241,22 @@ def train_model(
 
 if __name__ == '__main__':
 
-    # # make only last GPU visible
-    # gpus = tf.config.list_physical_devices('GPU')
-    # if gpus:
-    #     # limit GPU visibility to last GPU
-    #     tf.config.set_visible_devices(gpus[-1], 'GPU')
-    #     # set memory growth
-    #     tf.config.experimental.set_memory_growth(gpus[-1], True)
-    #
-    # print('Visible devices:')
-    # for dev in tf.config.get_visible_devices():
-    #     print(f'  {dev.device_type}, {dev.name}')
-
     try:
-        hist, res = train_model(max_elms=5, epochs=1, save_std_to_file=True, skip_testing=False)
+        hist, res = train_model(max_elms_per_datafile=None,
+                                signal_window_size=16,
+                                super_window_size=500,
+                                epochs=24,
+                                initial_learning_rate=3e-5,
+                                epochs_per_halving=8,
+                                patience=8,
+                                min_delta=1e-4,
+                                conv_size=3,
+                                dropout_rate=0.05,
+                                cnn_layers=(12, 20),
+                                dense_layers=(100, 40),
+                                save_std_to_file=True,
+                                i_gpu=0,
+                                )
     finally:
         if hasattr(sys.stdout, 'close'):
             sys.stdout.close()
