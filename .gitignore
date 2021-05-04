@@ -5,4 +5,5 @@ data/
 models/
 jobs/
 
+slurm*
 *.db

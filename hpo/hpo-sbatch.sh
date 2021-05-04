@@ -5,8 +5,12 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=240G
 #SBATCH --time=1-0
-#SBATCH -A pppl
-###SBATCH --dependency=141655
+#SBATCH --account pppl
+#SBATCH --mail-type=all
+#SBATCH --mail-user=drsmith@pppl.gov
+###SBATCH --dependency=155749
+
+# setup environment
 
 module load edgeml
 module list
@@ -18,10 +22,9 @@ conda activate tf
 
 env | egrep "SLURM|HOST"
 
+
+# run job
+
 db_file='/home/dsmith/scratch/optuna/hpo-02.db'
-
-echo "Hostname: ${HOSTNAME}"
 echo "DB file: ${db_file}"
-echo "Study name: ${study_name}"
-
 srun python3 hpo-create.py $db_file

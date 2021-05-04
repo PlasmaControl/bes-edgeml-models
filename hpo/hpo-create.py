@@ -18,13 +18,6 @@ study_name = 'study'
 
 print(f'Database url: {db_url}')
 
-if Path(db_file).exists():
-    n_startup_trials = 0
-else:
-    n_startup_trials = 100
-
-print(f'Startup trials: {n_startup_trials}')
-
 optuna.create_study(storage=db_url,
     study_name=study_name,
     direction='minimize',
@@ -42,7 +35,7 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
     for i_worker in range(n_workers):
         i_gpu = i_worker % n_gpus
         print(f'  Submitting worker {i_worker+1}/{n_workers} on GPU {gpus[i_gpu].name}')
-        command = f'python3 hpo-launch.py {db_url} {study_name} {i_gpu} {n_startup_trials}'
+        command = f'python3 hpo-launch.py {db_url} {study_name} {i_gpu}'
         print(f'  Subprocess command: {command}')
         future = executor.submit(
             subprocess.run,

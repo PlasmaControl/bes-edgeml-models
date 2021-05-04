@@ -1,8 +1,10 @@
 import pickle
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
 import seaborn as sn
 import tensorflow as tf
+import sklearn.metrics
 
 try:
     from . import utilities
@@ -26,14 +28,7 @@ for device in tf.config.get_visible_devices():
     print(f'  {device.device_type}, {device.name}')
 
 
-# train_dir = 'multitrain-01_20210421_110057'
-# train_dir = 'multitrain-01_20210421_142545'
-# train_dir = 'multitrain-01_20210421_142605'
-# train_dir = 'multitrain-01_20210421_213026'
-# train_dir = 'multitrain-01_20210422_110440'
-# train_dir = 'trained_model_20210428_095838/'
-# train_dir = 'trained_model_20210429_130740'
-train_dir = 'trained_model_20210430_134400'
+train_dir = 'hpo-02_trial_013_20210502_133426'
 
 model_dir = utilities.model_dir / train_dir
 
@@ -72,6 +67,7 @@ for i in range(n_valid_t0):
     pred_tmp = model.predict(data, batch_size=16)
     prediction[:, i] = np.squeeze(pred_tmp)
 
+prediction = sp.special.expit(prediction)
 
 print('Test dataset results')
 
@@ -79,7 +75,7 @@ print('Test dataset results')
 cross_entropy = tf.keras.losses.binary_crossentropy(
     labels_trimmed,
     prediction,
-    from_logits=True,
+    from_logits=False,
 )
 cross_entropy = np.mean(cross_entropy)
 print(f'  Cross entropy: {cross_entropy:.4f}')
@@ -107,6 +103,17 @@ confusion_matrix = tf.math.confusion_matrix(
 confusion_matrix = np.array(confusion_matrix)
 print('  Confusion matrix:')
 print(confusion_matrix)
+
+
+# ROC and PR curves
+fp, tp, _ = sklearn.metrics.roc_curve(labels_classes.flat,
+                                      prediction.flat)
+roc_auc = sklearn.metrics.roc_auc_score(labels_classes.flat,
+                                        prediction.flat)
+precision, recall, _ = sklearn.metrics.precision_recall_curve(labels_classes.flat,
+                                                              prediction.flat)
+pr_auc = sklearn.metrics.auc(recall, precision)
+
 
 def do_plot():
 
@@ -142,6 +149,23 @@ def do_plot():
         plt.ylabel('Signal | label')
         plt.ylim([None,1.1])
         plt.legend(fontsize='small')
+    plt.tight_layout()
+
+    plt.figure(figsize=(6.5,3))
+    plt.subplot(121)
+    plt.plot(fp, tp)
+    plt.xlabel('False positive rate')
+    plt.ylabel('True positive rate')
+    plt.title('ROC curve')
+    plt.annotate(f'AUC = {roc_auc:.3f}', (0.5, 0.42))
+    plt.grid()
+    plt.subplot(122)
+    plt.plot(recall, precision)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('PR curve')
+    plt.annotate(f'AUC = {pr_auc:.3f}', (0.1,0.42))
+    plt.grid()
     plt.tight_layout()
 
 
