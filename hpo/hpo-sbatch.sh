@@ -1,30 +1,41 @@
 #!/bin/bash
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=128
-#SBATCH --gres=gpu:4
-#SBATCH --mem=240G
-#SBATCH --time=1-0
-#SBATCH --account pppl
-#SBATCH --mail-type=all
-#SBATCH --mail-user=drsmith@pppl.gov
-###SBATCH --dependency=155749
+
+# sbatch scripts must specify `#SBATCH` directives prior to any regular command.
+# Multiple hashes, like `##SBATCH`, are comments and ignored.
+
+## nodes and time
+
+#SBATCH --nodes=1  # compute nodes
+#SBATCH --time=1-0  # time limit in format `days-hours`
+
+## resources per node
+
+#SBATCH --ntasks-per-node=1   # MPI tasks per node
+#SBATCH --cpus-per-task=128  # logical CPUs per task
+#SBATCH --gpus-per-node=4  # GPUs per node
+#SBATCH --mem=240G  # memory per node (allow ~10 GB for OS)
+
+## dependency
+
+###SBATCH --dependency=161186  # run only after dependency job completes
+
+#SBATCH --account pppl  # account to charge
+#SBATCH --mail-type=all  # email for all events
+#SBATCH --mail-user=drsmith@pppl.gov  # email address
+
 
 # setup environment
-
 module load edgeml
 module list
-
 source "/scratch/gpfs/dsmith/miniconda/etc/profile.d/conda.sh"
-which conda
-which python3
 conda activate tf
 
+
+# verify environment
+which conda
+which python3
 env | egrep "SLURM|HOST"
 
 
 # run job
-
-db_file='/home/dsmith/scratch/optuna/hpo-02.db'
-echo "DB file: ${db_file}"
-srun python3 hpo-create.py $db_file
+srun python3 hpo-create.py

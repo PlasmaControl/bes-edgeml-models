@@ -12,27 +12,35 @@ study = optuna.load_study(storage=db_url, study_name=study_name)
 
 print('Trials')
 for trial in study.trials:
-    if not trial.intermediate_values:
-        print(f'  Num {trial.number:03d} in first epoch')
-        continue
-    if trial.value:
-        value = trial.value
-    else:
+    trial_summary = f'  Num {trial.number:03d} state {trial.state.name}'
+    if trial.state.name in ['COMPLETE', 'PRUNED']:
+        trial_summary += f' duration {trial.duration.seconds/3600:.1f} hr'
+    if trial.intermediate_values:
         value = list(trial.intermediate_values.values())[-1]
-    report = f'  Num {trial.number:03d} value {value:.3f} last step {trial.last_step} state {trial.state.name}'
-    if trial.state.name != 'RUNNING':
-        report += f' duration {trial.duration.seconds/3600:.1f} hr'
-    print(report)
+        trial_summary += f'  step {trial.last_step} value {value:.3f}'
+    print(trial_summary)
 
 
+print('Importances')
 importances = optuna.importance.get_param_importances(study)
-print('Importances:')
 for key, value in importances.items():
     print(f'  {key} importance: {value:.2f}')
 
 
-best_trial = study.best_trial
+print('Best trials')
+values = []
+for trial in study.trials:
+    if trial.state.name in ['COMPLETE', 'PRUNED']:
+        values.append(trial.value)
+    else:
+        values.append(1e6)
+i_sort = np.argsort(values)
+for i in range(10):
+    print(f'  Trial {i_sort[i]:03d} value {values[i_sort[i]]:.3f}')
+
+
 print('Best trial')
+best_trial = study.best_trial
 print(f'  Number {best_trial.number}')
 print(f'  Value: {best_trial.value:.4f}')
 print(f'  Duration: {best_trial.duration.seconds/3600:.1f} hr')

@@ -57,9 +57,9 @@ def optuna_objective_wrapper(trial):
         epochs_per_halving=trial.suggest_int('epochs_per_halving', 2, 8, step=2),
         initial_learning_rate=trial.suggest_float('initial_learning_rate', 1e-6, 1e-3, log=True),
         minimum_learning_rate_factor=trial.suggest_int('minimum_learning_rate_factor', 10, 100, log=True),
-        momentum=trial.suggest_float('momentum', 0.0, 0.5, step=0.1),
+        momentum=trial.suggest_float('momentum', 0.0, 0.8, step=0.1),
         # training kwargs
-        epochs=12,
+        epochs=14,
         fit_verbose=2,
         callbacks=callbacks,
         # save/checkpoint
@@ -90,8 +90,8 @@ if __name__ == '__main__':
     print('TF version:', tf.__version__)
 
     print('Worker configuration')
-    print(f'  db url: {db_url}')
-    print(f'  study name: {study_name}')
+    print(f'  Database URL: {db_url}')
+    print(f'  Study name: {study_name}')
     print(f'  GPU index: {i_gpu}')
     print(f'  n_startup_trials: {n_startup_trials}')
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     print('Run study.optimize()')
     study.optimize(
         optuna_objective_wrapper,
-        timeout=15*60*60,  # stop *initiating* trials after timeout (seconds)
+        timeout=14*60*60,  # stop *initiating* trials after timeout (seconds); end time is unknown
         )
 
     print('End study.optimize()')
