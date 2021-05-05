@@ -6,7 +6,7 @@ import tensorflow as tf
 import optuna
 
 
-db_file='/home/dsmith/scratch/optuna/hpo-02.db'
+db_file='/home/dsmith/scratch/optuna/hpo_features_01.db'
 db_url = f'sqlite:///{db_file}'
 study_name = 'study'
 

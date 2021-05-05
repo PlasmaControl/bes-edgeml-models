@@ -12,12 +12,12 @@
 
 #SBATCH --ntasks-per-node=1   # MPI tasks per node
 #SBATCH --cpus-per-task=128  # logical CPUs per task
-#SBATCH --gpus-per-node=4  # GPUs per node
+#SBATCH --gres=gpu:4  # total GPUs
 #SBATCH --mem=240G  # memory per node (allow ~10 GB for OS)
 
 ## dependency
 
-###SBATCH --dependency=161186  # run only after dependency job completes
+#SBATCH --dependency=161543  # run only after dependency job completes
 
 #SBATCH --account pppl  # account to charge
 #SBATCH --mail-type=all  # email for all events

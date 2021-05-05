@@ -27,8 +27,8 @@ print('Visible devices:')
 for device in tf.config.get_visible_devices():
     print(f'  {device.device_type}, {device.name}')
 
-# train_dir = 'hpo-02_trial_119_20210504_113150/'
-train_dir = 'hpo-02_trial_013_20210502_133426/'
+train_dir = 'hpo-02_trial_119_20210504_113150/'
+# train_dir = 'hpo-02_trial_013_20210502_133426/'
 # train_dir = 'hpo-02_trial_083_20210503_151706/'
 # train_dir = 'hpo-02_trial_141_20210504_224158/'
 # train_dir = 'hpo-02_trial_089_20210503_180059/'

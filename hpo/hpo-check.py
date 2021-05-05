@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import optuna
 
 
-db_file = '/home/dsmith/scratch/optuna/hpo-02.db'
+# db_file = '/home/dsmith/scratch/optuna/hpo-02.db'
+db_file = '/home/dsmith/scratch/optuna/hpo_features_01.db'
 db_url = f'sqlite:///{db_file}'
 study_name = 'study'
 
@@ -54,7 +55,7 @@ valid_trials = [trial for trial in study.trials
                 and trial.value is not None]
 
 values = [trial.value for trial in valid_trials]
-value_percentile = np.percentile(values, 10)
+value_percentile = np.percentile(values, 20)
 best_trials = [trial for trial in valid_trials if trial.value <= value_percentile]
 
 nparams = len(best_trial.params.keys())

@@ -24,13 +24,19 @@ def train_model(
         transition_halfwidth=3,
         training_batch_size=4,
         elming_oversample=6,
-        # model kwargs
-        conv_size=3,
-        cnn_layers=(4, 8),
+        # specify model
+        model_type='cnn',  # 'cnn' or 'features'
+        # kwargs for all models
         dense_layers=(40, 20),
         dropout_rate=0.2,
         l2_factor=2e-3,
         relu_negative_slope=0.002,
+        # kwargs for cnn models
+        conv_size=3,
+        cnn_layers=(4, 8),
+        # kwargs for feature models
+        maxpool_size=2,  # 0 to skip maxpool
+        filters=10,
         # optimization kwargs
         epochs_per_halving=3,
         initial_learning_rate=3e-5,
@@ -49,12 +55,15 @@ def train_model(
         save_std_to_file=True,
         ):
 
+    assert(model_type in ['cnn', 'features'])
+
     folder = prefix + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S")
 
     model_dir = utilities.model_dir / folder
     model_dir.mkdir(parents=True)
 
     if save_std_to_file:
+        # capture stdout/stderr and send to files
         stdout_file = model_dir / 'stdout.txt'
         stderr_file = model_dir / 'stderr.txt'
         sys.stdout = open(stdout_file, 'w')
@@ -96,16 +105,34 @@ def train_model(
                     f)
 
 
-    # define model
-    m = model.cnn_model(
+    # kwargs for all models
+    model_kwargs = dict(
         signal_window_size=signal_window_size,
-        conv_size=conv_size,
-        cnn_layers=cnn_layers,
         dense_layers=dense_layers,
         dropout_rate=dropout_rate,
         l2_factor=l2_factor,
         relu_negative_slope=relu_negative_slope,
         )
+
+    # define model
+    if model_type == 'cnn':
+        m = model.cnn_model(
+            # kwargs for all models
+            **model_kwargs,
+            # kwargs for CNN models
+            conv_size=conv_size,
+            cnn_layers=cnn_layers,
+            )
+    elif model_type == 'features':
+        m = model.feature_model(
+            # kwargs for all models
+            **model_kwargs,
+            # kwargs for feature models
+            maxpool_size=maxpool_size,
+            filters=filters,
+            )
+    else:
+        raise ValueError
 
 
     # optimizer
@@ -140,6 +167,8 @@ def train_model(
 
     if not callbacks:
 
+        # default callbacks when not specified by input
+
         # Tensorboard logs
         # log_dir = model_dir / 'tensorboard-logs'
         # log_dir.mkdir(parents=True)
@@ -165,6 +194,7 @@ def train_model(
                 monitor='val_loss',
                 ),
             ]
+
 
     history = m.fit(
         x=d.ds_train,
@@ -202,6 +232,7 @@ def train_model(
     m.save(save_file)
 
     if save_std_to_file:
+        # release stdout/stderr catpure
         sys.stdout.close()
         sys.stderr.close()
         sys.stdout = sys.__stdout__
