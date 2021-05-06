@@ -27,11 +27,12 @@ print('Visible devices:')
 for device in tf.config.get_visible_devices():
     print(f'  {device.device_type}, {device.name}')
 
-train_dir = 'hpo-02_trial_119_20210504_113150/'
+# train_dir = 'hpo-02_trial_119_20210504_113150/'
 # train_dir = 'hpo-02_trial_013_20210502_133426/'
 # train_dir = 'hpo-02_trial_083_20210503_151706/'
 # train_dir = 'hpo-02_trial_141_20210504_224158/'
 # train_dir = 'hpo-02_trial_089_20210503_180059/'
+train_dir = 'hpo_features_01_trial_016_20210506_030617'
 
 model_dir = utilities.model_dir / train_dir
 
@@ -157,16 +158,16 @@ def do_plot():
     plt.figure(figsize=(6.5,3))
     plt.subplot(121)
     plt.plot(fp, tp)
-    plt.xlabel('False positive rate')
-    plt.ylabel('True positive rate')
-    plt.title('ROC curve')
+    plt.xlabel('TP/P (Sens.)')
+    plt.ylabel('FP/N')
+    plt.title(f'{train_dir} | ROC')
     plt.annotate(f'AUC = {roc_auc:.3f}', (0.5, 0.42))
     plt.grid()
     plt.subplot(122)
     plt.plot(recall, precision)
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.title('PR curve')
+    plt.xlabel('TP/P (Recall)')
+    plt.ylabel('TP/pred. pos. (Prec.)')
+    plt.title(f'{train_dir} | PR')
     plt.annotate(f'AUC = {pr_auc:.3f}', (0.1,0.42))
     plt.grid()
     plt.tight_layout()

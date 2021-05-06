@@ -28,7 +28,7 @@ def optuna_objective_wrapper(trial):
         ]
 
 
-    model_type = 'cnn'  # 'cnn' or 'features'
+    model_type = 'features'  # 'cnn' or 'features'
     prefix = f'hpo_features_01_trial_{trial.number:03d}'
     epochs = 6  # max epochs per trial
 

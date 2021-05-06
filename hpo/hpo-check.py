@@ -23,9 +23,13 @@ for trial in study.trials:
 
 
 print('Importances')
-importances = optuna.importance.get_param_importances(study)
-for key, value in importances.items():
-    print(f'  {key} importance: {value:.2f}')
+try:
+    importances = optuna.importance.get_param_importances(study)
+    for key, value in importances.items():
+        print(f'  {key} importance: {value:.2f}')
+except:
+    print('Importance calculation failed')
+    pass
 
 
 print('Best trials')
