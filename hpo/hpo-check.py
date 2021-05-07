@@ -59,7 +59,7 @@ valid_trials = [trial for trial in study.trials
                 and trial.value is not None]
 
 values = [trial.value for trial in valid_trials]
-value_percentile = np.percentile(values, 20)
+value_percentile = np.percentile(values, 10)
 best_trials = [trial for trial in valid_trials if trial.value <= value_percentile]
 
 nparams = len(best_trial.params.keys())

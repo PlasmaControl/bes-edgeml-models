@@ -17,7 +17,7 @@
 
 ## dependency
 
-#SBATCH --dependency=161543  # run only after dependency job completes
+#SBATCH --dependency=164415  # run only after dependency job completes
 
 #SBATCH --account pppl  # account to charge
 #SBATCH --mail-type=all  # email for all events
