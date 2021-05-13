@@ -68,15 +68,12 @@ def optuna_objective_wrapper(trial):
         # data kwargs
         label_look_ahead=0,
         signal_window_size=16,
-        super_window_size=500,
-        max_elms_per_datafile=None,
-        super_window_shuffle_seed=None,
+        max_elms=None,
         fraction_validate=0.15,  # validation data for post-epoch evaluation
         fraction_test=0.15,  # test data for post-training evaluation
         # transition_halfwidth=trial.suggest_int('transition_halfwidth', 2, 4),
         transition_halfwidth=4,
         training_batch_size=4,
-        elming_oversample=6,
         # model kwargs
         **model_kwargs,
         # optimization kwargs

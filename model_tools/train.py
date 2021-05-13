@@ -2,6 +2,7 @@ import sys
 import inspect
 import pickle
 import datetime
+import numpy as np
 import tensorflow as tf
 
 try:
@@ -16,19 +17,16 @@ def train_model(
         # data kwargs
         label_look_ahead=0,
         signal_window_size=8,
-        super_window_size=250,
-        max_elms_per_datafile=None,
-        super_window_shuffle_seed=None,
+        max_elms=None,
         fraction_validate=0.15,  # validation data for post-epoch evaluation
         fraction_test=0.15,  # test data for post-training evaluation
         transition_halfwidth=3,
         training_batch_size=4,
-        elming_oversample=6,
         # specify model
         model_type='cnn',  # 'cnn' or 'features'
         # kwargs for all models
         dense_layers=(40, 20),
-        dropout_rate=0.2,
+        dropout_rate=0.1,
         l2_factor=2e-3,
         relu_negative_slope=0.002,
         # kwargs for cnn models
@@ -36,19 +34,20 @@ def train_model(
         cnn_layers=(4, 8),
         # kwargs for feature models
         maxpool_size=2,  # 0 to skip maxpool
-        filters=10,
+        filters=16,
         # optimization kwargs
-        epochs_per_halving=3,
+        epochs_per_halving=4,
         initial_learning_rate=3e-5,
         minimum_learning_rate_factor=30,
         momentum=0.2,
         # training kwargs
-        epochs=5,
+        epochs=4,
+        steps_per_epoch=50000,  # batches per epoch
         fit_verbose=2,
         callbacks=None,
         # early stopping
-        min_delta=1e-3,
-        patience=5,
+        min_delta=5e-4,  # minimum relative improvement in validation metric to continue training
+        patience=5,  # epochs allowed to satisfy min_delta improvement
         # save/checkpoint
         prefix='trained_model',
         # save stdout/stderr to file?
@@ -86,20 +85,18 @@ def train_model(
     d = data.Data(
         signal_window_size=signal_window_size,
         label_look_ahead=label_look_ahead,
-        super_window_size=super_window_size,
-        max_elms_per_datafile=max_elms_per_datafile,
-        super_window_shuffle_seed=super_window_shuffle_seed,
+        max_elms=max_elms,
         fraction_validate=fraction_validate,
         fraction_test=fraction_test,
         training_batch_size=training_batch_size,
         transition_halfwidth=transition_halfwidth,
-        elming_oversample=elming_oversample,
         )
 
     test_file = model_dir / 'test_data.pickle'
     with test_file.open('wb') as f:
-        pickle.dump({'signals': d.test_signals_superwindows,
-                     'labels': d.test_labels_superwindows,
+        pickle.dump({'signals': np.array(d.test_data[0]),
+                     'labels': np.array(d.test_data[1]),
+                     'window_start_indices': d.test_data[3],
                      'signal_window_size': d.signal_window_size,
                      'label_look_ahead': d.label_look_ahead},
                     f)
@@ -136,12 +133,12 @@ def train_model(
 
 
     # optimizer
+    steps_per_halving = steps_per_epoch * epochs_per_halving
     optimizer = tf.keras.optimizers.SGD(
         learning_rate=utilities.Exp_Learning_Rate_Schedule(
             initial_learning_rate=initial_learning_rate,
             minimum_learning_rate_factor=minimum_learning_rate_factor,
-            batches_per_epoch=d.n_training_batches,
-            epochs_per_halving=epochs_per_halving,
+            steps_per_halving=steps_per_halving,
             ),
         momentum=momentum,
         nesterov=True,
@@ -155,7 +152,7 @@ def train_model(
 
 
     sample_output = m.evaluate(
-        x=d.ds_test,
+        x=d.test_dataset,
         steps=1,
         verbose=0,
         return_dict=True,
@@ -197,13 +194,14 @@ def train_model(
 
 
     history = m.fit(
-        x=d.ds_train,
+        x=d.train_dataset,
         verbose=fit_verbose,
         epochs=epochs,
-        validation_data=d.ds_validate,
+        validation_data=d.validation_dataset,
         workers=2,
         use_multiprocessing=True,
         callbacks=callbacks,
+        steps_per_epoch=steps_per_epoch,  # batches per epoch
         )
 
 
@@ -214,7 +212,7 @@ def train_model(
 
     # evaluate validation and test datasets
     for ds_name, dataset in zip(['Validation', 'Test'],
-                                [d.ds_validate, d.ds_test]):
+                                [d.validation_dataset, d.test_dataset]):
         print(f'{ds_name} metrics')
         result = m.evaluate(
             x=dataset,
@@ -262,21 +260,18 @@ if __name__ == '__main__':
         print(f'  {device.device_type}, {device.name}')
 
 
-    hist, res = train_model(max_elms_per_datafile=10,
-                            epochs=2,
-                            signal_window_size=8,
-                            super_window_size=250,
+    hist, res = train_model(max_elms=80,
+                            epochs=4,
+                            signal_window_size=16,
                             initial_learning_rate=3e-5,
-                            epochs_per_halving=8,
-                            patience=8,
-                            min_delta=1e-4,
-                            conv_size=3,
+                            epochs_per_halving=2,
                             dropout_rate=0.05,
-                            cnn_layers=(8, 12),
-                            dense_layers=(60, 20),
-                            save_std_to_file=True,
-                            fit_verbose=2,
-                            elming_oversample=0,
+                            model_type='features',
+                            maxpool_size=2,
+                            filters=16,
+                            dense_layers=(60, 30),
+                            save_std_to_file=False,
+                            fit_verbose=1,
                             )
 
     if hasattr(sys.stdout, 'close'):

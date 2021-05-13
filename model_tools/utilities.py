@@ -27,24 +27,18 @@ class Exp_Learning_Rate_Schedule(tf.keras.optimizers.schedules.LearningRateSched
     def __init__(self,
                  initial_learning_rate=1e-3,
                  minimum_learning_rate_factor=10,
-                 epochs_per_halving=1,
-                 batches_per_epoch=10000,
+                 steps_per_halving=50000,  # batches per halving
                  ):
         super(Exp_Learning_Rate_Schedule, self).__init__()
-
         self.initial_learning_rate = initial_learning_rate
         self.minimum_learning_rate_factor = minimum_learning_rate_factor
-        self.epochs_per_halving = epochs_per_halving
-        self.batches_per_epoch = batches_per_epoch
-
+        self.steps_per_halving = steps_per_halving
         self.minimum_learning_rate = self.initial_learning_rate / self.minimum_learning_rate_factor
-        self.batches_per_halving = self.epochs_per_halving * self.batches_per_epoch
-
         print(f'Initial learning rate: {self.initial_learning_rate:.4g} (minimum {self.minimum_learning_rate:.4g})')
-        print(f'Learning rate halves every {self.epochs_per_halving} epochs ({self.batches_per_epoch} batches per epoch)')
+        print(f'Learning rate halves every {self.steps_per_halving} steps (batches)')
 
     def __call__(self, step):
-        decay_factor = tf.math.pow(0.5, step / self.batches_per_halving)
+        decay_factor = tf.math.pow(0.5, step / self.steps_per_halving)
         learning_rate = self.initial_learning_rate * decay_factor
         output_rate = tf.math.maximum(learning_rate, self.minimum_learning_rate)
         return output_rate
@@ -52,9 +46,7 @@ class Exp_Learning_Rate_Schedule(tf.keras.optimizers.schedules.LearningRateSched
     def get_config(self):
         config = {'initial_learning_rate': self.initial_learning_rate,
                   'minimum_learning_rate_factor': self.minimum_learning_rate_factor,
-                  'epochs_per_halving': self.epochs_per_halving,
-                  'batches_per_epoch': self.batches_per_epoch,
-                  }
+                  'steps_per_halving': self.steps_per_halving,}
         return config
 
 
