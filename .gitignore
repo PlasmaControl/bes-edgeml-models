@@ -4,6 +4,7 @@ __pycache__/
 data/
 models/
 jobs/
+figures/
 
 slurm*
 *.db

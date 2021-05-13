@@ -21,8 +21,8 @@ for device in tf.config.list_physical_devices():
     print(f'  {device.device_type}, {device.name}')
 
 # device visibility
-# cpus = tf.config.list_physical_devices('CPU')
-tf.config.set_visible_devices([], 'GPU')
+gpus = tf.config.list_physical_devices('GPU')
+tf.config.set_visible_devices(gpus[-1], 'GPU')
 print('Visible devices:')
 for device in tf.config.get_visible_devices():
     print(f'  {device.device_type}, {device.name}')
@@ -32,7 +32,8 @@ for device in tf.config.get_visible_devices():
 # train_dir = 'hpo-02_trial_083_20210503_151706/'
 # train_dir = 'hpo-02_trial_141_20210504_224158/'
 # train_dir = 'hpo-02_trial_089_20210503_180059/'
-train_dir = 'hpo_features_01_trial_016_20210506_030617'
+# train_dir = 'hpo_features_01_trial_016_20210506_030617'
+train_dir = 'hpo_features_01_trial_125_20210507_175056'
 
 model_dir = utilities.model_dir / train_dir
 
@@ -118,6 +119,12 @@ precision, recall, _ = sklearn.metrics.precision_recall_curve(labels_classes.fla
                                                               prediction.flat)
 pr_auc = sklearn.metrics.auc(recall, precision)
 
+# fp2, tp2, _ = sklearn.metrics.roc_curve(-1*(labels_classes.flatten()-1),
+#                                       -1*(prediction.flatten()-1))
+# roc_auc2 = sklearn.metrics.roc_auc_score(-1*(labels_classes.flatten()-1),
+#                                       -1*(prediction.flatten()-1))
+
+
 
 def do_plot():
 
@@ -160,7 +167,7 @@ def do_plot():
     plt.plot(fp, tp)
     plt.xlabel('TP/P (Sens.)')
     plt.ylabel('FP/N')
-    plt.title('ROC')
+    plt.title('ROC - Inactive ALM')
     plt.annotate(f'AUC = {roc_auc:.3f}', (0.5, 0.42))
     plt.grid()
     plt.subplot(122)

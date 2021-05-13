@@ -30,7 +30,7 @@ def optuna_objective_wrapper(trial):
 
     model_type = 'features'  # 'cnn' or 'features'
     prefix = f'hpo_features_01_trial_{trial.number:03d}'
-    epochs = 6  # max epochs per trial
+    epochs = 12  # max epochs per trial
 
     assert(model_type in ['cnn', 'features'])
 
@@ -142,14 +142,14 @@ if __name__ == '__main__':
             ),
         pruner=optuna.pruners.MedianPruner(
             n_startup_trials=n_startup_trials//2,  # minimum trials before pruning allowed
-            n_warmup_steps=4,  # minimum epochs before pruning allowed
+            n_warmup_steps=6,  # minimum epochs before pruning allowed
             ),
         )
 
     print('Run study.optimize()')
     study.optimize(
         optuna_objective_wrapper,
-        timeout=18*60*60,  # stop *initiating* trials after timeout (seconds); end time is unknown
+        timeout=14*60*60,  # stop *initiating* trials after timeout (seconds); end time is unknown
         )
 
     print('End study.optimize()')
