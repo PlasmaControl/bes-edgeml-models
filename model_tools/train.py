@@ -96,6 +96,7 @@ def train_model(
     with test_file.open('wb') as f:
         pickle.dump({'signals': np.array(elm_data.test_data[0]),
                      'labels': np.array(elm_data.test_data[1]),
+                     'sample_indices': elm_data.test_data[2],
                      'window_start_indices': elm_data.test_data[3],
                      'signal_window_size': elm_data.signal_window_size,
                      'label_look_ahead': elm_data.label_look_ahead},
