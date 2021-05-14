@@ -82,7 +82,7 @@ def train_model(
 
 
     # get data
-    d = data.Data(
+    elm_data = data.Data(
         signal_window_size=signal_window_size,
         label_look_ahead=label_look_ahead,
         max_elms=max_elms,
@@ -94,11 +94,11 @@ def train_model(
 
     test_file = model_dir / 'test_data.pickle'
     with test_file.open('wb') as f:
-        pickle.dump({'signals': np.array(d.test_data[0]),
-                     'labels': np.array(d.test_data[1]),
-                     'window_start_indices': d.test_data[3],
-                     'signal_window_size': d.signal_window_size,
-                     'label_look_ahead': d.label_look_ahead},
+        pickle.dump({'signals': np.array(elm_data.test_data[0]),
+                     'labels': np.array(elm_data.test_data[1]),
+                     'window_start_indices': elm_data.test_data[3],
+                     'signal_window_size': elm_data.signal_window_size,
+                     'label_look_ahead': elm_data.label_look_ahead},
                     f)
 
 
@@ -152,7 +152,7 @@ def train_model(
 
 
     sample_output = m.evaluate(
-        x=d.test_dataset,
+        x=elm_data.test_dataset,
         steps=1,
         verbose=0,
         return_dict=True,
@@ -194,10 +194,10 @@ def train_model(
 
 
     history = m.fit(
-        x=d.train_dataset,
+        x=elm_data.train_dataset,
         verbose=fit_verbose,
         epochs=epochs,
-        validation_data=d.validation_dataset,
+        validation_data=elm_data.validation_dataset,
         workers=2,
         use_multiprocessing=True,
         callbacks=callbacks,
@@ -212,7 +212,7 @@ def train_model(
 
     # evaluate validation and test datasets
     for ds_name, dataset in zip(['Validation', 'Test'],
-                                [d.validation_dataset, d.test_dataset]):
+                                [elm_data.validation_dataset, elm_data.test_dataset]):
         print(f'{ds_name} metrics')
         result = m.evaluate(
             x=dataset,
@@ -265,7 +265,7 @@ if __name__ == '__main__':
         print(f'  {device.device_type}, {device.name}')
 
 
-    hist, res = train_model(max_elms=None,
+    hist, res = train_model(max_elms=100,
                             epochs=8,
                             steps_per_epoch=50000,  # batches per epoch
                             training_batch_size=4,

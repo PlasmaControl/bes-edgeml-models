@@ -73,7 +73,7 @@ class Data(object):
             signals=self.validation_data[0],
             labels=self.validation_data[1],
             sample_indices=self.validation_data[2],
-            batch_size=16,
+            # batch_size=16,
             )
 
         print('Reading test ELMs and make dataset')
@@ -85,7 +85,7 @@ class Data(object):
             signals=self.test_data[0],
             labels=self.test_data[1],
             sample_indices=self.test_data[2],
-            batch_size=16,
+            # batch_size=16,
             )
 
         print(f'Training batch size: {self.training_batch_size}')
