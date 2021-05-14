@@ -67,7 +67,7 @@ class Data(object):
         print('Reading validation ELMs and make dataset')
         self.validation_data = self.read_data(
             self.validation_elms,
-            shuffle_sample_indices=False,
+            shuffle_sample_indices=True,
             )
         self.validation_dataset = self.make_dataset(
             signals=self.validation_data[0],

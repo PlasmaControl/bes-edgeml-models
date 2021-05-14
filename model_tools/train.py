@@ -202,6 +202,7 @@ def train_model(
         use_multiprocessing=True,
         callbacks=callbacks,
         steps_per_epoch=steps_per_epoch,  # batches per epoch
+        validation_steps=steps_per_epoch//4,
         )
 
 
@@ -265,7 +266,7 @@ if __name__ == '__main__':
         print(f'  {device.device_type}, {device.name}')
 
 
-    hist, res = train_model(max_elms=100,
+    hist, res = train_model(max_elms=None,
                             epochs=8,
                             steps_per_epoch=50000,  # batches per epoch
                             training_batch_size=4,
@@ -282,8 +283,8 @@ if __name__ == '__main__':
                             dense_layers=(80, 40),
                             patience=4,  # epochs to wait to allow satisfaction of min_delta improvement
                             min_delta=1e-4,  # minimum relative improvement (validation loss) to avoid early stopping
-                            fraction_test=0.2,
-                            fraction_validate=0.1,
+                            fraction_test=0.15,
+                            fraction_validate=0.05,
                             save_std_to_file=False,  # False for regular stdout, True to redirect to file in model dir.
                             fit_verbose=1,  # 0 for no message, 1 for progress bar, 2 for epoch summary
                             )
