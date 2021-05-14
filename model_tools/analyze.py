@@ -27,6 +27,7 @@ print('Visible devices:')
 for device in tf.config.get_visible_devices():
     print(f'  {device.device_type}, {device.name}')
 
+
 # train_dir = 'hpo-02_trial_119_20210504_113150/'
 # train_dir = 'hpo-02_trial_013_20210502_133426/'
 # train_dir = 'hpo-02_trial_083_20210503_151706/'
@@ -34,6 +35,7 @@ for device in tf.config.get_visible_devices():
 # train_dir = 'hpo-02_trial_089_20210503_180059/'
 # train_dir = 'hpo_features_01_trial_016_20210506_030617'
 train_dir = 'hpo_features_01_trial_125_20210507_175056'
+
 
 model_dir = utilities.model_dir / train_dir
 
@@ -44,15 +46,17 @@ model = tf.keras.models.load_model(model_dir/'saved_model.tf',
                                    compile=True,
                                    )
 
-test_data = model_dir / 'test_data.pickle'
-with test_data.open('rb') as f:
+
+# read test data saved during training
+test_data_file = model_dir / 'test_data.pickle'
+with test_data_file.open('rb') as f:
     data = pickle.load(f)
 
-# read test data into np arrays
 signals = np.array(data['signals'])
 labels = np.array(data['labels'])
-
+window_start_indices = np.array(data['window_start_indices'])
 signal_window_size = data['signal_window_size']
+
 
 labels_trimmed = labels[:, (signal_window_size-1):]
 
@@ -118,12 +122,6 @@ roc_auc = sklearn.metrics.roc_auc_score(labels_classes.flat,
 precision, recall, _ = sklearn.metrics.precision_recall_curve(labels_classes.flat,
                                                               prediction.flat)
 pr_auc = sklearn.metrics.auc(recall, precision)
-
-# fp2, tp2, _ = sklearn.metrics.roc_curve(-1*(labels_classes.flatten()-1),
-#                                       -1*(prediction.flatten()-1))
-# roc_auc2 = sklearn.metrics.roc_auc_score(-1*(labels_classes.flatten()-1),
-#                                       -1*(prediction.flatten()-1))
-
 
 
 def do_plot():

@@ -252,7 +252,12 @@ if __name__ == '__main__':
     # set GPU visibility
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
-        i_gpu = len(gpus)-1
+        if len(sys.argv)>=2:
+            # command line option to specify GPU index
+            i_gpu = int(sys.argv[1])
+        else:
+            # default to last GPU
+            i_gpu = len(gpus)-1
         tf.config.set_visible_devices(gpus[i_gpu], 'GPU')
 
     print('Visible devices:')
@@ -260,18 +265,27 @@ if __name__ == '__main__':
         print(f'  {device.device_type}, {device.name}')
 
 
-    hist, res = train_model(max_elms=80,
-                            epochs=4,
+    hist, res = train_model(max_elms=None,
+                            epochs=8,
+                            steps_per_epoch=50000,  # batches per epoch
+                            training_batch_size=4,
                             signal_window_size=16,
                             initial_learning_rate=3e-5,
-                            epochs_per_halving=2,
+                            epochs_per_halving=4,  # epochs per LR halving
+                            momentum=0.2,
                             dropout_rate=0.05,
-                            model_type='features',
-                            maxpool_size=2,
-                            filters=16,
-                            dense_layers=(60, 30),
-                            save_std_to_file=False,
-                            fit_verbose=1,
+                            relu_negative_slope=5e-3,
+                            l2_factor=1e-3,
+                            model_type='features',  # 'cnn' or 'features'
+                            maxpool_size=2,  # spatial down-sample
+                            filters=20,  # feature kernels (should rename kw)
+                            dense_layers=(80, 40),
+                            patience=4,  # epochs to wait to allow satisfaction of min_delta improvement
+                            min_delta=1e-4,  # minimum relative improvement (validation loss) to avoid early stopping
+                            fraction_test=0.2,
+                            fraction_validate=0.1,
+                            save_std_to_file=False,  # False for regular stdout, True to redirect to file in model dir.
+                            fit_verbose=1,  # 0 for no message, 1 for progress bar, 2 for epoch summary
                             )
 
     if hasattr(sys.stdout, 'close'):

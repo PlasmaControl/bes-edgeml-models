@@ -34,7 +34,6 @@ class Data(object):
         self.datafile = datafile
         if self.datafile is None:
             self.datafile = utilities.data_dir / 'labeled-elm-events.hdf5'
-        # self.super_window_size = super_window_size
         self.signal_window_size = signal_window_size
         self.label_look_ahead = label_look_ahead
         self.max_elms = max_elms
@@ -43,7 +42,6 @@ class Data(object):
         self.training_batch_size = training_batch_size
         self.transition_halfwidth = transition_halfwidth
         self.signal_dtype = signal_dtype
-        # self.elming_oversample = elming_oversample
 
         self.training_elms = None
         self.validation_elms = None
@@ -64,6 +62,7 @@ class Data(object):
             sample_indices=self.training_data[2],
             batch_size=self.training_batch_size,
             )
+        self.train_dataset = self.train_dataset.repeat(count=20)
 
         print('Reading validation ELMs and make dataset')
         self.validation_data = self.read_data(
@@ -238,7 +237,8 @@ class Data(object):
         dtypes = (signals.dtype, labels.dtype)
         shapes = (tf.TensorShape([self.signal_window_size, 8, 8, 1]), tf.TensorShape([1]))
         dataset = tf.data.Dataset.from_generator(generator, dtypes, output_shapes=shapes)
-        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        dataset = dataset.batch(batch_size)
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 
 
