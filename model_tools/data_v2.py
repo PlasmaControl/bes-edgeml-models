@@ -1,4 +1,5 @@
 import os
+import logging
 import h5py
 from typing import Tuple, Callable
 
@@ -16,6 +17,34 @@ except ImportError:
     import config
 
     print("Loading datafile from direct import.")
+
+
+# log the model and data-preprocessing outputs
+def get_logger(stream_handler=True):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    # create handlers
+    f_handler = logging.FileHandler("output_logs.log")
+
+    # create formatters and add it to handlers
+    f_format = logging.Formatter(
+        "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
+    )
+
+    f_handler.setFormatter(f_format)
+
+    # add handlers to the logger
+    logger.addHandler(f_handler)
+
+    # display the logs in console
+    if stream_handler:
+        s_handler = logging.StreamHandler()
+        s_format = logging.Formatter("%(name)s:%(levelname)s:%(message)s")
+        s_handler.setFormatter(s_format)
+        logger.addHandler(s_handler)
+
+    return logger
 
 
 class Data:
@@ -81,11 +110,20 @@ class Data:
         training_elms, validation_elms, test_elms = self._partition_elms(
             max_elms=config.max_elms, fold=fold
         )
-        print("Reading training ELMs and make dataset")
+        LOGGER.info("Reading ELM events and creating datasets")
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating training dataset")
+        LOGGER.info("-" * 30)
         train_dataset = self._get_data(training_elms)
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating validation dataset")
+        LOGGER.info("-" * 30)
         validation_dataset = self._get_data(
             validation_elms, shuffle_sample_indices=False
         )
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating test dataset")
+        LOGGER.info("-" * 30)
         test_dataset = self._get_data(test_elms, shuffle_sample_indices=False)
 
         return train_dataset, validation_dataset, test_dataset
@@ -121,7 +159,7 @@ class Data:
         # shuffle indices
         np.random.shuffle(elm_index)
         if max_elms is not None and max_elms != -1:
-            print(f"Limiting data read to {max_elms} events.")
+            LOGGER.info(f"Limiting data read to {max_elms} events.")
             n_elms = max_elms
         else:
             n_elms = len(elm_index)
@@ -141,19 +179,23 @@ class Data:
             )
 
         if self.kfold:
+            LOGGER.info("Using K-fold cross-validation")
             self._kfold_cross_val(training_elms)
             training_elms = self.df[self.df["fold"] != fold]["elm_events"]
             validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
         else:
+            LOGGER.info(
+                "Creating training and validation datasets by simple splitting"
+            )
             (
                 training_elms,
                 validation_elms,
             ) = model_selection.train_test_split(
                 training_elms, test_size=self.fraction_validate
             )
-        print(f"    Number of training ELM events: {training_elms.size}")
-        print(f"    Number of validation ELM events: {validation_elms.size}")
-        print(f"    Number of test ELM events: {test_elms.size}")
+        LOGGER.info(f"Number of training ELM events: {training_elms.size}")
+        LOGGER.info(f"Number of validation ELM events: {validation_elms.size}")
+        LOGGER.info(f"Number of test ELM events: {test_elms.size}")
 
         return training_elms, validation_elms, test_elms
 
@@ -281,7 +323,7 @@ class Data:
             print("Shuffling sample indices")
             sample_indices = tf.random.shuffle(sample_indices)
 
-        print(
+        LOGGER.info(
             "Data tensors: signals, labels, valid_indices, sample_indices, window_start_indices"
         )
         for tensor in [
@@ -295,13 +337,13 @@ class Data:
             tmp += f" min {np.min(tensor):.3f} max {np.max(tensor):.3f}"
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
-            print(tmp)
+            LOGGER.info(tmp)
 
         hf.close()
         if hf:
-            print("File is open")
+            LOGGER.info("File is open")
         else:
-            print("File is closed")
+            LOGGER.info("File is closed")
         return signals, labels, sample_indices, window_start
 
     def _read_file(self) -> Tuple[np.ndarray, h5py.File]:
@@ -312,11 +354,11 @@ class Data:
             Tuple[np.ndarray, h5py.File]: Tuple containing ELM indices and file object.
         """
         assert os.path.exists(self.datafile)
-        print(f"Found datafile: {self.datafile}")
+        LOGGER.info(f"Found datafile: {self.datafile}")
 
         # get ELM indices from datafile
         hf = h5py.File(self.datafile, "r")
-        print(f"    Number of ELM events in the datafile: {len(hf)}")
+        LOGGER.info(f"Number of ELM events in the datafile: {len(hf)}")
         elm_index = np.array([int(key) for key in hf], dtype=np.int)
         return elm_index, hf
 
@@ -332,7 +374,6 @@ class Data:
             np.ndarray: Smoothened labels.
         """
         non_zero_elm = np.nonzero(labels_np)[0]
-        print(len(non_zero_elm))
         for direction, idx in zip([1, -1], [non_zero_elm[0], non_zero_elm[-1]]):
             idx_start = idx - config.transition_halfwidth - 1
             idx_end = idx + config.transition_halfwidth + 2
@@ -464,10 +505,10 @@ class Data:
 
         # oversample active ELM periods to reduce class imbalance
         fraction_elm = np.count_nonzero(labels_np >= 0.5) / labels_np.shape[0]
-        print(f"    Active ELM fraction (raw data): {fraction_elm:.3f}")
+        LOGGER.info(f"Active ELM fraction (raw data): {fraction_elm:.3f}")
         oversample_count = int((1 - fraction_elm) / fraction_elm) - 1
-        print(
-            f"    Active ELM oversampling for balanced data: {oversample_count}"
+        LOGGER.info(
+            f"Active ELM oversampling for balanced data: {oversample_count}"
         )
         for i_start, i_stop in zip(elm_start, elm_stop):
             assert np.all(labels_np[i_start : i_stop + 1] >= 0.5)
@@ -480,7 +521,7 @@ class Data:
             np.count_nonzero(labels_np[sample_indices] >= 0.5)
             / sample_indices.size
         )
-        print(f"  Active ELM fraction (balanced data): {fraction_elm:.3f}")
+        LOGGER.info(f"Active ELM fraction (balanced data): {fraction_elm:.3f}")
         return sample_indices
 
     def _make_dataset(
@@ -505,7 +546,7 @@ class Data:
         --------
             tf.data.Dataset: Dataset batches.
         """
-        print("  Make dataset from generator")
+        LOGGER.info("Making dataset from generator")
         generator = self._make_generator(signals, labels, sample_indices)
         dtypes = (signals.dtype, labels.dtype)
         shapes = (
@@ -571,10 +612,11 @@ class Data:
 
 if __name__ == "__main__":
     # turn off GPU visibility for tensorflow
+    LOGGER = get_logger()
     tf.config.set_visible_devices([], "GPU")
     print(f"Tensorflow version: {tf.__version__}")
     print("Visible devices:")
     for device in tf.config.get_visible_devices():
-        print(f"  {device.device_type} {device.name}")
+        print(f"{device.device_type} {device.name}")
     ds = Data(kfold=True)
     train, valid, test = ds.get_datasets(fold=0)
