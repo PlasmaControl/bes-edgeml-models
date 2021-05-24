@@ -1,6 +1,7 @@
 """
 Package utilities
 """
+import logging
 from pathlib import Path
 import numpy as np
 import h5py
@@ -18,6 +19,33 @@ data_dir.mkdir(exist_ok=True)
 
 model_dir = repo_dir / "models"
 model_dir.mkdir(exist_ok=True)
+
+# log the model and data-preprocessing outputs
+def get_logger(stream_handler=True):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    # create handlers
+    f_handler = logging.FileHandler("output_logs.log")
+
+    # create formatters and add it to handlers
+    f_format = logging.Formatter(
+        "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
+    )
+
+    f_handler.setFormatter(f_format)
+
+    # add handlers to the logger
+    logger.addHandler(f_handler)
+
+    # display the logs in console
+    if stream_handler:
+        s_handler = logging.StreamHandler()
+        s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
+        s_handler.setFormatter(s_format)
+        logger.addHandler(s_handler)
+
+    return logger
 
 
 # custom learning rate schedule with exponential decay
