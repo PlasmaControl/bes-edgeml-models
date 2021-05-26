@@ -6,42 +6,18 @@ import numpy as np
 import tensorflow as tf
 
 try:
-    from . import model, data, utilities
+    from . import model, data_v2, utilities, config
 
     print("Package-level relative import")
 except ImportError:
-    import model, data, utilities
+    import model, data_v2, utilities, config
 
     print("Direct import")
 
 
 def train_model(
-    # data kwargs
-    label_look_ahead=0,
-    signal_window_size=8,
-    max_elms=None,
-    fraction_validate=0.15,  # validation data for post-epoch evaluation
-    fraction_test=0.15,  # test data for post-training evaluation
-    transition_halfwidth=3,
-    training_batch_size=4,
     # specify model
     model_type="cnn",  # 'cnn' or 'features'
-    # kwargs for all models
-    dense_layers=(40, 20),
-    dropout_rate=0.1,
-    l2_factor=2e-3,
-    relu_negative_slope=0.002,
-    # kwargs for cnn models
-    conv_size=3,
-    cnn_layers=(4, 8),
-    # kwargs for feature models
-    maxpool_size=2,  # 0 to skip maxpool
-    filters=16,
-    # optimization kwargs
-    epochs_per_halving=4,
-    initial_learning_rate=3e-5,
-    minimum_learning_rate_factor=30,
-    momentum=0.2,
     # training kwargs
     epochs=4,
     steps_per_epoch=50000,  # batches per epoch
@@ -82,37 +58,37 @@ def train_model(
         pickle.dump(input_vars, f)
 
     # get data
-    elm_data = data.Data(
-        signal_window_size=signal_window_size,
-        label_look_ahead=label_look_ahead,
-        max_elms=max_elms,
-        fraction_validate=fraction_validate,
-        fraction_test=fraction_test,
-        training_batch_size=training_batch_size,
-        transition_halfwidth=transition_halfwidth,
+    elm_data = data_v2.Data(
+        fraction_validate=config.fraction_validate,
+        fraction_test=config.fraction_test,
+        kfold=False,
+        smoothen_transition=False,
     )
+    all_data, datasets = elm_data.get_datasets()
+    train_data, validation_data, test_data = all_data
+    train_dataset, validation_dataset, test_dataset = datasets
 
     test_file = model_dir / "test_data.pickle"
     with test_file.open("wb") as f:
         pickle.dump(
             {
-                "signals": np.array(elm_data.test_data[0]),
-                "labels": np.array(elm_data.test_data[1]),
-                "sample_indices": elm_data.test_data[2],
-                "window_start_indices": elm_data.test_data[3],
-                "signal_window_size": elm_data.signal_window_size,
-                "label_look_ahead": elm_data.label_look_ahead,
+                "signals": np.array(test_data[0]),
+                "labels": np.array(test_data[1]),
+                "sample_indices": test_data[2],
+                "window_start_indices": test_data[3],
+                "signal_window_size": config.signal_window_size,
+                "label_look_ahead": config.label_look_ahead,
             },
             f,
         )
 
     # kwargs for all models
     model_kwargs = dict(
-        signal_window_size=signal_window_size,
-        dense_layers=dense_layers,
-        dropout_rate=dropout_rate,
-        l2_factor=l2_factor,
-        relu_negative_slope=relu_negative_slope,
+        signal_window_size=config.signal_window_size,
+        dense_layers=config.dense_layers,
+        dropout_rate=config.dropout_rate,
+        l2_factor=config.l2_factor,
+        relu_negative_slope=config.relu_negative_slope,
     )
 
     # define model
@@ -121,29 +97,31 @@ def train_model(
             # kwargs for all models
             **model_kwargs,
             # kwargs for CNN models
-            conv_size=conv_size,
-            cnn_layers=cnn_layers,
+            conv_size=config.conv_size,
+            cnn_layers=config.cnn_layers,
         )
     elif model_type == "features":
         m = model.feature_model(
             # kwargs for all models
             **model_kwargs,
             # kwargs for feature models
-            maxpool_size=maxpool_size,
-            filters=filters,
+            maxpool_size=config.maxpool_size,
+            filters=config.filters,
         )
     else:
-        raise ValueError
+        raise ValueError(
+            'Unknown model type is passed. Use either "cnn" or "features".'
+        )
 
     # optimizer
-    steps_per_halving = steps_per_epoch * epochs_per_halving
+    steps_per_halving = steps_per_epoch * config.epochs_per_halving
     optimizer = tf.keras.optimizers.SGD(
         learning_rate=utilities.Exp_Learning_Rate_Schedule(
-            initial_learning_rate=initial_learning_rate,
-            minimum_learning_rate_factor=minimum_learning_rate_factor,
+            initial_learning_rate=config.initial_learning_rate,
+            minimum_learning_rate_factor=config.minimum_learning_rate_factor,
             steps_per_halving=steps_per_halving,
         ),
-        momentum=momentum,
+        momentum=config.momentum,
         nesterov=True,
     )
 
@@ -153,7 +131,7 @@ def train_model(
     )
 
     sample_output = m.evaluate(
-        x=elm_data.test_dataset,
+        x=test_dataset,
         steps=1,
         verbose=0,
         return_dict=True,
@@ -193,10 +171,10 @@ def train_model(
         ]
 
     history = m.fit(
-        x=elm_data.train_dataset,
+        x=train_dataset,
         verbose=fit_verbose,
         epochs=epochs,
-        validation_data=elm_data.validation_dataset,
+        validation_data=validation_dataset,
         workers=2,
         use_multiprocessing=True,
         callbacks=callbacks,
@@ -211,7 +189,7 @@ def train_model(
     # evaluate validation and test datasets
     for ds_name, dataset in zip(
         ["Validation", "Test"],
-        [elm_data.validation_dataset, elm_data.test_dataset],
+        [validation_dataset, test_dataset],
     ):
         print(f"{ds_name} metrics")
         result = m.evaluate(
@@ -239,7 +217,6 @@ def train_model(
 
 
 if __name__ == "__main__":
-
     # TF environment
     print("TF version:", tf.__version__)
     for gpu_device in tf.config.list_physical_devices("GPU"):
@@ -264,25 +241,11 @@ if __name__ == "__main__":
         print(f"  {device.device_type}, {device.name}")
 
     hist, res = train_model(
-        max_elms=None,
         epochs=8,
         steps_per_epoch=50000,  # batches per epoch
-        training_batch_size=4,
-        signal_window_size=16,
-        initial_learning_rate=3e-5,
-        epochs_per_halving=4,  # epochs per LR halving
-        momentum=0.2,
-        dropout_rate=0.05,
-        relu_negative_slope=5e-3,
-        l2_factor=1e-3,
         model_type="features",  # 'cnn' or 'features'
-        maxpool_size=2,  # spatial down-sample
-        filters=20,  # feature kernels (should rename kw)
-        dense_layers=(80, 40),
         patience=4,  # epochs to wait to allow satisfaction of min_delta improvement
         min_delta=1e-4,  # minimum relative improvement (validation loss) to avoid early stopping
-        fraction_test=0.15,
-        fraction_validate=0.05,
         save_std_to_file=False,  # False for regular stdout, True to redirect to file in model dir.
         fit_verbose=1,  # 0 for no message, 1 for progress bar, 2 for epoch summary
     )
