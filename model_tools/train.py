@@ -65,7 +65,7 @@ def train_model(
         smoothen_transition=False,
     )
     all_data, datasets = elm_data.get_datasets()
-    train_data, validation_data, test_data = all_data
+    _, _, test_data = all_data
     train_dataset, validation_dataset, test_dataset = datasets
 
     test_file = model_dir / "test_data.pickle"
