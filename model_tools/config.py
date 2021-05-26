@@ -27,3 +27,29 @@ label_look_ahead = 0
 
 # Number of k-folds if using k-fold cross validation
 folds = 5
+
+# hidden units in fully connected layers
+dense_layers = (40, 20)
+
+# dropout fraction
+dropout_rate = 0.1
+
+# l2-regularization
+l2_factor = 2e-3
+
+# slope of the leaky ReLU
+relu_negative_slope = 0.002
+
+# kwargs for cnn model
+conv_size = (3,)
+cnn_layers = ((4, 8),)
+
+# kwargs for feature model
+maxpool_size = 2  # 0 to skip maxpool
+filters = 16
+
+# optimization kwargs
+epochs_per_halving = 4
+initial_learning_rate = 3e-5
+minimum_learning_rate_factor = 30
+momentum = 0.2

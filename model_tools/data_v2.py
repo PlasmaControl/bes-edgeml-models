@@ -1,7 +1,7 @@
 import os
 import logging
 import h5py
-from typing import Tuple, Callable
+from typing import Tuple, Callable, List
 
 import numpy as np
 import pandas as pd
@@ -45,6 +45,10 @@ def get_logger(stream_handler=True):
         logger.addHandler(s_handler)
 
     return logger
+
+
+# create the logger object
+LOGGER = get_logger()
 
 
 class Data:
@@ -91,9 +95,7 @@ class Data:
 
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
 
-    def get_datasets(
-        self, fold: int = None
-    ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
+    def get_datasets(self, fold: int = None) -> Tuple[List, List]:
         """Method to create tensorflow datasets for training, validation and
         testing.
 
@@ -114,19 +116,25 @@ class Data:
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating training dataset")
         LOGGER.info("-" * 30)
-        train_dataset = self._get_data(training_elms)
+        train_data, train_dataset = self._get_data(training_elms)
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating validation dataset")
         LOGGER.info("-" * 30)
-        validation_dataset = self._get_data(
+        validation_data, validation_dataset = self._get_data(
             validation_elms, shuffle_sample_indices=False
         )
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating test dataset")
         LOGGER.info("-" * 30)
-        test_dataset = self._get_data(test_elms, shuffle_sample_indices=False)
+        test_data, test_dataset = self._get_data(
+            test_elms, shuffle_sample_indices=False
+        )
 
-        return train_dataset, validation_dataset, test_dataset
+        return [train_data, validation_data, test_data], [
+            train_dataset,
+            validation_dataset,
+            test_dataset,
+        ]
 
     def _partition_elms(
         self, max_elms: int = None, fold: int = None
@@ -217,7 +225,9 @@ class Data:
 
     def _get_data(
         self, elms: np.ndarray, shuffle_sample_indices: bool = True
-    ) -> tf.data.Dataset:
+    ) -> Tuple[
+        Tuple[tf.Tensor, tf.Tensor, np.ndarray, np.ndarray], tf.data.Dataset
+    ]:
         """Creates tensorflow dataset after preprocessing steps like label smoothening,
         calculating allowed indices and upsampling.
 
@@ -230,7 +240,8 @@ class Data:
 
         Returns:
         --------
-            tf.data.Dataset: Tensorflow dataset for the given mode.
+            Tuple[Tuple[tf.Tensor, tf.Tensor, np.ndarray, np.ndarray], tf.data.Dataset]:
+                Tuple containing data and tensorflow dataset for the given mode.
         """
         data = self._read_data(
             elms, shuffle_sample_indices=shuffle_sample_indices
@@ -242,7 +253,7 @@ class Data:
             batch_size=config.batch_size,
         )
 
-        return dataset
+        return data, dataset
 
     def _read_data(
         self,
@@ -612,7 +623,6 @@ class Data:
 
 if __name__ == "__main__":
     # turn off GPU visibility for tensorflow
-    LOGGER = get_logger()
     tf.config.set_visible_devices([], "GPU")
     print(f"Tensorflow version: {tf.__version__}")
     print("Visible devices:")
