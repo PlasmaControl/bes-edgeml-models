@@ -131,7 +131,7 @@ class Data:
     def _partition_elms(
         self, max_elms: int = None, fold: int = None
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Partition the all ELM events into training, validation and test indices.
+        """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
         validation set being `fraction_validate` of the training set or by K-fold
         cross-validation.
