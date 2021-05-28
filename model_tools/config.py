@@ -1,6 +1,9 @@
 # name of the file containing the data
 file_name = "labeled-elm-events.hdf5"
 
+# output directory
+output_dir = "outputs"
+
 # set universal random state
 seed = 15
 
