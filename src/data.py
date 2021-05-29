@@ -91,7 +91,38 @@ class Data:
 
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
 
-    def get_data(
+    def get_data(self, fold: int = None) -> Tuple:
+        """Method to create data for training, validation and testing.
+
+        Args:
+        -----
+            fold (int, optional): Fold index for K-fold cross-validation between
+                [0-num_folds). Must be passed when `kfold=True`. Defaults to None.
+
+        Returns:
+        --------
+            Tuple: Tuple containing data for training, validation and test sets.
+        """
+        training_elms, validation_elms, test_elms = self._partition_elms(
+            max_elms=config.max_elms, fold=fold
+        )
+        LOGGER.info("Reading ELM events and creating datasets")
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating training data")
+        LOGGER.info("-" * 30)
+        train_data = self._preprocess_data(training_elms)
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating validation data")
+        LOGGER.info("-" * 30)
+        validation_data = self._preprocess_data(validation_elms)
+        LOGGER.info("-" * 30)
+        LOGGER.info("  Creating test dataset")
+        LOGGER.info("-" * 30)
+        test_data = self._preprocess_data(test_elms)
+
+        return train_data, validation_data, test_data
+
+    def _preprocess_data(
         self, elm_indices: np.ndarray = None
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
@@ -422,3 +453,34 @@ class Data:
         )
         LOGGER.info(f"Active ELM fraction (balanced data): {fraction_elm:.3f}")
         return sample_indices
+
+
+class ELMDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        signals: np.ndarray,
+        labels: np.ndarray,
+        sample_indices: np.ndarray,
+        window_start: np.ndarray,
+    ):
+        self.signals = signals
+        self.labels = labels
+        self.sample_indices = sample_indices
+        self.window_start = window_start
+        LOGGER.info("Dataset class")
+        LOGGER.info(f"Signals shape: {signals.shape}")
+        LOGGER.info(f"Labels shape: {labels.shape}")
+        LOGGER.info(f"Sample indices shape: {sample_indices.shape}")
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return self.signals[idx], self.labels[idx]
+
+
+if __name__ == "__main__":
+    data = Data()
+    train_data = data.get_data()
+
+    train_dataset = ELMDataset
