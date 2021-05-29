@@ -91,8 +91,100 @@ class Data:
 
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
 
-    def get_datasets(self):
-        pass
+    def get_data(
+        self, elm_indices: np.ndarray = None
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Helper function to preprocess the data: reshape the input signal, use
+        allowed indices to upsample the class minority labels [active ELM events].
+
+        Args:
+        -----
+            elm_indices (np.ndarray, optional): ELM event indices for the corresponding
+                mode. Defaults to None.
+
+        Returns:
+        --------
+            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Tuple containing
+                original signals, correponding labels, sample indices obtained
+                after upsampling and start index for each ELM event.
+        """
+        signals = None
+        window_start = None
+        elm_start = None
+        elm_stop = None
+        hf = None
+        valid_t0 = []
+        labels = []
+
+        # get ELM indices from the data file if not provided
+        if elm_indices is None:
+            elm_indices, hf = self._read_file()
+        else:
+            _, hf = self._read_file()
+
+        # iterate through all the ELM indices
+        for elm_index in elm_indices:
+            elm_key = f"{elm_index:05d}"
+            elm_event = hf[elm_key]
+            _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
+            # transposing so that the time dimension comes forward
+            _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
+            _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
+
+            # TODO: add label smoothening
+
+            # get all the allowed indices till current time step
+            indices_data = self._get_valid_indices(
+                _signals=_signals,
+                _labels=_labels,
+                window_start_indices=window_start,
+                elm_start_indices=elm_start,
+                elm_stop_indices=elm_stop,
+                valid_t0=valid_t0,
+                labels=labels,
+                signals=signals,
+            )
+            (
+                signals,
+                labels,
+                valid_t0,
+                window_start,
+                elm_start,
+                elm_stop,
+            ) = indices_data
+
+        _labels = np.array(labels)
+
+        # valid indices for data sampling
+        valid_indices = np.arange(valid_t0.size, dtype="int")
+        valid_indices = valid_indices[valid_t0 == 1]
+
+        sample_indices = self._oversample_data(
+            _labels, valid_indices, elm_start, elm_stop
+        )
+
+        LOGGER.info(
+            "Data tensors: signals, labels, valid_indices, sample_indices, window_start_indices"
+        )
+        for tensor in [
+            signals,
+            labels,
+            valid_indices,
+            sample_indices,
+            window_start,
+        ]:
+            tmp = f"  shape {tensor.shape} dtype {tensor.dtype}"
+            tmp += f" min {np.min(tensor):.3f} max {np.max(tensor):.3f}"
+            if hasattr(tensor, "device"):
+                tmp += f" device {tensor.device[-5:]}"
+            LOGGER.info(tmp)
+
+        hf.close()
+        if hf:
+            LOGGER.info("File is open")
+        else:
+            LOGGER.info("File is closed")
+        return signals, labels, sample_indices, window_start
 
     def _partition_elms(
         self, max_elms: int = None, fold: int = None
@@ -176,108 +268,6 @@ class Data:
         self.df["fold"] = -1
         for f_, (_, valid_idx) in enumerate(kf.split(X=training_elms)):
             self.df.loc[valid_idx, "fold"] = f_
-
-    def _get_data(
-        self, elms: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        data = self._read_data(elms)
-
-        return data
-
-    def _read_data(
-        self, elm_indices: np.ndarray = None
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Helper function to preprocess the data: reshape the input signal, use
-        allowed indices to upsample the class minority labels [active ELM events].
-
-        Args:
-        -----
-            elm_indices (np.ndarray, optional): ELM event indices for the corresponding
-                mode. Defaults to None.
-
-        Returns:
-        --------
-            Tuple[tf.Tensor, tf.Tensor, np.ndarray, np.ndarray]: Tuple containing
-                original signals, correponding labels, sample indices obtained
-                after  upsampling and start index for each ELM event.
-        """
-        signals = None
-        window_start = None
-        elm_start = None
-        elm_stop = None
-        hf = None
-        valid_t0 = []
-        labels = []
-
-        # get ELM indices from the data file if not provided
-        if elm_indices is None:
-            elm_indices, hf = self._read_file()
-        else:
-            _, hf = self._read_file()
-
-        # iterate through all the ELM indices
-        for elm_index in elm_indices:
-            elm_key = f"{elm_index:05d}"
-            elm_event = hf[elm_key]
-            _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
-            # transposing so that the time dimension comes forward
-            _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
-
-            # TODO: add label smoothening
-
-            # get all the allowed indices till current time step
-            indices_data = self._get_valid_indices(
-                _signals=_signals,
-                _labels=_labels,
-                window_start_indices=window_start,
-                elm_start_indices=elm_start,
-                elm_stop_indices=elm_stop,
-                valid_t0=valid_t0,
-                labels=labels,
-                signals=signals,
-            )
-            (
-                signals,
-                labels,
-                valid_t0,
-                window_start,
-                elm_start,
-                elm_stop,
-            ) = indices_data
-
-        _labels = np.array(labels)
-
-        # valid indices for data sampling
-        valid_indices = np.arange(valid_t0.size, dtype="int")
-        valid_indices = valid_indices[valid_t0 == 1]
-
-        sample_indices = self._oversample_data(
-            _labels, valid_indices, elm_start, elm_stop
-        )
-
-        LOGGER.info(
-            "Data tensors: signals, labels, valid_indices, sample_indices, window_start_indices"
-        )
-        for tensor in [
-            signals,
-            labels,
-            valid_indices,
-            sample_indices,
-            window_start,
-        ]:
-            tmp = f"  shape {tensor.shape} dtype {tensor.dtype}"
-            tmp += f" min {np.min(tensor):.3f} max {np.max(tensor):.3f}"
-            if hasattr(tensor, "device"):
-                tmp += f" device {tensor.device[-5:]}"
-            LOGGER.info(tmp)
-
-        hf.close()
-        if hf:
-            LOGGER.info("File is open")
-        else:
-            LOGGER.info("File is closed")
-        return signals, labels, sample_indices, window_start
 
     def _read_file(self) -> Tuple[np.ndarray, h5py.File]:
         """Helper function to read a HDF5 file.
