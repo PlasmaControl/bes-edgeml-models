@@ -189,7 +189,6 @@ class Data:
         # valid indices for data sampling
         valid_indices = np.arange(valid_t0.size, dtype="int")
         valid_indices = valid_indices[valid_t0 == 1]
-
         sample_indices = self._oversample_data(
             _labels, valid_indices, elm_start, elm_stop
         )
@@ -313,7 +312,7 @@ class Data:
         # get ELM indices from datafile
         hf = h5py.File(self.datafile, "r")
         LOGGER.info(f"Number of ELM events in the datafile: {len(hf)}")
-        elm_index = np.array([int(key) for key in hf], dtype=np.int)
+        elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
 
     def _get_valid_indices(
@@ -362,7 +361,7 @@ class Data:
                 time data point.
         """
         # allowed indices; time data points which can be used for creating the data chunks
-        _valid_t0 = np.ones(_labels.shape, dtype=np.int8)
+        _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
         _valid_t0[
             -(config.signal_window_size + config.label_look_ahead) + 1 :
         ] = 0
@@ -374,7 +373,7 @@ class Data:
             # initialize arrays
             window_start_indices = np.array([0])
             elm_start_indices = active_elm_events[0]
-            elm_start_indices = active_elm_events[-1]
+            elm_stop_indices = active_elm_events[-1]
             valid_t0 = _valid_t0
             signals = _signals
             labels = _labels
@@ -473,10 +472,11 @@ class ELMDataset(torch.utils.data.Dataset):
         LOGGER.info(f"Sample indices shape: {sample_indices.shape}")
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.sample_indices)
 
     def __getitem__(self, idx):
-        return self.signals[idx], self.labels[idx]
+        elm_idx = self.sample_indices[idx]
+        return self.signals[elm_idx], self.labels[elm_idx]
 
 
 if __name__ == "__main__":
@@ -484,4 +484,6 @@ if __name__ == "__main__":
     train_data, _, _ = data.get_data()
 
     train_dataset = ELMDataset(*train_data)
-    print(train_dataset.__getitem__(0))
+    sample = train_dataset.__getitem__(0)
+    print(sample)
+    print(sample[0].shape)
