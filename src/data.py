@@ -13,8 +13,8 @@ from sklearn import model_selection
 import torch
 
 # run the code from top level directory
-sys.path.append("../model_tools")
-from model_tools import utilities, config
+sys.path.append("model_tools")
+import config
 
 # log the model and data preprocessing outputs
 def get_logger(stream_handler=True):
@@ -81,7 +81,7 @@ class Data:
         """
         self.datafile = datafile
         if self.datafile is None:
-            self.datafile = os.path.join(utilities.data_dir, config.file_name)
+            self.datafile = os.path.join(config.data_dir, config.file_name)
         self.fraction_validate = fraction_validate
         self.fraction_test = fraction_test
         self.signal_dtype = signal_dtype
@@ -481,6 +481,7 @@ class ELMDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     data = Data()
-    train_data = data.get_data()
+    train_data, _, _ = data.get_data()
 
-    train_dataset = ELMDataset
+    train_dataset = ELMDataset(*train_data)
+    print(train_dataset.__getitem__(0))
