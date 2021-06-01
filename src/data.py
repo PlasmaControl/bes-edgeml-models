@@ -461,11 +461,15 @@ class ELMDataset(torch.utils.data.Dataset):
         labels: np.ndarray,
         sample_indices: np.ndarray,
         window_start: np.ndarray,
+        signal_window_size: int,
+        label_look_ahead: int,
     ):
         self.signals = signals
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
+        self.signal_window_size = signal_window_size
+        self.label_look_ahead = label_look_ahead
         LOGGER.info("Dataset class")
         LOGGER.info(f"Signals shape: {signals.shape}")
         LOGGER.info(f"Labels shape: {labels.shape}")
@@ -476,14 +480,25 @@ class ELMDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         elm_idx = self.sample_indices[idx]
-        return self.signals[elm_idx], self.labels[elm_idx]
+        signal_window = self.signals[
+            elm_idx : elm_idx + self.signal_window_size
+        ]
+        label = self.labels[
+            elm_idx + self.signal_window_size + self.label_look_ahead - 1
+        ].astype("int")
+        signal_window = torch.as_tensor(signal_window, dtype=torch.float64)
+        label = torch.as_tensor(label, dtype=torch.int64)
+        return signal_window, label
 
 
 if __name__ == "__main__":
     data = Data()
     train_data, _, _ = data.get_data()
 
-    train_dataset = ELMDataset(*train_data)
+    train_dataset = ELMDataset(
+        *train_data, config.signal_window_size, config.label_look_ahead
+    )
     sample = train_dataset.__getitem__(0)
-    print(sample)
+    print(sample[0])
+    print(sample[1])
     print(sample[0].shape)
