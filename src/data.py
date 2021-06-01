@@ -3,8 +3,8 @@ Data class to package BES data for training using PyTorch
 """
 import os
 import sys
-import logging
-from typing import Tuple, Callable, List
+import utils
+from typing import Tuple
 
 import h5py
 import numpy as np
@@ -16,37 +16,9 @@ import torch
 sys.path.append("model_tools")
 import config
 
-# log the model and data preprocessing outputs
-def get_logger(stream_handler=True):
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
-    # create handlers
-    f_handler = logging.FileHandler(
-        os.path.join(config.output_dir, "output_logs.log")
-    )
-
-    # create formatters and add it to the handlers
-    f_format = logging.Formatter(
-        "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
-    )
-    f_handler.setFormatter(f_format)
-
-    # add handlers to the logger
-    logger.addHandler(f_handler)
-
-    # display the logs in console
-    if stream_handler:
-        s_handler = logging.StreamHandler()
-        s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
-        s_handler.setFormatter(s_format)
-        logger.addHandler(s_handler)
-
-    return logger
-
 
 # create the logger object
-LOGGER = get_logger()
+LOGGER = utils.get_logger(script_name=__name__, log_file="output_logs.log")
 
 
 class Data:
