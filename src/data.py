@@ -12,13 +12,13 @@ import pandas as pd
 from sklearn import model_selection
 import torch
 
-# run the code from top level directory
-sys.path.append("model_tools")
 import config
 
 
 # create the logger object
-LOGGER = utils.get_logger(script_name=__name__, log_file="output_logs.log")
+LOGGER = utils.get_logger(
+    script_name=__name__, log_file="output_logs_fold2.log"
+)
 
 
 class Data:
@@ -439,7 +439,7 @@ class ELMDataset(torch.utils.data.Dataset):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
         which stacks the time data points and return a data chunk of size:
-        (`signal_window_size`x8x8). The dataset also returns the label which
+        (`signal_window_sizex8x8`). The dataset also returns the label which
         corresponds to the label of the last time step of the chunk.
 
         Args:
@@ -484,8 +484,8 @@ class ELMDataset(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    data = Data()
-    train_data, _, _ = data.get_data()
+    data = Data(kfold=True)
+    train_data, _, _ = data.get_data(fold=0)
 
     train_dataset = ELMDataset(
         *train_data, config.signal_window_size, config.label_look_ahead
