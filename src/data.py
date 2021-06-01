@@ -464,6 +464,24 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window_size: int,
         label_look_ahead: int,
     ):
+        """PyTorch dataset class to get the ELM data and corresponding labels
+        according to the sample_indices. The signals are grouped by `signal_window_size`
+        which stacks the time data points and return a data chunk of size:
+        (`signal_window_size`x8x8). The dataset also returns the label which
+        corresponds to the label of the last time step of the chunk.
+
+        Args:
+        -----
+            signals (np.ndarray): Input data of size 8x8.
+            labels (np.ndarray): Corresponding targets.
+            sample_indices (np.ndarray): Indices of the inputs obtained after
+                oversampling.
+            window_start (np.ndarray): Start index of each ELM event.
+            signal_window_size (int): Number of time data points to be used for
+                stacking.
+            label_look_ahead (int): Label look ahead to find which time step label
+                is to used.
+        """
         self.signals = signals
         self.labels = labels
         self.sample_indices = sample_indices
@@ -480,7 +498,7 @@ class ELMDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.sample_indices)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
         elm_idx = self.sample_indices[idx]
         signal_window = self.signals[
             elm_idx : elm_idx + self.signal_window_size
