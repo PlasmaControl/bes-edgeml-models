@@ -2,7 +2,6 @@
 Data class to package BES data for training using PyTorch
 """
 import os
-import sys
 import utils
 from typing import Tuple
 
@@ -17,7 +16,7 @@ import config
 
 # create the logger object
 LOGGER = utils.get_logger(
-    script_name=__name__, log_file="output_logs_fold2.log"
+    script_name=__name__, log_file="output_logs_fold0.log"
 )
 
 
@@ -63,13 +62,17 @@ class Data:
 
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
 
-    def get_data(self, fold: int = None) -> Tuple:
+    def get_data(
+        self, shuffle_sample_indices: bool = False, fold: int = None
+    ) -> Tuple:
         """Method to create data for training, validation and testing.
 
         Args:
         -----
             fold (int, optional): Fold index for K-fold cross-validation between
                 [0-num_folds). Must be passed when `kfold=True`. Defaults to None.
+            shuffle_sample_indices (bool, optional): Whether to shuffle the sample
+                indices. Defaults to False.
 
         Returns:
         --------
@@ -82,20 +85,28 @@ class Data:
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating training data")
         LOGGER.info("-" * 30)
-        train_data = self._preprocess_data(training_elms)
+        train_data = self._preprocess_data(
+            training_elms, shuffle_sample_indices=shuffle_sample_indices
+        )
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating validation data")
         LOGGER.info("-" * 30)
-        validation_data = self._preprocess_data(validation_elms)
+        validation_data = self._preprocess_data(
+            validation_elms, shuffle_sample_indices=shuffle_sample_indices
+        )
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating test dataset")
         LOGGER.info("-" * 30)
-        test_data = self._preprocess_data(test_elms)
+        test_data = self._preprocess_data(
+            test_elms, shuffle_sample_indices=shuffle_sample_indices
+        )
 
         return train_data, validation_data, test_data
 
     def _preprocess_data(
-        self, elm_indices: np.ndarray = None
+        self,
+        elm_indices: np.ndarray = None,
+        shuffle_sample_indices: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
@@ -104,6 +115,8 @@ class Data:
         -----
             elm_indices (np.ndarray, optional): ELM event indices for the corresponding
                 mode. Defaults to None.
+            shuffle_sample_indices (bool, optional): Whether to shuffle the sample
+                indices. Defaults to False.
 
         Returns:
         --------
@@ -164,6 +177,9 @@ class Data:
         sample_indices = self._oversample_data(
             _labels, valid_indices, elm_start, elm_stop
         )
+
+        if shuffle_sample_indices:
+            np.random.shuffle(sample_indices)
 
         LOGGER.info(
             "Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:"
@@ -484,13 +500,21 @@ class ELMDataset(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
+    fold = 1
     data = Data(kfold=True)
-    train_data, _, _ = data.get_data(fold=0)
-
+    LOGGER.info("-" * 10)
+    LOGGER.info(f" Fold: {fold}")
+    LOGGER.info("-" * 10)
+    train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=fold)
+    _, _, sample_indices, _ = train_data
+    LOGGER.info(f"sample indices: {sample_indices[:10]}")
+    values, counts = np.unique(sample_indices, return_counts=True)
+    LOGGER.info(f"Values: {values[counts > 1]}")
+    LOGGER.info(f"Counts: {counts[counts > 1]}")
+    LOGGER.info(f"Number of non-unique values: {len(values[counts > 1])}")
     train_dataset = ELMDataset(
         *train_data, config.signal_window_size, config.label_look_ahead
     )
     sample = train_dataset.__getitem__(0)
-    print(sample[0])
     print(sample[1])
     print(sample[0].shape)
