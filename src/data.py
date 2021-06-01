@@ -194,7 +194,7 @@ class Data:
         )
 
         LOGGER.info(
-            "Data tensors: signals, labels, valid_indices, sample_indices, window_start_indices"
+            "Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:"
         )
         for tensor in [
             signals,
@@ -203,17 +203,17 @@ class Data:
             sample_indices,
             window_start,
         ]:
-            tmp = f"  shape {tensor.shape} dtype {tensor.dtype}"
-            tmp += f" min {np.min(tensor):.3f} max {np.max(tensor):.3f}"
+            tmp = f" shape {tensor.shape}, dtype {tensor.dtype},"
+            tmp += f" min {np.min(tensor):.3f}, max {np.max(tensor):.3f}"
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
             LOGGER.info(tmp)
 
         hf.close()
         if hf:
-            LOGGER.info("File is open")
+            LOGGER.info("File is open.")
         else:
-            LOGGER.info("File is closed")
+            LOGGER.info("File is closed.")
         return signals, labels, sample_indices, window_start
 
     def _partition_elms(
@@ -470,7 +470,9 @@ class ELMDataset(torch.utils.data.Dataset):
         self.window_start = window_start
         self.signal_window_size = signal_window_size
         self.label_look_ahead = label_look_ahead
-        LOGGER.info("Dataset class")
+        LOGGER.info("-" * 15)
+        LOGGER.info(" Dataset class")
+        LOGGER.info("-" * 15)
         LOGGER.info(f"Signals shape: {signals.shape}")
         LOGGER.info(f"Labels shape: {labels.shape}")
         LOGGER.info(f"Sample indices shape: {sample_indices.shape}")
@@ -487,7 +489,7 @@ class ELMDataset(torch.utils.data.Dataset):
             elm_idx + self.signal_window_size + self.label_look_ahead - 1
         ].astype("int")
         signal_window = torch.as_tensor(signal_window, dtype=torch.float64)
-        label = torch.as_tensor(label, dtype=torch.int64)
+        label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
 
 
