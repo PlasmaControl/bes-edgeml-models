@@ -1,6 +1,7 @@
 __pycache__/
 .ipynb_checkpoints/
 .idea/
+.vscode/
 data/
 models/
 jobs/
@@ -8,3 +9,4 @@ figures/
 
 slurm*
 *.db
+*.log
