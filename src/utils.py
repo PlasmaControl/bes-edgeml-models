@@ -1,9 +1,8 @@
 import os
-import sys
 import logging
+import time
+import math
 
-# run the code from top level directory
-sys.path.append("model_tools")
 import config
 
 
@@ -47,3 +46,45 @@ def get_logger(
         logger.addHandler(s_handler)
 
     return logger
+
+
+def as_minutes_seconds(s: int) -> str:
+    m = math.floor(s / 60)
+    s -= m * 60
+    m, s = int(m), int(s)
+    return f"{m:2d}m {s:2d}s"
+
+
+def time_since(since: int, percent: float) -> str:
+    now = time.time()
+    elapsed = now - since
+    total_estimated = elapsed / percent
+    remaining = total_estimated - elapsed
+    return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
+
+
+class MetricMonitor:
+    """Calculates and stores the average value of the metrics/loss"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """Reset all the parameters to zero."""
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n: int = 1):
+        """Update the value of the metrics and calculate their
+        average value over the whole dataset.
+        Args:
+        -----
+            val (float): Computed metric (per batch)
+            n (int, optional): Batch size. Defaults to 1.
+        """
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
