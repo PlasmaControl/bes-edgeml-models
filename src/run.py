@@ -25,7 +25,7 @@ class Run:
         self,
         data_loader: torch.utils.data.DataLoader,
         epoch: int,
-        print_every: int = 100,
+        print_every: int = 10000,
     ) -> float:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -50,7 +50,9 @@ class Run:
 
             # forward pass
             y_preds = self.model(images)
-            loss = self.criterion(y_preds, labels.unsqueeze(1).type_as(y_preds))
+            loss = self.criterion(
+                y_preds.squeeze(1), labels.unsqueeze(1).type_as(y_preds)
+            )
 
             # record loss
             losses.update(loss.item(), batch_size)
@@ -77,8 +79,8 @@ class Run:
         return losses.avg
 
     def evaluate(
-        self, data_loader: torch.utils.data.DataLoader, print_every: int = 50
-    ) -> Tuple[utils.MetricMonitor, np.ndarray]:
+        self, data_loader: torch.utils.data.DataLoader, print_every: int = 5000
+    ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
         losses = utils.MetricMonitor()
@@ -86,6 +88,7 @@ class Run:
         # switch the model to evaluation mode
         self.model.eval()
         preds = []
+        valid_labels = []
         start = end = time.time()
         for batch_idx, (images, labels) in enumerate(data_loader):
             # measure data loading time
@@ -105,6 +108,7 @@ class Run:
 
             # record accuracy
             preds.append(torch.sigmoid(y_preds).cpu().numpy())
+            valid_labels.append(labels.cpu().numpy())
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -119,4 +123,5 @@ class Run:
                     f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
                 )
         predictions = np.concatenate(preds)
-        return losses.avg, predictions
+        targets = np.concatenate(valid_labels)
+        return losses.avg, predictions, targets

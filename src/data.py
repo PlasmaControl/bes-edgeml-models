@@ -492,7 +492,7 @@ class ELMDataset(torch.utils.data.Dataset):
         label = self.labels[
             elm_idx + self.signal_window_size + self.label_look_ahead - 1
         ].astype("int")
-        signal_window = torch.as_tensor(signal_window, dtype=torch.float64)
+        signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
@@ -505,12 +505,16 @@ if __name__ == "__main__":
     LOGGER.info(f" Fold: {fold}")
     LOGGER.info("-" * 10)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=fold)
-    _, _, sample_indices, _ = train_data
-    LOGGER.info(f"sample indices: {sample_indices[:10]}")
+    _, _, sample_indices, window_start = train_data
+
+    LOGGER.info(f"Sample indices: {sample_indices[:10]}")
     values, counts = np.unique(sample_indices, return_counts=True)
     LOGGER.info(f"Values: {values[counts > 1]}")
     LOGGER.info(f"Counts: {counts[counts > 1]}")
     LOGGER.info(f"Number of non-unique values: {len(values[counts > 1])}")
+    LOGGER.info(
+        f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
+    )
     train_dataset = ELMDataset(
         *train_data, config.signal_window_size, config.label_look_ahead
     )

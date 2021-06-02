@@ -4,6 +4,7 @@ file_name = "labeled-elm-events.hdf5"
 # output directory
 output_dir = "outputs"
 data_dir = "data"
+model_dir = "models"
 
 # set universal random state
 seed = 15
@@ -13,7 +14,7 @@ fraction_validate = 0.2
 fraction_test = 0.1
 
 # batch size
-batch_size = 4
+batch_size = 48
 num_workers = 4
 
 # maximum number of ELM events to analyze
@@ -33,6 +34,12 @@ label_look_ahead = 0
 # Number of k-folds if using k-fold cross validation
 folds = 5
 
+# model to use: CNN_model or feature_model
+model_name = "feature_model"
+
+# number of traiing epochs
+epochs = 5
+
 # hidden units in fully connected layers
 dense_layers = (40, 20)
 
@@ -43,7 +50,7 @@ dropout_rate = 0.1
 l2_factor = 2e-3
 
 # slope of the leaky ReLU
-relu_negative_slope = 0.002
+relu_negative_slope = 0.02
 
 # kwargs for cnn model
 conv_size = (3,)
@@ -54,7 +61,5 @@ maxpool_size = 2  # 0 to skip maxpool
 filters = 16
 
 # optimization kwargs
-epochs_per_halving = 4
-initial_learning_rate = 3e-5
-minimum_learning_rate_factor = 30
-momentum = 0.2
+learning_rate = 3e-4
+weight_decay = 5e-5
