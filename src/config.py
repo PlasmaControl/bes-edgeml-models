@@ -14,6 +14,7 @@ fraction_test = 0.1
 
 # batch size
 batch_size = 4
+num_workers = 4
 
 # maximum number of ELM events to analyze
 max_elms = -1

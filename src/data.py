@@ -15,9 +15,7 @@ import config
 
 
 # create the logger object
-LOGGER = utils.get_logger(
-    script_name=__name__, log_file="output_logs_fold0.log"
-)
+LOGGER = utils.get_logger(script_name=__name__, log_file="output_logs.log")
 
 
 class Data:
