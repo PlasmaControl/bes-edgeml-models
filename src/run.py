@@ -25,7 +25,7 @@ class Run:
         self,
         data_loader: torch.utils.data.DataLoader,
         epoch: int,
-        print_every: int = 10000,
+        print_every: int = 100,
     ) -> float:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -79,7 +79,7 @@ class Run:
         return losses.avg
 
     def evaluate(
-        self, data_loader: torch.utils.data.DataLoader, print_every: int = 5000
+        self, data_loader: torch.utils.data.DataLoader, print_every: int = 50
     ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -103,6 +103,7 @@ class Run:
             with torch.no_grad():
                 y_preds = self.model(images)
 
+            y_preds = y_preds.squeeze(1)
             loss = self.criterion(y_preds, labels.unsqueeze(1).type_as(y_preds))
             losses.update(loss.item(), batch_size)
 

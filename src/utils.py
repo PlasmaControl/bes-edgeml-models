@@ -27,7 +27,9 @@ def get_logger(
     logger.setLevel(logging.INFO)
 
     # create handlers
-    f_handler = logging.FileHandler(os.path.join(config.output_dir, log_file))
+    f_handler = logging.FileHandler(
+        os.path.join(config.output_dir, log_file), mode="w"
+    )
 
     # create formatters and add it to the handlers
     f_format = logging.Formatter(

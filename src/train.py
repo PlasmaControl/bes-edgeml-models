@@ -53,7 +53,7 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
         shuffle=False,
         num_workers=config.num_workers,
         pin_memory=True,
-        drop_last=False,
+        drop_last=True,
     )
 
     # model
@@ -73,11 +73,12 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
+        amsgrad=False,
     )
 
     # learning rate scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=3, verbose=True, eps=1e-6
+        optimizer, mode="min", factor=0.5, patience=2, verbose=True, eps=1e-6
     )
 
     # loss function
@@ -97,10 +98,12 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
         start_time = time.time()
 
         # train
-        avg_loss = engine.train(train_loader, epoch)
+        avg_loss = engine.train(train_loader, epoch, print_every=5000)
 
         # evaluate
-        avg_val_loss, preds, valid_labels = engine.evaluate(valid_loader)
+        avg_val_loss, preds, valid_labels = engine.evaluate(
+            valid_loader, print_every=2000
+        )
 
         # step the scheduler
         scheduler.step(avg_val_loss)
