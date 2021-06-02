@@ -493,6 +493,7 @@ class ELMDataset(torch.utils.data.Dataset):
             elm_idx + self.signal_window_size + self.label_look_ahead - 1
         ].astype("int")
         signal_window = torch.as_tensor(signal_window, dtype=torch.float64)
+        signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
 
