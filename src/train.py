@@ -5,6 +5,7 @@ from typing import Union
 import torch
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 import config, data, utils, run, cnn_feature_model
@@ -13,7 +14,23 @@ import config, data, utils, run, cnn_feature_model
 LOGGER = utils.get_logger(script_name=__name__, log_file="output_logs.log")
 
 
-def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
+def train_loop(
+    data_obj: data.Data,
+    kfold: bool = False,
+    fold: Union[int, None] = None,
+    desc: bool = True,
+):
+    # TODO: Implement K-fold cross-validation
+    if kfold and (fold is None):
+        raise Exception(
+            f"K-fold cross validation is passed but fold index in range [0, {config.folds}) is not specified."
+        )
+    if (not kfold) and (fold is not None):
+        LOGGER.info(
+            f"K-fold is set to {kfold} but fold index is passed!"
+            " Proceeding without using K-fold."
+        )
+        fold = None
     LOGGER.info("-" * 30)
     LOGGER.info(f"       Training fold: {fold}       ")
     LOGGER.info("-" * 30)
@@ -82,7 +99,9 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
     )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss(
+        pos_weight=torch.tensor([13], device=device)
+    )
 
     # define variables for ROC and loss
     best_score = 0
@@ -128,7 +147,7 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
                 {"model": model.state_dict(), "preds": preds},
                 os.path.join(
                     config.model_dir,
-                    f"{config.model_name}_fold{fold}_best_roc.pth",
+                    f"{config.model_name}_fold{fold}_best_roc_unbalanced.pth",
                 ),
             )
 
@@ -144,17 +163,17 @@ def train_loop(data_obj: data.Data, fold: Union[int, None], desc: bool = True):
             #         f"{config.model_name}_fold{fold}_best_loss.pth",
             #     ),
             # )
-    # # save the predictions in the valid dataframe
-    # valid_folds["preds"] = torch.load(
-    #     os.path.join(
-    #         config.model_dir, f"{config.model_name}_fold{fold}_best_roc.pth"
-    #     ),
-    #     map_location=torch.device("cpu"),
-    # )["preds"]
+    # # # save the predictions in the valid dataframe
+    # # valid_folds["preds"] = torch.load(
+    # #     os.path.join(
+    # #         config.model_dir, f"{config.model_name}_fold{fold}_best_roc.pth"
+    # #     ),
+    # #     map_location=torch.device("cpu"),
+    # # )["preds"]
 
-    # return valid_folds
+    # # return valid_folds
 
 
 if __name__ == "__main__":
-    data_obj = data.Data(kfold=False)
-    train_loop(data_obj, fold=None)
+    data_obj = data.Data(kfold=False, balance_classes=False)
+    train_loop(data_obj)
