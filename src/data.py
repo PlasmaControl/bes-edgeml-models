@@ -27,6 +27,7 @@ class Data:
         signal_dtype: str = "float32",
         kfold: bool = False,
         smoothen_transition: bool = False,
+        balance_classes: bool = False,
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -47,6 +48,9 @@ class Data:
             smoothen_transition (bool, optional): Boolean showing whether to smooth
                 the labels so that there is a gradual transition of the labels from
                 0 to 1 with respect to the input time series. Defaults to False.
+            balance_classes (bool, optional): Boolean representing whether or not
+                to oversample the data to balance the label classes. Defaults to
+                False.
         """
         self.datafile = datafile
         if self.datafile is None:
@@ -56,8 +60,10 @@ class Data:
         self.signal_dtype = signal_dtype
         self.kfold = kfold
         self.smoothen_transition = smoothen_transition
+        self.balance_classes = balance_classes
         self.max_elms = config.max_elms
 
+        self.df = pd.DataFrame()
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
 
     def get_data(
@@ -276,7 +282,6 @@ class Data:
         -----
             training_elms (np.ndarray): Indices for training ELM events.
         """
-        self.df = pd.DataFrame()
         kf = model_selection.KFold(
             n_splits=config.folds, shuffle=True, random_state=config.seed
         )
@@ -425,18 +430,25 @@ class Data:
         LOGGER.info(
             f"Active ELM oversampling for balanced data: {oversample_count}"
         )
-        for i_start, i_stop in zip(elm_start, elm_stop):
-            assert np.all(_labels[i_start : i_stop + 1] >= 0.5)
-            active_elm_window = np.arange(
-                i_start - index_buffer, i_stop + index_buffer, dtype="int"
+        if self.balance_classes:
+            for i_start, i_stop in zip(elm_start, elm_stop):
+                assert np.all(_labels[i_start : i_stop + 1] >= 0.5)
+                active_elm_window = np.arange(
+                    i_start - index_buffer, i_stop + index_buffer, dtype="int"
+                )
+                active_elm_window = np.tile(
+                    active_elm_window, [oversample_count]
+                )
+                sample_indices = np.concatenate(
+                    [sample_indices, active_elm_window]
+                )
+            fraction_elm = (
+                np.count_nonzero(_labels[sample_indices] >= 0.5)
+                / sample_indices.size
             )
-            active_elm_window = np.tile(active_elm_window, [oversample_count])
-            sample_indices = np.concatenate([sample_indices, active_elm_window])
-        fraction_elm = (
-            np.count_nonzero(_labels[sample_indices] >= 0.5)
-            / sample_indices.size
-        )
-        LOGGER.info(f"Active ELM fraction (balanced data): {fraction_elm:.3f}")
+            LOGGER.info(
+                f"Active ELM fraction (balanced data): {fraction_elm:.3f}"
+            )
         return sample_indices
 
 
@@ -500,7 +512,7 @@ class ELMDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     fold = 1
-    data = Data(kfold=True)
+    data = Data(kfold=True, balance_classes=True)
     LOGGER.info("-" * 10)
     LOGGER.info(f" Fold: {fold}")
     LOGGER.info("-" * 10)
