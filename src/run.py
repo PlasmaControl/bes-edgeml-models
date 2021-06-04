@@ -50,9 +50,7 @@ class Run:
 
             # forward pass
             y_preds = self.model(images)
-            loss = self.criterion(
-                y_preds.squeeze(1), labels.unsqueeze(1).type_as(y_preds)
-            )
+            loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
 
             # record loss
             losses.update(loss.item(), batch_size)
@@ -103,8 +101,8 @@ class Run:
             with torch.no_grad():
                 y_preds = self.model(images)
 
-            y_preds = y_preds.squeeze(1)
-            loss = self.criterion(y_preds, labels.unsqueeze(1).type_as(y_preds))
+            y_preds = y_preds.view(-1)
+            loss = self.criterion(y_preds, labels.type_as(y_preds))
             losses.update(loss.item(), batch_size)
 
             # record accuracy

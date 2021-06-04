@@ -50,12 +50,17 @@ class CNNModel(nn.Module):
         self.fc2 = nn.Linear(in_features=fc_units[0], out_features=fc_units[1])
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, batch_size: int = config.batch_size
+    ) -> torch.Tensor:
         x = self.conv1(x)
         x = self.relu(self.dropout3d(x))
         x = self.conv2(x)
         x = self.relu(self.dropout3d(x))
-        x = x.view(config.batch_size, 1, -1)
+        if batch_size == config.batch_size:
+            x = x.view(config.batch_size, -1)
+        else:
+            x = x.view(batch_size, -1)
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)
@@ -108,11 +113,17 @@ class FeatureModel(nn.Module):
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, batch_size: int = config.batch_size
+    ) -> torch.Tensor:
         x = self.maxpool(x)
         x = self.dropout3d(self.conv(x))
         x = self.relu(x)
-        x = x.view(config.batch_size, 1, -1)
+        # if batch_size == config.batch_size:
+        #     x = x.view(config.batch_size, -1)
+        # else:
+        #     x = x.view(batch_size, -1)
+        x = torch.flatten(x, 1)
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)
