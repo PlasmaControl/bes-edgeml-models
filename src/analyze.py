@@ -2,15 +2,20 @@ import os
 import pickle
 
 import torch
-import matplotlib
 
-matplotlib.use("TkAgg")
+# import matplotlib
+
+# matplotlib.use("TkAgg")
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
+import seaborn as sns
+from sklearn import metrics
 from tqdm import tqdm
 
-import utils, config, data, cnn_feature_model
+import config, data, cnn_feature_model
+
+sns.set_style("white")
+sns.set_palette("Dark2")
 
 
 def get_test_dataset(file_name: str):
@@ -33,7 +38,9 @@ def get_test_dataset(file_name: str):
     return data_attrs, test_dataset
 
 
-def plot(test_data, model, device):
+def plot(
+    test_data, model, device, plot_metrics: bool = False, threshold: float = 0.5
+):
     signals = test_data[0]
     labels = test_data[1]
     sample_indices = test_data[2]
@@ -74,8 +81,15 @@ def plot(test_data, model, device):
         )
         plt.subplot(3, 4, i + 1)
         elm_time = np.arange(elm_labels.size)
-        plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
-        plt.plot(elm_time, elm_labels + 0.02, label="Ground truth", ls="-.")
+        plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22", alpha=0.7)
+        plt.plot(
+            elm_time,
+            elm_labels + 0.02,
+            label="Ground truth",
+            ls="-.",
+            alpha=0.95,
+            lw=2.5,
+        )
         plt.plot(
             elm_time[
                 (config.signal_window_size + config.label_look_ahead - 1) :
@@ -83,11 +97,13 @@ def plot(test_data, model, device):
             predictions,
             label="Prediction",
             ls="-.",
+            alpha=0.95,
+            lw=2.5,
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
         plt.ylim([None, 1.1])
-        plt.legend(fontsize=14)
+        plt.legend(fontsize=9, frameon=False)
         plt.suptitle(f"Model output on {config.data_mode} classes", fontsize=20)
     plt.tight_layout()
     plt.show()
@@ -121,7 +137,7 @@ def model_predict(model, device, data_loader):
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
     print(predictions[:10], targets[:10])
-    print(roc_auc_score(targets, predictions))
+    print(metrics.roc_auc_score(targets, predictions))
 
 
 def main(fold=None, show_info=True, plot_data=False):
