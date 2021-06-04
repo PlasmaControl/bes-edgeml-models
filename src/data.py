@@ -15,7 +15,11 @@ import config
 
 
 # create the logger object
-LOGGER = utils.get_logger(script_name=__name__, log_file="output_logs.log")
+LOGGER = utils.get_logger(
+    script_name=__name__,
+    stream_handler=False,
+    log_file=f"output_logs_{config.data_mode}.log",
+)
 
 
 class Data:
@@ -512,7 +516,7 @@ class ELMDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     fold = 1
-    data = Data(kfold=True, balance_classes=True)
+    data = Data(kfold=True, balance_classes=config.balance_classes)
     LOGGER.info("-" * 10)
     LOGGER.info(f" Fold: {fold}")
     LOGGER.info("-" * 10)

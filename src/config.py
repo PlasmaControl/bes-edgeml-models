@@ -9,6 +9,10 @@ model_dir = "models"
 # set universal random state
 seed = 15
 
+# set the data mode: balanced or unbalanced
+data_mode = "balanced"
+balance_classes = True
+
 # fraction of whole data to be used as validation and test data
 fraction_validate = 0.2
 fraction_test = 0.1
