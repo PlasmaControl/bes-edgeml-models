@@ -10,8 +10,8 @@ model_dir = "models"
 seed = 15
 
 # set the data mode: balanced or unbalanced
-data_mode = "balanced"
-balance_classes = True
+data_mode = "unbalanced"
+balance_classes = False
 
 # fraction of whole data to be used as validation and test data
 fraction_validate = 0.2
