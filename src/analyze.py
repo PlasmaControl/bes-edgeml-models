@@ -139,7 +139,7 @@ def show_metrics(
         os.path.join(
             config.output_dir, f"classification_report_{config.data_mode}.csv"
         ),
-        index=False,
+        index=True,
     )
     print(f"Classification report:\n{df}")
     cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
