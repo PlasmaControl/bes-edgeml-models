@@ -39,7 +39,7 @@ label_look_ahead = 0
 folds = 5
 
 # model to use: CNN_model or feature_model
-model_name = "feature_model"
+model_name = "CNN_model"
 
 # number of traiing epochs
 epochs = 5

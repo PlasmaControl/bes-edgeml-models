@@ -101,7 +101,7 @@ def train_loop(
     )
 
     # model
-    model = cnn_feature_model.FeatureModel()
+    model = cnn_feature_model.CNNModel()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
