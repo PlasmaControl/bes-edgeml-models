@@ -31,7 +31,8 @@ transition_halfwidth = 3
 signal_window_size = 8
 
 # size of the input after stitching and resizing
-size = 8
+size = 12
+stack_elm_events = True
 
 # "look ahead", meaning the label for the entire signal window is taken to
 # be label corresponding to the last element (0 ahead) of the signal window;
@@ -40,9 +41,6 @@ label_look_ahead = 0
 
 # Number of k-folds if using k-fold cross validation
 folds = 5
-
-# model to use: CNN_model or feature_model
-model_name = "CNN_model"
 
 # number of traiing epochs
 epochs = 5

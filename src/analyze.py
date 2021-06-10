@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import torch
 
-# import matplotlib
+import matplotlib
 
-# matplotlib.use("TkAgg")
+matplotlib.use("TkAgg")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,13 +13,15 @@ import seaborn as sns
 from sklearn import metrics
 from tqdm import tqdm
 
-import config, data, cnn_feature_model
+import config, data, cnn_feature_model, model
 
 sns.set_style("white")
 sns.set_palette("deep")
 
 
-def get_test_dataset(file_name: str) -> Tuple[tuple, data.ELMDataset]:
+def get_test_dataset(
+    file_name: str, transforms=None
+) -> Tuple[tuple, data.ELMDataset]:
     file_path = os.path.join(config.data_dir, file_name)
 
     with open(file_path, "rb") as f:
@@ -34,6 +36,8 @@ def get_test_dataset(file_name: str) -> Tuple[tuple, data.ELMDataset]:
         *data_attrs,
         config.signal_window_size,
         config.label_look_ahead,
+        stack_elm_events=config.stack_elm_events,
+        transform=transforms,
     )
 
     return data_attrs, test_dataset
@@ -41,7 +45,7 @@ def get_test_dataset(file_name: str) -> Tuple[tuple, data.ELMDataset]:
 
 def plot(
     test_data: tuple,
-    model: cnn_feature_model.FeatureModel,
+    elm_model,
     device: torch.device,
 ) -> None:
     signals = test_data[0]
@@ -77,7 +81,7 @@ def plot(
                 dtype=torch.float32,
             )
             input_signals = input_signals.to(device)
-            predictions[j] = model(input_signals, batch_size=12)
+            predictions[j] = elm_model(input_signals, batch_size=12)
         # convert logits to probability
         predictions = torch.sigmoid(
             torch.as_tensor(predictions, dtype=torch.float32)
@@ -109,7 +113,8 @@ def plot(
     plt.tight_layout()
     fig.savefig(
         os.path.join(
-            config.output_dir, f"{config.data_mode}_classes_output.png"
+            config.output_dir,
+            f"{type(elm_model).__name__}_{config.data_mode}_classes_output.png",
         ),
         dpi=200,
     )
@@ -129,7 +134,10 @@ def show_details(test_data: tuple) -> None:
 
 
 def show_metrics(
-    y_true: np.ndarray, y_pred: np.ndarray, threshold: float = 0.5
+    model_name: str,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    threshold: float = 0.5,
 ):
     preds = (y_pred > threshold).astype(int)
     cm = metrics.confusion_matrix(y_true, preds)
@@ -137,7 +145,8 @@ def show_metrics(
     df = pd.DataFrame(cr).transpose()
     df.to_csv(
         os.path.join(
-            config.output_dir, f"classification_report_{config.data_mode}.csv"
+            config.output_dir,
+            f"{model_name}_classification_report_{config.data_mode}.csv",
         ),
         index=True,
     )
@@ -147,7 +156,8 @@ def show_metrics(
     fig = cm_disp.figure_
     fig.savefig(
         os.path.join(
-            config.output_dir, f"confusion_matrix_{config.data_mode}.png"
+            config.output_dir,
+            f"{model_name}_confusion_matrix_{config.data_mode}.png",
         ),
         dpi=200,
     )
@@ -155,19 +165,19 @@ def show_metrics(
 
 
 def model_predict(
-    model: cnn_feature_model.FeatureModel,
+    elm_model,
     device: torch.device,
     data_loader: torch.utils.data.DataLoader,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    # put the model to eval mode
-    model.eval()
+    # put the elm_model to eval mode
+    elm_model.eval()
     predictions = []
     targets = []
     for images, labels in tqdm(data_loader):
         images = images.to(device)
 
         with torch.no_grad():
-            preds = model(images)
+            preds = elm_model(images)
         preds = preds.view(-1)
         predictions.append(torch.sigmoid(preds).cpu().numpy())
         targets.append(labels.cpu().numpy())
@@ -184,26 +194,31 @@ def main(
     plot_data: bool = False,
     display_metrics: bool = False,
 ) -> None:
-    # instantiate the model and load the checkpoint
-    model = cnn_feature_model.FeatureModel()
+    # instantiate the elm_model and load the checkpoint
+    # elm_model = cnn_feature_model.FeatureModel()
+    elm_model = model.StackedELMModel()
+    model_name = type(elm_model).__name__
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_ckpt_path = os.path.join(
         config.model_dir,
-        f"{config.model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
+        f"{model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
     )
-    print(f"Using model checkpoint: {model_ckpt_path}")
-    model.load_state_dict(
+    print(f"Using elm_model checkpoint: {model_ckpt_path}")
+    elm_model.load_state_dict(
         torch.load(
             model_ckpt_path,
             map_location=device,
         )["model"]
     )
-    model = model.to(device)
+    elm_model = elm_model.to(device)
 
     # get the test data and dataloader
     f_name = f"test_data_{config.data_mode}.pkl"
     print(f"Using test data file: {f_name}")
-    test_data, test_dataset = get_test_dataset(file_name=f_name)
+    test_transforms = data.get_transforms()
+    test_data, test_dataset = get_test_dataset(
+        file_name=f_name, transforms=test_transforms
+    )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=config.batch_size,
@@ -214,14 +229,14 @@ def main(
     if show_info:
         show_details(test_data)
 
-    targets, predictions = model_predict(model, device, test_loader)
+    targets, predictions = model_predict(elm_model, device, test_loader)
 
     if plot_data:
-        plot(test_data, model, device)
+        plot(test_data, elm_model, device)
 
     if display_metrics:
-        show_metrics(targets, predictions)
+        show_metrics(model_name, targets, predictions)
 
 
 if __name__ == "__main__":
-    main(plot_data=True, display_metrics=True)
+    main(plot_data=False, display_metrics=True)

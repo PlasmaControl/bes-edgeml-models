@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-import config, data, utils, run, cnn_feature_model
+import config, data, utils, run, cnn_feature_model, model
 
 
 LOGGER = utils.get_logger(
@@ -20,6 +20,7 @@ LOGGER = utils.get_logger(
 def train_loop(
     data_obj: data.Data,
     test_datafile_name: str,
+    model_class=cnn_feature_model.CNNModel,
     kfold: bool = False,
     fold: Union[int, None] = None,
     desc: bool = True,
@@ -72,13 +73,24 @@ def train_loop(
             f,
         )
 
+    # create image transforms
+    transforms = data.get_transforms()
+
     # create datasets
     train_dataset = data.ELMDataset(
-        *train_data, config.signal_window_size, config.label_look_ahead
+        *train_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=config.stack_elm_events,
+        transform=transforms,
     )
 
     valid_dataset = data.ELMDataset(
-        *valid_data, config.signal_window_size, config.label_look_ahead
+        *valid_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=config.stack_elm_events,
+        transform=transforms,
     )
 
     # training and validation dataloaders
@@ -101,13 +113,26 @@ def train_loop(
     )
 
     # model
-    model = cnn_feature_model.CNNModel()
+    model = model_class()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
+    model_name = type(model).__name__
+    LOGGER.info("-" * 50)
+    LOGGER.info(f"       Training with model: {model_name}       ")
+    LOGGER.info("-" * 50)
 
     # display model details
     if desc:
-        input_size = (config.batch_size, 1, config.signal_window_size, 8, 8)
+        if config.stack_elm_events and model_name == "StackedELMModel":
+            input_size = (config.batch_size, 1, config.size, config.size)
+        else:
+            input_size = (
+                config.batch_size,
+                1,
+                config.signal_window_size,
+                8,
+                8,
+            )
         x = torch.rand(*input_size)
         x = x.to(device)
         cnn_feature_model.model_details(model, x, input_size)
@@ -171,7 +196,7 @@ def train_loop(
         # save the model if best ROC is found
         model_save_path = os.path.join(
             config.model_dir,
-            f"{config.model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
+            f"{model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
         )
         if roc_score > best_score:
             best_score = roc_score
@@ -202,4 +227,8 @@ def train_loop(
 
 if __name__ == "__main__":
     data_obj = data.Data(kfold=False, balance_classes=config.balance_classes)
-    train_loop(data_obj, test_datafile_name=f"test_data_{config.data_mode}.pkl")
+    train_loop(
+        data_obj,
+        model_class=model.StackedELMModel,
+        test_datafile_name=f"test_data_{config.data_mode}.pkl",
+    )
