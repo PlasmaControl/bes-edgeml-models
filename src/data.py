@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from sklearn import model_selection
 import torch
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 import config
 
@@ -465,6 +467,8 @@ class ELMDataset(torch.utils.data.Dataset):
         window_start: np.ndarray,
         signal_window_size: int,
         label_look_ahead: int,
+        stack_elm_events: bool = False,
+        transform=None,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -483,6 +487,9 @@ class ELMDataset(torch.utils.data.Dataset):
                 stacking.
             label_look_ahead (int): Label look ahead to find which time step label
                 is to used.
+            stack_elm_events (bool): Whether to use stacked ELM events. It stitches
+                the input 3d-tensor together to get a 2d tensor representation on
+                which larger CNNs can be trained. Defaults to False.
         """
         self.signals = signals
         self.labels = labels
@@ -490,6 +497,8 @@ class ELMDataset(torch.utils.data.Dataset):
         self.window_start = window_start
         self.signal_window_size = signal_window_size
         self.label_look_ahead = label_look_ahead
+        self.stack_elm_events = stack_elm_events
+        self.transform = transform
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -508,10 +517,32 @@ class ELMDataset(torch.utils.data.Dataset):
         label = self.labels[
             elm_idx + self.signal_window_size + self.label_look_ahead - 1
         ].astype("int")
+        if self.stack_elm_events:
+            if config.signal_window_size == 8:
+                signal_window = np.hsplit(
+                    np.concatenate(signal_window, axis=-1), 2
+                )
+                signal_window = np.concatenate(signal_window)
+            elif config.signal_window_size == 16:
+                signal_window = np.hsplit(
+                    np.concatenate(signal_window, axis=-1), 4
+                )
+                signal_window = np.concatenate(signal_window)
+            else:
+                raise Exception(
+                    f"Expected signal window size is 8 or 16 but got {config.signal_window_size}."
+                )
+            if self.transform:
+                signal_window = self.transform(image=signal_window)["image"]
+
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
+
+
+def get_transforms():
+    return A.Compose([A.Resize(config.size, config.size)])
 
 
 if __name__ == "__main__":
@@ -531,9 +562,16 @@ if __name__ == "__main__":
     LOGGER.info(
         f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
     )
+    transforms = get_transforms()
+
     train_dataset = ELMDataset(
-        *train_data, config.signal_window_size, config.label_look_ahead
+        *train_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=True,
+        transform=transforms,
     )
     sample = train_dataset.__getitem__(0)
     print(sample[1])
     print(sample[0].shape)
+    print(sample[0])
