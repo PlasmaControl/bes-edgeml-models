@@ -10,8 +10,8 @@ model_dir = "models"
 seed = 15
 
 # set the data mode: balanced or unbalanced
-data_mode = "balanced"
-balance_classes = True
+data_mode = "unbalanced"
+balance_classes = False
 
 # fraction of whole data to be used as validation and test data
 fraction_validate = 0.2
@@ -32,7 +32,7 @@ signal_window_size = 8
 
 # size of the input after stitching and resizing
 size = 12
-stack_elm_events = True
+stack_elm_events = False
 
 # "look ahead", meaning the label for the entire signal window is taken to
 # be label corresponding to the last element (0 ahead) of the signal window;

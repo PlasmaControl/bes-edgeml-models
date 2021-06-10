@@ -55,7 +55,7 @@ def plot(
     num_elms = len(window_start)
     i_elms = np.random.choice(num_elms, 12, replace=False)
 
-    fig = plt.figure(figsize=(18, 8))
+    fig = plt.figure(figsize=(14, 12))
     for i, i_elm in enumerate(i_elms):
         i_start = window_start[i_elm]
         if i_elm < num_elms - 1:
@@ -86,7 +86,7 @@ def plot(
         predictions = torch.sigmoid(
             torch.as_tensor(predictions, dtype=torch.float32)
         )
-        plt.subplot(3, 4, i + 1)
+        plt.subplot(4, 3, i + 1)
         elm_time = np.arange(elm_labels.size)
         plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
         plt.plot(
@@ -140,6 +140,8 @@ def show_metrics(
     threshold: float = 0.5,
 ):
     preds = (y_pred > threshold).astype(int)
+
+    # creating a classification report
     cm = metrics.confusion_matrix(y_true, preds)
     cr = metrics.classification_report(y_true, preds, output_dict=True)
     df = pd.DataFrame(cr).transpose()
@@ -151,6 +153,21 @@ def show_metrics(
         index=True,
     )
     print(f"Classification report:\n{df}")
+
+    # ROC details
+    fpr, tpr, thresh = metrics.roc_curve(y_true, y_pred)
+    roc_details = pd.DataFrame()
+    roc_details["fpr"] = fpr
+    roc_details["tpr"] = tpr
+    roc_details["threshold"] = thresh
+    roc_details.to_csv(
+        os.path.join(
+            config.output_dir,
+            f"{model_name}_roc_details_{config.data_mode}.csv",
+        ),
+        index=False,
+    )
+
     cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
     cm_disp.plot()
     fig = cm_disp.figure_
@@ -195,8 +212,8 @@ def main(
     display_metrics: bool = False,
 ) -> None:
     # instantiate the elm_model and load the checkpoint
-    # elm_model = cnn_feature_model.FeatureModel()
-    elm_model = model.StackedELMModel()
+    elm_model = cnn_feature_model.CNNModel()
+    # elm_model = model.StackedELMModel()
     model_name = type(elm_model).__name__
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_ckpt_path = os.path.join(
@@ -239,4 +256,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(plot_data=False, display_metrics=True)
+    main(plot_data=True, display_metrics=True)
