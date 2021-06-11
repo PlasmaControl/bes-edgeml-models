@@ -30,7 +30,7 @@ class StackedELMModel(nn.Module):
 
 if __name__ == "__main__":
     model = StackedELMModel()
-    input_size = (1, 1, 12, 12)
+    input_size = (1, 1, 32, 32)
     x = torch.rand(*input_size)
     print(f"Output shape: {model(x).shape}")
     print(f"{sum(p.numel() for p in model.parameters() if p.requires_grad)}")

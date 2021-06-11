@@ -42,7 +42,7 @@ label_look_ahead = 0
 # Number of k-folds if using k-fold cross validation
 folds = 5
 
-# number of traiing epochs
+# number of training epochs
 epochs = 5
 
 # hidden units in fully connected layers
@@ -68,3 +68,4 @@ filters = 16
 # optimization kwargs
 learning_rate = 3e-4
 weight_decay = 5e-5
+scheduler = "CyclicLR2"

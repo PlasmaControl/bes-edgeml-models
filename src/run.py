@@ -1,5 +1,5 @@
 import time
-from typing import Tuple
+from typing import Tuple, Union, Callable
 
 import numpy as np
 import torch
@@ -25,6 +25,7 @@ class Run:
         self,
         data_loader: torch.utils.data.DataLoader,
         epoch: int,
+        scheduler: Union[Callable, None] = None,
         print_every: int = 100,
     ) -> float:
         batch_time = utils.MetricMonitor()
@@ -64,6 +65,10 @@ class Run:
             # elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
+
+            # step the scheduler if provided
+            if scheduler is not None:
+                scheduler.step()
 
             # display results
             if (batch_idx + 1) % print_every == 0:

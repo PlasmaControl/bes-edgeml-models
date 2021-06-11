@@ -17,6 +17,47 @@ LOGGER = utils.get_logger(
 )
 
 
+def get_lr_scheduler(optimizer, scheduler_name):
+    # learning rate scheduler
+    if scheduler_name == "ReduceLROnPlateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True,
+            eps=1e-6,
+        )
+    elif scheduler_name == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=10, eta_min=0, verbose=False
+        )
+    elif scheduler_name == "CyclicLR":
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            base_lr=1e-4,
+            max_lr=1e-3,
+            mode="triangular",
+            cycle_momentum=False,
+            verbose=False,
+        )
+    elif scheduler_name == "CyclicLR2":
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            base_lr=1e-4,
+            max_lr=1e-3,
+            mode="triangular2",
+            cycle_momentum=False,
+            verbose=False,
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=0.5, verbose=True
+        )
+
+    return scheduler
+
+
 def train_loop(
     data_obj: data.Data,
     test_datafile_name: str,
@@ -145,10 +186,8 @@ def train_loop(
         amsgrad=False,
     )
 
-    # learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=2, verbose=True, eps=1e-6
-    )
+    # get the lr scheduler
+    scheduler = get_lr_scheduler(optimizer, scheduler_name=config.scheduler)
 
     # loss function
     if config.balance_classes:
@@ -171,16 +210,33 @@ def train_loop(
     for epoch in range(config.epochs):
         start_time = time.time()
 
-        # train
-        avg_loss = engine.train(train_loader, epoch, print_every=5000)
+        if config.scheduler in ["CosineAnnealingLR", "CyclicLR", "CyclicLR2"]:
+            # train
+            avg_loss = engine.train(
+                train_loader, epoch, scheduler=scheduler, print_every=5000
+            )
 
-        # evaluate
-        avg_val_loss, preds, valid_labels = engine.evaluate(
-            valid_loader, print_every=2000
-        )
+            # evaluate
+            avg_val_loss, preds, valid_labels = engine.evaluate(
+                valid_loader, print_every=2000
+            )
+            scheduler = get_lr_scheduler(
+                optimizer, scheduler_name=config.scheduler
+            )
+        else:
+            # train
+            avg_loss = engine.train(train_loader, epoch, print_every=5000)
 
-        # step the scheduler
-        scheduler.step(avg_val_loss)
+            # evaluate
+            avg_val_loss, preds, valid_labels = engine.evaluate(
+                valid_loader, print_every=2000
+            )
+
+            # step the scheduler
+            if config.scheduler == "ReduceLROnPlateau":
+                scheduler.step(avg_val_loss)
+            else:
+                scheduler.step()
 
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
@@ -229,6 +285,6 @@ if __name__ == "__main__":
     data_obj = data.Data(kfold=False, balance_classes=config.balance_classes)
     train_loop(
         data_obj,
-        model_class=model.StackedELMModel,
+        model_class=cnn_feature_model.FeatureModel,
         test_datafile_name=f"test_data_{config.data_mode}.pkl",
     )
