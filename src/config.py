@@ -67,5 +67,5 @@ filters = 16
 
 # optimization kwargs
 learning_rate = 3e-4
-weight_decay = 5e-5
-scheduler = "CyclicLR2"
+weight_decay = 5e-4
+scheduler = "OneCyclicLR"

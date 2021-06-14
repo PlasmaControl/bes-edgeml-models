@@ -17,7 +17,7 @@ LOGGER = utils.get_logger(
 )
 
 
-def get_lr_scheduler(optimizer, scheduler_name):
+def get_lr_scheduler(optimizer, scheduler_name, dataloader):
     # learning rate scheduler
     if scheduler_name == "ReduceLROnPlateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -49,6 +49,15 @@ def get_lr_scheduler(optimizer, scheduler_name):
             mode="triangular2",
             cycle_momentum=False,
             verbose=False,
+        )
+    elif scheduler_name == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            epochs=config.epochs,
+            steps_per_epoch=len(dataloader),
+            max_lr=1e-3,
+            pct_start=0.2,
+            anneal_strategy="cos",
         )
     else:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(
@@ -179,7 +188,7 @@ def train_loop(
         cnn_feature_model.model_details(model, x, input_size)
 
     # optimizer
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
@@ -187,7 +196,9 @@ def train_loop(
     )
 
     # get the lr scheduler
-    scheduler = get_lr_scheduler(optimizer, scheduler_name=config.scheduler)
+    scheduler = get_lr_scheduler(
+        optimizer, scheduler_name=config.scheduler, dataloader=train_loader
+    )
 
     # loss function
     if config.balance_classes:
@@ -210,7 +221,12 @@ def train_loop(
     for epoch in range(config.epochs):
         start_time = time.time()
 
-        if config.scheduler in ["CosineAnnealingLR", "CyclicLR", "CyclicLR2"]:
+        if config.scheduler in [
+            "CosineAnnealingLR",
+            "CyclicLR",
+            "CyclicLR2",
+            "OneCycleLR",
+        ]:
             # train
             avg_loss = engine.train(
                 train_loader, epoch, scheduler=scheduler, print_every=5000
