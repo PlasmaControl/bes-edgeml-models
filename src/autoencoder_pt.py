@@ -1,5 +1,8 @@
 import torch
 from typing import Tuple
+from torchinfo import summary
+import data, config
+from torch.utils.data import DataLoader
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
@@ -12,7 +15,7 @@ class Autoencoder_PT(torch.nn.Module):
         encoder_hidden_layers: Tuple,
         decoder_hidden_layers: Tuple, 
         relu_negative_slope: float = 0.0,
-        model_input_shape: Tuple = (1,8,8,8),
+        model_input_shape: Tuple = (4,1,8,8,8),
         signal_window_size: int = 8):
 
         super(Autoencoder_PT, self).__init__()
@@ -20,13 +23,14 @@ class Autoencoder_PT(torch.nn.Module):
         self.latent_dim = latent_dim
         self.encoder_hidden_layers = encoder_hidden_layers
         self.decoder_hidden_layers = decoder_hidden_layers
-        self.model_input_shape = model_input_shape # (batch size, signal window size, height, width)
+        self.model_input_shape = model_input_shape # (batch size, channels, signal window size, height, width)
         self.signal_window_size = signal_window_size # Initialized to 8 frames 
         self.relu_negative_slope = relu_negative_slope
+        self.batch_size = model_input_shape[0]
 
         # 8x8x8 = 512 input features
-        self.num_input_features = self.model_input_shape[0]
-        for i in range(1, len(self.model_input_shape)):
+        self.num_input_features = self.model_input_shape[1]
+        for i in range(2, len(self.model_input_shape)):
             self.num_input_features *= self.model_input_shape[i]
         # print(f'total number of features: {num_features}')
 
@@ -38,7 +42,7 @@ class Autoencoder_PT(torch.nn.Module):
 
         return
 
-    def create_encoder(self):
+    def create_encoder(self): #(250,100)
         # Add the requested number of encoder hidden dense layers + relu layers
         for i, layer_size in enumerate(self.encoder_hidden_layers):
             if i == 0:
@@ -85,8 +89,31 @@ if __name__== '__main__':
     model = Autoencoder_PT(32, 
         encoder_hidden_layers = (250,100), 
         decoder_hidden_layers = (100,250))
+
+    input_size = (4,1,8,8,8)
+    summary(model, input_size)
+
+    fold = 1
+    data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
+    train_data, _, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
     
-    print()
-    print(model)
+    train_dataset = data.ELMDataset(
+        *train_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=False,
+        transform=None,
+    )
+
+    sample = train_dataset.__getitem__(0)
+    # print(sample[1])
+    # print(sample[0].shape)
+    # print(sample[0])
+
+    train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+    train_features, train_labels = next(iter(train_dataloader))
+    print(train_features.size())
+    print(train_labels.size())
+
         
 
