@@ -204,13 +204,7 @@ def train_loop(
     )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss()
-    # if config.balance_classes:
-    #     criterion = nn.BCEWithLogitsLoss()
-    # else:
-    #     criterion = nn.BCEWithLogitsLoss(
-    #         pos_weight=torch.tensor([13], device=device)
-    #     )
+    criterion = nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
@@ -218,7 +212,11 @@ def train_loop(
 
     # instantiate training object
     engine = run.Run(
-        model, device=device, criterion=criterion, optimizer=optimizer
+        model,
+        device=device,
+        criterion=criterion,
+        optimizer=optimizer,
+        use_focal_loss=True,
     )
 
     # iterate through all the epochs
@@ -241,7 +239,9 @@ def train_loop(
                 valid_loader, print_every=2000
             )
             scheduler = get_lr_scheduler(
-                optimizer, scheduler_name=config.scheduler
+                optimizer,
+                scheduler_name=config.scheduler,
+                dataloader=train_loader,
             )
         else:
             # train

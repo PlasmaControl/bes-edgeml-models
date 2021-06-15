@@ -15,11 +15,13 @@ class Run:
         device: torch.device,
         criterion: nn.BCEWithLogitsLoss,
         optimizer: torch.optim.Adam,
+        use_focal_loss: bool = False,
     ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
         self.device = device
+        self.use_focal_loss = use_focal_loss
 
     def train(
         self,
@@ -52,6 +54,12 @@ class Run:
             # forward pass
             y_preds = self.model(images)
             loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
+
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
+
+            # perform loss reduction
+            loss = loss.mean()
 
             # record loss
             losses.update(loss.item(), batch_size)
@@ -108,6 +116,13 @@ class Run:
 
             y_preds = y_preds.view(-1)
             loss = self.criterion(y_preds, labels.type_as(y_preds))
+
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
+
+            # perform loss reduction
+            loss = loss.mean()
+
             losses.update(loss.item(), batch_size)
 
             # record accuracy
@@ -129,3 +144,12 @@ class Run:
         predictions = np.concatenate(preds)
         targets = np.concatenate(valid_labels)
         return losses.avg, predictions, targets
+
+    def _focal_loss(self, y_true, y_preds, loss, gamma=2):
+        probas = torch.sigmoid(y_preds)
+        loss = torch.where(
+            y_true >= 0.5,
+            (1.0 - probas) ** gamma * loss,
+            probas ** gamma * loss,
+        )
+        return loss

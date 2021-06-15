@@ -37,13 +37,13 @@ stack_elm_events = False
 # "look ahead", meaning the label for the entire signal window is taken to
 # be label corresponding to the last element (0 ahead) of the signal window;
 # (defaults to zero).
-label_look_ahead = 0
+label_look_ahead = 2
 
 # Number of k-folds if using k-fold cross validation
 folds = 5
 
 # number of training epochs
-epochs = 5
+epochs = 10
 
 # hidden units in fully connected layers
 dense_layers = (40, 20)
@@ -68,4 +68,4 @@ filters = 16
 # optimization kwargs
 learning_rate = 1e-3
 weight_decay = 5e-3
-scheduler = "OneCyclicLR"
+scheduler = "CyclicLR2"
