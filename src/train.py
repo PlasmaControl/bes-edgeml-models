@@ -204,12 +204,13 @@ def train_loop(
     )
 
     # loss function
-    if config.balance_classes:
-        criterion = nn.BCEWithLogitsLoss()
-    else:
-        criterion = nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor([13], device=device)
-        )
+    criterion = nn.BCEWithLogitsLoss()
+    # if config.balance_classes:
+    #     criterion = nn.BCEWithLogitsLoss()
+    # else:
+    #     criterion = nn.BCEWithLogitsLoss(
+    #         pos_weight=torch.tensor([13], device=device)
+    #     )
 
     # define variables for ROC and loss
     best_score = 0
