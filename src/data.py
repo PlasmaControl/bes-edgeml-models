@@ -500,6 +500,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.label_look_ahead = label_look_ahead
         self.stack_elm_events = stack_elm_events
         self.transform = transform
+        self.for_autoencoder = for_autoencoder
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -539,8 +540,8 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
-        
-        if for_autoencoder:
+
+        if self.for_autoencoder:
             return signal_window, signal_window
         else:
             return signal_window, label
