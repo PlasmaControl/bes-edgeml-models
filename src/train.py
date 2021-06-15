@@ -124,7 +124,10 @@ def train_loop(
         )
 
     # create image transforms
-    transforms = data.get_transforms()
+    if type(model_class).__name__ in ["FeatureModel", "CNNModel"]:
+        transforms = None
+    else:
+        transforms = data.get_transforms()
 
     # create datasets
     train_dataset = data.ELMDataset(

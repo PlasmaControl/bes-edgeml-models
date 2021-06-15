@@ -66,6 +66,6 @@ maxpool_size = 2  # 0 to skip maxpool
 filters = 16
 
 # optimization kwargs
-learning_rate = 3e-4
-weight_decay = 5e-4
+learning_rate = 1e-3
+weight_decay = 5e-3
 scheduler = "OneCyclicLR"
