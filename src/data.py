@@ -469,6 +469,7 @@ class ELMDataset(torch.utils.data.Dataset):
         label_look_ahead: int,
         stack_elm_events: bool = False,
         transform=None,
+        for_autoencoder: bool = False
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -538,7 +539,11 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
-        return signal_window, label
+        
+        if for_autoencoder:
+            return signal_window, signal_window
+        else:
+            return signal_window, label
 
 
 def get_transforms():
