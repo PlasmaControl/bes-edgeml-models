@@ -99,6 +99,8 @@ class Autoencoder_PT(torch.nn.Module):
             for i, data in enumerate(dataloader):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = data
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
                 # zero the parameter gradients
                 self.optimizer.zero_grad()
@@ -129,6 +131,8 @@ if __name__== '__main__':
         encoder_hidden_layers = (250,100), 
         decoder_hidden_layers = (100,250))
 
+    model = model.to(device)
+
     input_size = (4,1,8,8,8)
     summary(model, input_size)
 
@@ -145,20 +149,20 @@ if __name__== '__main__':
         for_autoencoder = True
     )
 
-    test_dataset = data.ELMDataset(
-        *test_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=False,
-        transform=None,
-        for_autoencoder = True
-    )
+    # test_dataset = data.ELMDataset(
+    #     *test_data,
+    #     config.signal_window_size,
+    #     config.label_look_ahead,
+    #     stack_elm_events=False,
+    #     transform=None,
+    #     for_autoencoder = True
+    # )
 
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
-    # Save the model
-    model.train_model(train_dataloader, epochs = 1)
+    # Train the model
+    model.train_model(train_dataloader, epochs = 5)
 
     # Save the model
     model_save_path = './models/trained_model.pth'
