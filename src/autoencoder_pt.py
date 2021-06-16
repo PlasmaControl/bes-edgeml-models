@@ -18,7 +18,8 @@ class Autoencoder_PT(torch.nn.Module):
         relu_negative_slope: float = 0.0,
         model_input_shape: Tuple = (4,1,8,8,8),
         signal_window_size: int = 8,
-        learning_rate: float = .01):
+        learning_rate: float = .01
+        l2_factor: float = 5e-3):
 
         super(Autoencoder_PT, self).__init__()
 
@@ -43,7 +44,7 @@ class Autoencoder_PT(torch.nn.Module):
         self.create_decoder()
 
         self.loss = torch.nn.MSELoss()
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9, weight_decay=l2_factor)
 
         return
 
@@ -89,7 +90,8 @@ class Autoencoder_PT(torch.nn.Module):
         return decoded.view(self.model_input_shape)
 
     # Train this autoencoder model
-    def train_model(self, dataloader: DataLoader, epochs: int = 3, print_output: bool = True):
+    @staticmethod
+    def train_model(model, dataloader: DataLoader, epochs: int, print_output: bool = True):
         if print_output:
             print('Beginning Training Model')
 
@@ -103,22 +105,22 @@ class Autoencoder_PT(torch.nn.Module):
                 labels = labels.to(device)
 
                 # zero the parameter gradients
-                self.optimizer.zero_grad()
+                model.optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs = self(inputs)
-                loss = self.loss(outputs, labels)
+                outputs = model(inputs)
+                loss = model.loss(outputs, labels)
                 loss.backward()
-                self.optimizer.step()
+                model.optimizer.step()
 
                 # print statistics
                 running_loss += loss.item()
 
                 if(print_output):
                     # print every 2000 mini-batches
-                    if i % 2000 == 1999:    
+                    if i % 500 == 499:    
                         print('Epoch %d, loss after sample #%5d: %.3f' %
-                              (epoch + 1, i + 1, running_loss / 2000))
+                              (epoch + 1, i + 1, running_loss / 500))
                         running_loss = 0.0
 
         
@@ -127,9 +129,9 @@ class Autoencoder_PT(torch.nn.Module):
         return
 
 if __name__== '__main__':
-    model = Autoencoder_PT(32, 
-        encoder_hidden_layers = (250,100), 
-        decoder_hidden_layers = (100,250))
+    model = Autoencoder_PT(64, 
+        encoder_hidden_layers = (100,80,70), 
+        decoder_hidden_layers = (70, 80, 100))
 
     model = model.to(device)
 
@@ -159,10 +161,10 @@ if __name__== '__main__':
     # )
 
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    # test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    model.train_model(train_dataloader, epochs = 5)
+    Autoencoder_PT.train_model(model, train_dataloader, epochs = 5)
 
     # Save the model
     model_save_path = './models/trained_model.pth'
