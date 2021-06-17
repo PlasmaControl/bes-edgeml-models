@@ -99,17 +99,20 @@ class Autoencoder_PT(torch.nn.Module):
         decoded = self.decoder(encoded)
         return decoded.view(*shape)
 
-    # Train this autoencoder model
+    # Train the passed in autoencoder model
     @staticmethod
     def train_model(model, dataloader: DataLoader, epochs: int, print_output: bool = True):
         if print_output:
             print('Beginning Training Model')
+
+        model.train()
 
         # loop over the dataset multiple times
         for epoch in range(epochs):
             epoch_total_loss = 0.0  
             running_loss = 0.0
             for i, data in enumerate(dataloader):
+                print(i)
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = data
                 inputs = inputs.to(device)
@@ -138,7 +141,8 @@ class Autoencoder_PT(torch.nn.Module):
 
             # After each epoch, calculate avg loss:
             if(print_output):    
-                print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
+                #print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
+                print(loss)
         
         if(print_output):
             print('Finished Training')
@@ -152,7 +156,7 @@ if __name__== '__main__':
     model = model.to(device)
     batch_size = 4
 
-    input_size = (batch_size,1,8,8,8)
+    input_size = (1,1,8,8,8)
     # summary(model, input_size)
 
     fold = 1
@@ -168,6 +172,8 @@ if __name__== '__main__':
         for_autoencoder = True
     )
 
+    print(f'Length of train dataset: {train_dataset.__len__()}')
+
     # test_dataset = data.ELMDataset(
     #     *test_data,
     #     config.signal_window_size,
@@ -181,7 +187,7 @@ if __name__== '__main__':
     # test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    Autoencoder_PT.train_model(model, train_dataloader, epochs = 5)
+    Autoencoder_PT.train_model(model, train_dataloader, epochs = 5, print_output = False)
 
     # Save the model
     model_save_path = './models/trained_model.pth'
