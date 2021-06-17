@@ -272,7 +272,7 @@ def train_loop(
         # save the model if best ROC is found
         model_save_path = os.path.join(
             config.model_dir,
-            f"{model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
+            f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}.pth",
         )
         if roc_score > best_score:
             best_score = roc_score
@@ -306,5 +306,5 @@ if __name__ == "__main__":
     train_loop(
         data_obj,
         model_class=cnn_feature_model.FeatureModel,
-        test_datafile_name=f"test_data_{config.data_mode}.pkl",
+        test_datafile_name=f"test_data_{config.data_mode}_lookahead_{config.label_look_ahead}.pkl",
     )

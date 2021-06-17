@@ -114,7 +114,7 @@ def plot(
     fig.savefig(
         os.path.join(
             config.output_dir,
-            f"{type(elm_model).__name__}_{config.data_mode}_classes_output.png",
+            f"{type(elm_model).__name__}_{config.data_mode}_lookahead_{config.label_look_ahead}_classes_output.png",
         ),
         dpi=200,
     )
@@ -148,7 +148,7 @@ def show_metrics(
     df.to_csv(
         os.path.join(
             config.output_dir,
-            f"{model_name}_classification_report_{config.data_mode}.csv",
+            f"{model_name}_classification_report_{config.data_mode}_lookahead_{config.label_look_ahead}.csv",
         ),
         index=True,
     )
@@ -163,7 +163,7 @@ def show_metrics(
     roc_details.to_csv(
         os.path.join(
             config.output_dir,
-            f"{model_name}_roc_details_{config.data_mode}.csv",
+            f"{model_name}_roc_details_{config.data_mode}_lookahead_{config.label_look_ahead}.csv",
         ),
         index=False,
     )
@@ -174,7 +174,7 @@ def show_metrics(
     fig.savefig(
         os.path.join(
             config.output_dir,
-            f"{model_name}_confusion_matrix_{config.data_mode}.png",
+            f"{model_name}_confusion_matrix_{config.data_mode}_lookahead_{config.label_look_ahead}.png",
         ),
         dpi=200,
     )
@@ -212,13 +212,13 @@ def main(
     display_metrics: bool = False,
 ) -> None:
     # instantiate the elm_model and load the checkpoint
-    elm_model = cnn_feature_model.CNNModel()
+    elm_model = cnn_feature_model.FeatureModel()
     # elm_model = model.StackedELMModel()
     model_name = type(elm_model).__name__
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_ckpt_path = os.path.join(
         config.model_dir,
-        f"{model_name}_fold{fold}_best_roc_{config.data_mode}.pth",
+        f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     elm_model.load_state_dict(
@@ -230,7 +230,9 @@ def main(
     elm_model = elm_model.to(device)
 
     # get the test data and dataloader
-    f_name = f"test_data_{config.data_mode}.pkl"
+    f_name = (
+        f"test_data_{config.data_mode}_lookahead_{config.label_look_ahead}.pkl"
+    )
     print(f"Using test data file: {f_name}")
     test_transforms = data.get_transforms()
     test_data, test_dataset = get_test_dataset(

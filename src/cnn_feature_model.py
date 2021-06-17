@@ -69,7 +69,7 @@ class FeatureModel(nn.Module):
     def __init__(
         self,
         fc_units: Union[int, Tuple[int, int]] = (40, 20),
-        dropout_rate: float = 0.3,
+        dropout_rate: float = 0.4,
         negative_slope: float = 0.02,
         filter_size: tuple = (8, 4, 4),
         maxpool_size: int = 2,
