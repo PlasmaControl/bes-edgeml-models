@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import torch
 
-import matplotlib
+# import matplotlib
 
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -62,26 +62,30 @@ def plot(
             i_stop = window_start[i_elm + 1] - 1
         else:
             i_stop = labels.size
-        print(f"ELM {i+1} of 12 with {i_stop-i_start+1} time points")
-        elm_signals = signals[i_start:i_stop, :, :]
-        elm_labels = labels[i_start:i_stop]
-        predictions = np.zeros(
-            elm_labels.size
-            - config.signal_window_size
-            - config.label_look_ahead
-            + 1
-        )
-        for j in range(predictions.size):
-            if j % 500 == 0:
-                print(f"  Time {j}")
-            input_signals = torch.as_tensor(
-                elm_signals[j : j + config.signal_window_size, :, :].reshape(
-                    [1, 1, config.signal_window_size, 8, 8]
-                ),
-                dtype=torch.float32,
+        if (i_stop-i_start+1) <= config.label_look_ahead:
+            print(f"Skipping ELM {i+1} of 12 with {i_stop-i_start+1} time points")
+            continue
+        else:
+            print(f"ELM {i+1} of 12 with {i_stop-i_start+1} time points")
+            elm_signals = signals[i_start:i_stop, :, :]
+            elm_labels = labels[i_start:i_stop]
+            predictions = np.zeros(
+                elm_labels.size
+                - config.signal_window_size
+                - config.label_look_ahead
+                + 1
             )
-            input_signals = input_signals.to(device)
-            predictions[j] = elm_model(input_signals, batch_size=12)
+            for j in range(predictions.size):
+                if j % 500 == 0:
+                    print(f"  Time {j}")
+                input_signals = torch.as_tensor(
+                    elm_signals[j : j + config.signal_window_size, :, :].reshape(
+                        [1, 1, config.signal_window_size, 8, 8]
+                    ),
+                    dtype=torch.float32,
+                )
+                input_signals = input_signals.to(device)
+                predictions[j] = elm_model(input_signals, batch_size=12)
         # convert logits to probability
         predictions = torch.sigmoid(
             torch.as_tensor(predictions, dtype=torch.float32)
