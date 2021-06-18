@@ -3,7 +3,7 @@ from typing import Tuple
 from torchinfo import summary
 import data, config
 from torch.utils.data import DataLoader
-from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
@@ -18,7 +18,7 @@ class Autoencoder_PT(torch.nn.Module):
         relu_negative_slope: float = 0.0,
         signal_window_shape: Tuple = (1,8,8,8),
         signal_window_size: int = 8,
-        learning_rate: float = .01,
+        learning_rate: float = .0001,
         l2_factor: float = 5e-3,
         dropout_rate: float = 0.3):
 
@@ -45,7 +45,20 @@ class Autoencoder_PT(torch.nn.Module):
         self.create_decoder()
 
         self.loss = torch.nn.MSELoss()
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9, weight_decay=l2_factor)
+        self.optimizer = torch.optim.SGD(
+            self.parameters(), 
+            lr=learning_rate, 
+            momentum=0.9, 
+            weight_decay=l2_factor)
+        
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True,
+            eps=1e-6,
+        )
 
         return
 
@@ -94,83 +107,104 @@ class Autoencoder_PT(torch.nn.Module):
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         shape = x.shape
-        print(shape)
+        # print(shape)
         x = self.flatten(x)
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
-        return decoded.view(*shape)
+        reconstructed = decoded.view(*shape)
+        # print(reconstructed.shape)
+        return reconstructed
 
-    # Train the passed in autoencoder model
     @staticmethod
-    def train_model(model, dataloader: DataLoader, epochs: int, print_output: bool = True):
-        if print_output:
-            print('Beginning Training Model')
-
+    def train_loop(model, dataloader: DataLoader, print_output: bool = True):
         model.train()
-        losses = []
+        size = len(dataloader.dataset)
+        for batch, (X, y) in enumerate(dataloader):
+            # Compute prediction and loss
+            pred = model(X)
+            loss = model.loss(pred, y)
 
-        # loop over the dataset multiple times
-        for epoch in range(epochs):
-            epoch_total_loss = 0.0  
-            running_loss = 0.0
-            for i, data in enumerate(dataloader):
-                # print(i)
-                # get the inputs; data is a list of [inputs, labels]
-                inputs, labels = data
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+            # Backpropagation
+            model.optimizer.zero_grad()
+            loss.backward()
+            model.optimizer.step()
 
-                # zero the parameter gradients
-                model.optimizer.zero_grad()
-
-                # forward + backward + optimize
-                outputs = model(inputs)
-                loss = model.loss(outputs, labels)
-                loss.backward()
-                model.optimizer.step()
-
-                # print statistics
-                running_loss += loss.item()
-                epoch_total_loss += loss.item()
-
-                # if(print_output):    
-                    #print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
-                    # print(loss)
-
-                
-
-                # print every 500 mini-batches
-                mini_batch_size = 1000
-                if i % mini_batch_size == mini_batch_size - 1:
-                    losses.append(running_loss)
-                    # if(print_output):    
-                        # print('Epoch %d, loss after sample #%5d: %.3f' % (epoch + 1, i + 1, running_loss / mini_batch_size))
-                    # running_loss = 0.0
+            if batch % 1000 == 0:
+                loss, current = loss.item(), batch * len(X)
+                if(print_output):
+                    print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
-            # After each epoch, calculate avg loss:
-            #if(print_output):    
-                #print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
-                # print(loss)
+    @staticmethod
+    def test_loop(model, dataloader: DataLoader, print_output: bool = True):
+        size = len(dataloader.dataset)
+        test_loss, correct = 0, 0
+
+        model.eval()
+        
+        with torch.no_grad():
+            for X, y in dataloader:
+                pred = model(X)
+                test_loss += model.loss(pred, y).item()
+
+        test_loss /= size
+
+        if(print_output):
+            print(f"Test Error:\n Avg loss: {test_loss:>8f} \n")
+
+        return test_loss
+
+
+    @staticmethod
+    def train_model(
+        model,  
+        train_dataloader: DataLoader, 
+        test_dataloader: DataLoader,
+        epochs: int = 10, 
+        print_output: bool = True):
+
+        all_losses = []
+
+        for t in range(epochs):
+            if(print_output):
+                print(f"Epoch {t+1}\n-------------------------------")
+            model.train_loop(model, train_dataloader,)
+            epoch_loss = model.test_loop(model, test_dataloader)
+
+            all_losses.append(epoch_loss)
+
+            # Change optimizer learning rate
+            model.scheduler.step(epoch_loss)
         
         if(print_output):
-            print('Finished Training')
-        return losses
+            print("Done Training!")
+
+        return all_losses
+
+
+def plot_loss(losses):
+    plt.plot(losses)
+    plt.title('Training Loss')
+    plt.ylabel('Avg Loss')
+    plt.xlabel('epochs')
+    # plt.show()
+    plt.savefig('loss_plot.png')
+
 
 if __name__== '__main__':
-    model = Autoencoder_PT(64, 
-        encoder_hidden_layers = (250,100), 
-        decoder_hidden_layers = (100,250))
+    model = Autoencoder_PT(32, 
+        encoder_hidden_layers = (250,100,50), 
+        decoder_hidden_layers = (50,100,250))
 
     model = model.to(device)
     batch_size = 4
 
-    # input_size = (1,1,8,8,8)
-    # summary(model, input_size)
+    input_size = (4,1,8,8,8)
+    summary(model, input_size)
 
     fold = 1
     data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
-    train_data, _, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
+    train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
     
     train_dataset = data.ELMDataset(
         *train_data,
@@ -181,22 +215,23 @@ if __name__== '__main__':
         for_autoencoder = True
     )
 
-    print(f'Length of train dataset: {train_dataset.__len__()}')
+    # print(f'Length of train dataset: {train_dataset.__len__()}')
 
-    # test_dataset = data.ELMDataset(
-    #     *test_data,
-    #     config.signal_window_size,
-    #     config.label_look_ahead,
-    #     stack_elm_events=False,
-    #     transform=None,
-    #     for_autoencoder = True
-    # )
+    test_dataset = data.ELMDataset(
+        *test_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=False,
+        transform=None,
+        for_autoencoder = True
+    )
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    # test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    Autoencoder_PT.train_model(model, train_dataloader, epochs = 1, print_output = True)
+    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, epochs  = 20, print_output = True)
+    plot_loss(losses)
 
     # Save the model - weights and structure
     model_save_path = './models/trained_model.pth'
