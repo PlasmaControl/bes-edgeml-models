@@ -94,6 +94,7 @@ class Autoencoder_PT(torch.nn.Module):
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         shape = x.shape
+        print(shape)
         x = self.flatten(x)
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
@@ -106,13 +107,14 @@ class Autoencoder_PT(torch.nn.Module):
             print('Beginning Training Model')
 
         model.train()
+        losses = []
 
         # loop over the dataset multiple times
         for epoch in range(epochs):
             epoch_total_loss = 0.0  
             running_loss = 0.0
             for i, data in enumerate(dataloader):
-                print(i)
+                # print(i)
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = data
                 inputs = inputs.to(device)
@@ -131,22 +133,29 @@ class Autoencoder_PT(torch.nn.Module):
                 running_loss += loss.item()
                 epoch_total_loss += loss.item()
 
+                # if(print_output):    
+                    #print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
+                    # print(loss)
+
+                
+
                 # print every 500 mini-batches
                 mini_batch_size = 1000
                 if i % mini_batch_size == mini_batch_size - 1:
-                    if(print_output):    
-                        print('Epoch %d, loss after sample #%5d: %.3f' % (epoch + 1, i + 1, running_loss / mini_batch_size))
-                    running_loss = 0.0
+                    losses.append(running_loss)
+                    # if(print_output):    
+                        # print('Epoch %d, loss after sample #%5d: %.3f' % (epoch + 1, i + 1, running_loss / mini_batch_size))
+                    # running_loss = 0.0
 
 
             # After each epoch, calculate avg loss:
-            if(print_output):    
+            #if(print_output):    
                 #print('Epoch %d, Average loss: %.3f' % (epoch + 1, epoch_total_loss / (i + 1)))
-                print(loss)
+                # print(loss)
         
         if(print_output):
             print('Finished Training')
-        return
+        return losses
 
 if __name__== '__main__':
     model = Autoencoder_PT(64, 
@@ -156,7 +165,7 @@ if __name__== '__main__':
     model = model.to(device)
     batch_size = 4
 
-    input_size = (1,1,8,8,8)
+    # input_size = (1,1,8,8,8)
     # summary(model, input_size)
 
     fold = 1
@@ -187,11 +196,11 @@ if __name__== '__main__':
     # test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    Autoencoder_PT.train_model(model, train_dataloader, epochs = 5, print_output = False)
+    Autoencoder_PT.train_model(model, train_dataloader, epochs = 1, print_output = True)
 
-    # Save the model
+    # Save the model - weights and structure
     model_save_path = './models/trained_model.pth'
-    torch.save(model.state_dict(), model_save_path)
+    torch.save(model, model_save_path)
     
         
 
