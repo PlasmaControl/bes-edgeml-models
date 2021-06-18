@@ -89,7 +89,7 @@ def plot(
         # convert logits to probability
         predictions = torch.sigmoid(
             torch.as_tensor(predictions, dtype=torch.float32)
-        )
+        ).cpu().numpy()
         plt.subplot(4, 3, i + 1)
         elm_time = np.arange(elm_labels.size)
         plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
@@ -103,7 +103,7 @@ def plot(
         plt.plot(
             elm_time[
                 (config.signal_window_size + config.label_look_ahead - 1) :
-            ],
+            ]-config.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",
