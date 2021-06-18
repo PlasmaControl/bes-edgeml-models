@@ -121,6 +121,8 @@ class Autoencoder_PT(torch.nn.Module):
         size = len(dataloader.dataset)
         for batch, (X, y) in enumerate(dataloader):
             # Compute prediction and loss
+            X = X.to(device)
+            y = y.to(device)
             pred = model(X)
             loss = model.loss(pred, y)
 
@@ -144,6 +146,8 @@ class Autoencoder_PT(torch.nn.Module):
         
         with torch.no_grad():
             for X, y in dataloader:
+                X = X.to(device)
+                y = y.to(device)
                 pred = model(X)
                 test_loss += model.loss(pred, y).item()
 
