@@ -1,0 +1,6 @@
+2021-06-10 11:32:08,146:data: INFO:---------------
+2021-06-10 11:32:08,146:data: INFO: Dataset class
+2021-06-10 11:32:08,152:data: INFO:---------------
+2021-06-10 11:32:08,152:data: INFO:Signals shape: (166973, 8, 8)
+2021-06-10 11:32:08,153:data: INFO:Labels shape: (166973,)
+2021-06-10 11:32:08,153:data: INFO:Sample indices shape: (316816,)
