@@ -1,9 +1,13 @@
 import torch
-from typing import Tuple
-from torchinfo import summary
-import data, config
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torchinfo import summary
+
 import matplotlib.pyplot as plt
+from typing import Tuple
+
+import data, config
+
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
@@ -15,7 +19,7 @@ class Autoencoder_PT(torch.nn.Module):
         latent_dim: int, 
         encoder_hidden_layers: Tuple,
         decoder_hidden_layers: Tuple, 
-        relu_negative_slope: float = 0.0,
+        relu_negative_slope: float = 0.1,
         signal_window_shape: Tuple = (1,8,8,8),
         signal_window_size: int = 8,
         learning_rate: float = .0001,
@@ -44,7 +48,7 @@ class Autoencoder_PT(torch.nn.Module):
         self.decoder = torch.nn.Sequential()
         self.create_decoder()
 
-        self.loss = torch.nn.MSELoss()
+        self.loss_fn = torch.nn.MSELoss()
         self.optimizer = torch.optim.SGD(
             self.parameters(), 
             lr=learning_rate, 
@@ -73,13 +77,13 @@ class Autoencoder_PT(torch.nn.Module):
             # Add fully connected, then dropout, then relu layers
             self.encoder.add_module(f'Encoder Dense Layer {i+1}', d_layer)
             self.encoder.add_module(f'Encoder Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
-            self.encoder.add_module(f'Encoder ReLU Layer {i+1}', torch.nn.ReLU())
+            self.encoder.add_module(f'Encoder ReLU Layer {i+1}', torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope))
 
         # Add latent dim layer after encoder hidden layers
         latent = torch.nn.Linear(self.encoder_hidden_layers[i], self.latent_dim)
         self.encoder.add_module(f'Latent Layer', latent)
-        self.encoder.add_module(f'Latent Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
-        self.encoder.add_module(f'Latent ReLU Layer', torch.nn.ReLU())
+        # self.encoder.add_module(f'Latent Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
+        self.encoder.add_module(f'Latent ReLU Layer', torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope))
 
         return
 
@@ -91,16 +95,15 @@ class Autoencoder_PT(torch.nn.Module):
             else:
                 d_layer = torch.nn.Linear(self.decoder_hidden_layers[i-1], self.decoder_hidden_layers[i])
 
-            # Add latent dim layer after encoder hidden layers
             self.decoder.add_module(f'Decoder Dense Layer {i+1}', d_layer)
             self.decoder.add_module(f'Decoder Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
-            self.decoder.add_module(f'Decoder ReLU Layer {i+1}', torch.nn.ReLU())
+            self.decoder.add_module(f'Decoder ReLU Layer {i+1}', torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope))
 
         # Add last layer after decoder hidden layers
         last = torch.nn.Linear(self.decoder_hidden_layers[i], self.num_input_features)
         self.decoder.add_module(f'Last Layer', last)
-        self.decoder.add_module(f'Last Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
-        self.decoder.add_module(f'Last ReLU Layer', torch.nn.ReLU())
+        # self.decoder.add_module(f'Last Dropout Layer {i+1}', torch.nn.Dropout(p=self.dropout_rate))
+        # self.decoder.add_module(f'Last ReLU Layer', torch.nn.ReLU())
 
         return
 
@@ -124,7 +127,7 @@ class Autoencoder_PT(torch.nn.Module):
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            loss = model.loss(pred, y)
+            loss = model.loss_fn(pred, y)
 
             # Backpropagation
             model.optimizer.zero_grad()
@@ -149,12 +152,12 @@ class Autoencoder_PT(torch.nn.Module):
                 X = X.to(device)
                 y = y.to(device)
                 pred = model(X)
-                test_loss += model.loss(pred, y).item()
+                test_loss += model.loss_fn(pred, y).item()
 
         test_loss /= size
 
         if(print_output):
-            print(f"Test Error:\n Avg loss: {test_loss:>8f} \n")
+            print(f"Test Dataset Avg loss: {test_loss:>8f} \n")
 
         return test_loss
 
@@ -196,13 +199,17 @@ def plot_loss(losses):
 
 
 if __name__== '__main__':
+    # Autoencoder Model
     model = Autoencoder_PT(32, 
         encoder_hidden_layers = (250,100,50), 
         decoder_hidden_layers = (50,100,250))
 
     model = model.to(device)
-    batch_size = 4
 
+    # Writer for tensorboard
+    writer = SummaryWriter('runs/practicing')
+
+    batch_size = 4
     input_size = (4,1,8,8,8)
     summary(model, input_size)
 
@@ -234,7 +241,7 @@ if __name__== '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, epochs  = 20, print_output = True)
+    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, epochs  = 3, print_output = True)
     plot_loss(losses)
 
     # Save the model - weights and structure
