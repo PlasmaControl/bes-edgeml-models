@@ -120,6 +120,7 @@ class Autoencoder_PT(torch.nn.Module):
 
             if batch % 1000 == 0:
                 loss, current = loss.item(), batch * len(X)
+                param = model.parameters()[0][0,0]
                 if(print_output):
                     print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
