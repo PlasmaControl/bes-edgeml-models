@@ -222,9 +222,9 @@ if __name__== '__main__':
     input_size = (4,1,8,8,8)
     summary(model, input_size)
 
-    fold = 1
-    data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
-    train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
+    
+    data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+    train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True)
     
     train_dataset = data.ELMDataset(
         *train_data,
@@ -254,7 +254,7 @@ if __name__== '__main__':
     plot_loss(losses)
 
     # Save the model - weights and structure
-    model_save_path = './models/trained_model.pth'
+    model_save_path = './trained_model.pth'
     torch.save(model, model_save_path)
     
         
