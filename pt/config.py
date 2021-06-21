@@ -2,9 +2,9 @@
 file_name = "labeled-elm-events.hdf5"
 
 # output directory
-output_dir = "outputs"
-data_dir = "data"
-model_dir = "models"
+output_dir = "outputs/signal_window_16"
+data_dir = "data/signal_window_16"
+model_dir = "models/signal_window_16"
 
 # set universal random state
 seed = 15
@@ -28,7 +28,7 @@ max_elms = -1
 transition_halfwidth = 3
 
 # number of time data points to be used for a whole signal
-signal_window_size = 8
+signal_window_size = 16
 
 # size of the input after stitching and resizing
 size = 12
@@ -37,7 +37,7 @@ stack_elm_events = False
 # "look ahead", meaning the label for the entire signal window is taken to
 # be label corresponding to the last element (0 ahead) of the signal window;
 # (defaults to zero).
-label_look_ahead = 1200
+label_look_ahead = 0
 
 # Number of k-folds if using k-fold cross validation
 folds = 5
