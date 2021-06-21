@@ -1,6 +1,7 @@
 import torch
 # from autoencoder_pt import Autoencoder_PT
-from ae_easy import Autoencoder_easy
+# from ae_easy import Autoencoder_easy
+from ae_one_piece import Autoencoder_OP
 import data, config
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
