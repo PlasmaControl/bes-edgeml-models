@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import torch
 
-# import matplotlib
+import matplotlib
 
-# matplotlib.use("TkAgg")
+matplotlib.use("TkAgg")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -62,8 +62,10 @@ def plot(
             i_stop = window_start[i_elm + 1] - 1
         else:
             i_stop = labels.size
-        if (i_stop-i_start+1) <= config.label_look_ahead:
-            print(f"Skipping ELM {i+1} of 12 with {i_stop-i_start+1} time points")
+        if (i_stop - i_start + 1) <= config.label_look_ahead:
+            print(
+                f"Skipping ELM {i+1} of 12 with {i_stop-i_start+1} time points"
+            )
             continue
         else:
             print(f"ELM {i+1} of 12 with {i_stop-i_start+1} time points")
@@ -79,17 +81,19 @@ def plot(
                 if j % 500 == 0:
                     print(f"  Time {j}")
                 input_signals = torch.as_tensor(
-                    elm_signals[j : j + config.signal_window_size, :, :].reshape(
-                        [1, 1, config.signal_window_size, 8, 8]
-                    ),
+                    elm_signals[
+                        j : j + config.signal_window_size, :, :
+                    ].reshape([1, 1, config.signal_window_size, 8, 8]),
                     dtype=torch.float32,
                 )
                 input_signals = input_signals.to(device)
                 predictions[j] = elm_model(input_signals, batch_size=12)
         # convert logits to probability
-        predictions = torch.sigmoid(
-            torch.as_tensor(predictions, dtype=torch.float32)
-        ).cpu().numpy()
+        predictions = (
+            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+            .cpu()
+            .numpy()
+        )
         plt.subplot(4, 3, i + 1)
         elm_time = np.arange(elm_labels.size)
         plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
@@ -103,7 +107,8 @@ def plot(
         plt.plot(
             elm_time[
                 (config.signal_window_size + config.label_look_ahead - 1) :
-            ]-config.label_look_ahead,
+            ]
+            - config.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",

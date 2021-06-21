@@ -37,7 +37,7 @@ stack_elm_events = False
 # "look ahead", meaning the label for the entire signal window is taken to
 # be label corresponding to the last element (0 ahead) of the signal window;
 # (defaults to zero).
-label_look_ahead = 8
+label_look_ahead = 1000
 
 # Number of k-folds if using k-fold cross validation
 folds = 5
