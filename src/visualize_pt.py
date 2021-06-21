@@ -1,7 +1,8 @@
 import torch
 # from autoencoder_pt import Autoencoder_PT
-# from ae_easy import Autoencoder_easy
-from ae_one_piece import Autoencoder_OP
+from ae_easy import Autoencoder_easy
+# from ae_one_piece import Autoencoder_OP
+from ae_easy import device
 import data, config
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
@@ -23,13 +24,15 @@ train_dataset = data.ELMDataset(
     )
 
 # Load model
-PATH = 'models/easy_model.pth'
+PATH = './easy_model.pth'
 model = torch.load(PATH)
+model = model.to(device)
 model.eval()
 
 
+
 def plot(index):
-    actual_window = train_dataset[index][0]
+    actual_window = train_dataset[index][0].to(device)
     pred_window = train_dataset[index][1]
     model_window = model(actual_window)
     
@@ -38,7 +41,7 @@ def plot(index):
     fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
 
     # Plot the actual frames 0,2,4,6
-    actual = actual_window.detach().numpy()[0]
+    actual = actual_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[0][i]
         cur_ax.imshow(actual[2*i], cmap = 'hot')
@@ -46,7 +49,7 @@ def plot(index):
         cur_ax.axis('off')
 
     # Plot the prediction frames 0,2,4,6
-    pred = model_window.detach().numpy()[0]
+    pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
         cur_ax.imshow(pred[2*i], cmap = 'hot')
