@@ -2,9 +2,9 @@
 file_name = "labeled-elm-events.hdf5"
 
 # output directory
-output_dir = "outputs/signal_window_16"
-data_dir = "data/signal_window_16"
-model_dir = "models/signal_window_16"
+output_dir = "outputs/signal_window_8/gaussian_noise_added"
+data_dir = "data/signal_window_8/gaussian_noise_added"
+model_dir = "models/signal_window_8/gaussian_noise_added"
 
 # set universal random state
 seed = 15
@@ -28,7 +28,7 @@ max_elms = -1
 transition_halfwidth = 3
 
 # number of time data points to be used for a whole signal
-signal_window_size = 16
+signal_window_size = 8
 
 # size of the input after stitching and resizing
 size = 12
