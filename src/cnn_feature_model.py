@@ -105,7 +105,10 @@ class FeatureModel(nn.Module):
         )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        self.fc1 = nn.Linear(in_features=10, out_features=fc_units[0])
+        input_features = 10 if config.signal_window_size == 8 else 90
+        self.fc1 = nn.Linear(
+            in_features=input_features, out_features=fc_units[0]
+        )
         self.fc2 = nn.Linear(in_features=fc_units[0], out_features=fc_units[1])
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
@@ -142,7 +145,7 @@ def model_details(model, x, input_size):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = FeatureModel()
-    input_size = (4, 1, 8, 8, 8)
+    input_size = (4, 1, 16, 8, 8)
     x = torch.rand(*input_size)
     model, x = model.to(device), x.to(device)
     model_details(model, x, input_size)

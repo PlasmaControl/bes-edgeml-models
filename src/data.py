@@ -60,7 +60,7 @@ class Data:
         """
         self.datafile = datafile
         if self.datafile is None:
-            self.datafile = os.path.join(config.data_dir, config.file_name)
+            self.datafile = os.path.join("data", config.file_name)
         self.fraction_validate = fraction_validate
         self.fraction_test = fraction_test
         self.signal_dtype = signal_dtype
