@@ -468,6 +468,7 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window_size: int,
         label_look_ahead: int,
         stack_elm_events: bool = False,
+        add_noise: bool = False,
         transform=None,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
@@ -499,6 +500,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.label_look_ahead = label_look_ahead
         self.stack_elm_events = stack_elm_events
         self.transform = transform
+        self.add_noise = add_noise
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -534,6 +536,10 @@ class ELMDataset(torch.utils.data.Dataset):
                 )
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
+        if self.add_noise:
+            noise = np.random.normal(loc=0, scale=0.5, size=signal_window.shape)
+            print(f"Noise added with shape: {noise.shape}")
+            signal_window += noise
 
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
@@ -568,10 +574,10 @@ if __name__ == "__main__":
         *train_data,
         config.signal_window_size,
         config.label_look_ahead,
-        stack_elm_events=True,
+        stack_elm_events=False,
         transform=transforms,
+        add_noise=True,
     )
     sample = train_dataset.__getitem__(0)
     print(sample[1])
     print(sample[0].shape)
-    print(sample[0])
