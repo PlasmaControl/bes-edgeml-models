@@ -47,23 +47,7 @@ class Autoencoder_PT(torch.nn.Module):
         self.create_encoder()
         self.decoder = torch.nn.Sequential()
         self.create_decoder()
-
-        self.loss_fn = torch.nn.MSELoss()
-        self.optimizer = torch.optim.SGD(
-            self.parameters(), 
-            lr=learning_rate, 
-            momentum=0.9, 
-            weight_decay=l2_factor)
         
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer,
-            mode="min",
-            factor=0.5,
-            patience=2,
-            verbose=True,
-            eps=1e-6,
-        )
-
         return
 
     def create_encoder(self):
@@ -119,7 +103,7 @@ class Autoencoder_PT(torch.nn.Module):
         return reconstructed
 
     @staticmethod
-    def train_loop(model, dataloader: DataLoader, print_output: bool = True):
+    def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
         model.train()
         size = len(dataloader.dataset)
         for batch, (X, y) in enumerate(dataloader):
@@ -127,12 +111,12 @@ class Autoencoder_PT(torch.nn.Module):
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            loss = model.loss_fn(pred, y)
+            loss = loss_fn(pred, y)
 
             # Backpropagation
-            model.optimizer.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
-            model.optimizer.step()
+            optimizer.step()
 
             if batch % 1000 == 0:
                 loss, current = loss.item(), batch * len(X)
@@ -141,7 +125,7 @@ class Autoencoder_PT(torch.nn.Module):
 
 
     @staticmethod
-    def test_loop(model, dataloader: DataLoader, print_output: bool = True):
+    def test_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
         size = len(dataloader.dataset)
         test_loss, correct = 0, 0
 
@@ -152,7 +136,7 @@ class Autoencoder_PT(torch.nn.Module):
                 X = X.to(device)
                 y = y.to(device)
                 pred = model(X)
-                test_loss += model.loss_fn(pred, y).item()
+                test_loss += loss_fn(pred, y).item()
 
         test_loss /= size
 
@@ -167,6 +151,9 @@ class Autoencoder_PT(torch.nn.Module):
         model,  
         train_dataloader: DataLoader, 
         test_dataloader: DataLoader,
+        optimizer,
+        scheduler, 
+        loss_fn,
         epochs: int = 10, 
         print_output: bool = True):
 
@@ -175,13 +162,13 @@ class Autoencoder_PT(torch.nn.Module):
         for t in range(epochs):
             if(print_output):
                 print(f"Epoch {t+1}\n-------------------------------")
-            model.train_loop(model, train_dataloader,)
-            epoch_loss = model.test_loop(model, test_dataloader)
+            model.train_loop(model, train_dataloader, optimizer, loss_fn)
+            epoch_loss = model.test_loop(model, test_dataloader, loss_fn)
 
             all_losses.append(epoch_loss)
 
             # Change optimizer learning rate
-            model.scheduler.step(epoch_loss)
+            scheduler.step(epoch_loss)
         
         if(print_output):
             print("Done Training!")
@@ -206,8 +193,30 @@ if __name__== '__main__':
 
     model = model.to(device)
 
+    # for param in model.parameters():
+    #     print(type(param), param.size())
+
+    learning_rate = .0001
+    l2_factor = 5e-3
+
+    loss_fn = torch.nn.MSELoss()
+    optimizer = torch.optim.SGD(
+        model.parameters(), 
+        lr=learning_rate, 
+        momentum=0.9, 
+        weight_decay=l2_factor)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True,
+            eps=1e-6,
+        )
+
+
     # Writer for tensorboard
-    writer = SummaryWriter('runs/practicing')
+    # writer = SummaryWriter('runs/practicing')
 
     batch_size = 4
     input_size = (4,1,8,8,8)
@@ -241,7 +250,7 @@ if __name__== '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model
-    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, epochs  = 3, print_output = True)
+    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
     plot_loss(losses)
 
     # Save the model - weights and structure

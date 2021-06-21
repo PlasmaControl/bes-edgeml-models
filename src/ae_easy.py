@@ -38,6 +38,8 @@ class Autoencoder_easy(torch.nn.Module):
             lr=learning_rate, 
             momentum=0.9
             )
+
+        # print(self.get_parameters())
         
 
     
@@ -135,46 +137,49 @@ def plot_loss(losses):
 if __name__== '__main__':
     model = Autoencoder_easy(512)
 
-    model = model.to(device)
-    batch_size = 4
+    for param in model.parameters():
+        print(type(param), param.size())
 
-    input_size = (4,1,8,8,8)
-    summary(model, input_size)
+    # model = model.to(device)
+    # batch_size = 4
 
-    fold = 1
-    data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
-    train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
+    # input_size = (4,1,8,8,8)
+    # summary(model, input_size)
+
+    # fold = 1
+    # data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
+    # train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True, fold=fold)
     
-    train_dataset = data.ELMDataset(
-        *train_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=False,
-        transform=None,
-        for_autoencoder = True
-    )
+    # train_dataset = data.ELMDataset(
+    #     *train_data,
+    #     config.signal_window_size,
+    #     config.label_look_ahead,
+    #     stack_elm_events=False,
+    #     transform=None,
+    #     for_autoencoder = True
+    # )
 
-    # print(f'Length of train dataset: {train_dataset.__len__()}')
+    # # print(f'Length of train dataset: {train_dataset.__len__()}')
 
-    test_dataset = data.ELMDataset(
-        *test_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=False,
-        transform=None,
-        for_autoencoder = True
-    )
+    # test_dataset = data.ELMDataset(
+    #     *test_data,
+    #     config.signal_window_size,
+    #     config.label_look_ahead,
+    #     stack_elm_events=False,
+    #     transform=None,
+    #     for_autoencoder = True
+    # )
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    # test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
-    # Train the model
-    losses = Autoencoder_easy.train_model(model, train_dataloader, test_dataloader, epochs  = 10, print_output = True)
-    plot_loss(losses)
+    # # Train the model
+    # losses = Autoencoder_easy.train_model(model, train_dataloader, test_dataloader, epochs  = 10, print_output = True)
+    # plot_loss(losses)
 
-    # Save the model - weights and structure
-    model_save_path = './easy_model.pth'
-    torch.save(model, model_save_path)
+    # # Save the model - weights and structure
+    # model_save_path = './easy_model.pth'
+    # torch.save(model, model_save_path)
     
         
 
