@@ -537,7 +537,9 @@ class ELMDataset(torch.utils.data.Dataset):
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
         if self.add_noise:
-            noise = np.random.normal(loc=0, scale=0.5, size=signal_window.shape)
+            noise = np.random.normal(
+                loc=config.mean, scale=config.stdev, size=signal_window.shape
+            )
             signal_window += noise
 
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)

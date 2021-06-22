@@ -32,6 +32,8 @@ signal_window_size = 8
 
 # add gaussian noise
 add_noise = True
+stdev = 0.025
+mean = 0
 
 # size of the input after stitching and resizing
 size = 12

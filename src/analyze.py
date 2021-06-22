@@ -123,7 +123,7 @@ def plot(
     fig.savefig(
         os.path.join(
             config.output_dir,
-            f"{type(elm_model).__name__}_{config.data_mode}_lookahead_{config.label_look_ahead}_classes_output.png",
+            f"{type(elm_model).__name__}_{config.data_mode}_lookahead_{config.label_look_ahead}_classes_output_noise_{config.stdev}.png",
         ),
         dpi=200,
     )
@@ -157,7 +157,7 @@ def show_metrics(
     df.to_csv(
         os.path.join(
             config.output_dir,
-            f"{model_name}_classification_report_{config.data_mode}_lookahead_{config.label_look_ahead}.csv",
+            f"{model_name}_classification_report_{config.data_mode}_lookahead_{config.label_look_ahead}_{config.stdev}.csv",
         ),
         index=True,
     )
@@ -172,7 +172,7 @@ def show_metrics(
     roc_details.to_csv(
         os.path.join(
             config.output_dir,
-            f"{model_name}_roc_details_{config.data_mode}_lookahead_{config.label_look_ahead}.csv",
+            f"{model_name}_roc_details_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.csv",
         ),
         index=False,
     )
@@ -183,7 +183,7 @@ def show_metrics(
     fig.savefig(
         os.path.join(
             config.output_dir,
-            f"{model_name}_confusion_matrix_{config.data_mode}_lookahead_{config.label_look_ahead}.png",
+            f"{model_name}_confusion_matrix_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.png",
         ),
         dpi=200,
     )
@@ -227,7 +227,7 @@ def main(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_ckpt_path = os.path.join(
         config.model_dir,
-        f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}.pth",
+        f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     elm_model.load_state_dict(

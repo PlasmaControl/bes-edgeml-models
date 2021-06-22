@@ -13,7 +13,8 @@ import config, data, utils, run, cnn_feature_model, model
 
 
 LOGGER = utils.get_logger(
-    script_name=__name__, log_file=f"output_logs_{config.data_mode}.log"
+    script_name=__name__,
+    log_file=f"output_logs_{config.data_mode}_noise_{config.stdev}.log",
 )
 
 
@@ -273,7 +274,7 @@ def train_loop(
         # save the model if best ROC is found
         model_save_path = os.path.join(
             config.model_dir,
-            f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}.pth",
+            f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.pth",
         )
         if roc_score > best_score:
             best_score = roc_score
