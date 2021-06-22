@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchinfo import summary
 
+import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple
 
@@ -13,7 +14,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
 # Autoencoder class
-class Autoencoder_PT(torch.nn.Module):
+class Autoencoder(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
         latent_dim: int, 
@@ -26,7 +27,7 @@ class Autoencoder_PT(torch.nn.Module):
         l2_factor: float = 5e-3,
         dropout_rate: float = 0.3):
 
-        super(Autoencoder_PT, self).__init__()
+        super(Autoencoder, self).__init__()
 
         self.latent_dim = latent_dim
         self.encoder_hidden_layers = encoder_hidden_layers
@@ -102,114 +103,112 @@ class Autoencoder_PT(torch.nn.Module):
         # print(reconstructed.shape)
         return reconstructed
 
-    @staticmethod
-    def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
-        model.train()
-        size = len(dataloader.dataset)
-        for batch, (X, y) in enumerate(dataloader):
-            # Compute prediction and loss
+def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
+    model.train()
+    size = len(dataloader.dataset)
+    for batch, (X, y) in enumerate(dataloader):
+        # Compute prediction and loss
+        X = X.to(device)
+        y = y.to(device)
+        pred = model(X)
+        loss = loss_fn(pred, y)
+
+        # Backpropagation
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if batch % 1000 == 0:
+            loss, current = loss.item(), batch * len(X)
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    print (name, param.data)
+                    break
+            # param = model.parameters()[0][0,0]
+            if(print_output):
+                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+def test_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
+    size = len(dataloader.dataset)
+    test_loss, correct = 0, 0
+
+    model.eval()
+    
+    with torch.no_grad():
+        for X, y in dataloader:
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            loss = loss_fn(pred, y)
+            test_loss += loss_fn(pred, y).item()
 
-            # Backpropagation
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+    test_loss /= size
 
-            if batch % 1000 == 0:
-                loss, current = loss.item(), batch * len(X)
-                for name, param in model.named_parameters():
-                    if param.requires_grad:
-                        print (name, param.data)
-                        break
-                # param = model.parameters()[0][0,0]
-                if(print_output):
-                    print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    if(print_output):
+        print(f"Test Dataset Avg loss: {test_loss:>8f} \n")
 
+    return test_loss
 
-    @staticmethod
-    def test_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
-        size = len(dataloader.dataset)
-        test_loss, correct = 0, 0
+def train_model(
+    model,  
+    train_dataloader: DataLoader, 
+    test_dataloader: DataLoader,
+    optimizer,
+    scheduler, 
+    loss_fn,
+    epochs: int = 10, 
+    print_output: bool = True):
 
-        model.eval()
-        
-        with torch.no_grad():
-            for X, y in dataloader:
-                X = X.to(device)
-                y = y.to(device)
-                pred = model(X)
-                test_loss += loss_fn(pred, y).item()
+    all_losses = []
 
-        test_loss /= size
-
+    for t in range(epochs):
         if(print_output):
-            print(f"Test Dataset Avg loss: {test_loss:>8f} \n")
+            print(f"Epoch {t+1}\n-------------------------------")
+        model.train_loop(model, train_dataloader, optimizer, loss_fn)
+        epoch_loss = model.test_loop(model, test_dataloader, loss_fn)
 
-        return test_loss
+        all_losses.append(epoch_loss)
 
-
-    @staticmethod
-    def train_model(
-        model,  
-        train_dataloader: DataLoader, 
-        test_dataloader: DataLoader,
-        optimizer,
-        scheduler, 
-        loss_fn,
-        epochs: int = 10, 
-        print_output: bool = True):
-
-        all_losses = []
-
-        for t in range(epochs):
-            if(print_output):
-                print(f"Epoch {t+1}\n-------------------------------")
-            model.train_loop(model, train_dataloader, optimizer, loss_fn)
-            epoch_loss = model.test_loop(model, test_dataloader, loss_fn)
-
-            all_losses.append(epoch_loss)
-
-            # Change optimizer learning rate
-            scheduler.step(epoch_loss)
-        
-        if(print_output):
-            print("Done Training!")
+        # Change optimizer learning rate
+        scheduler.step(epoch_loss)
+    
+    if(print_output):
+        print("Done Training!")
 
         return all_losses
 
-
 def plot_loss(losses):
-    plt.plot(losses)
-    plt.title('Training Loss')
-    plt.ylabel('Avg Loss')
-    plt.xlabel('epochs')
+    plt.plot(np.arange(1, len(losses)+1), losses, linestyle='-', marker='o', color='b')
+    plt.xticks(np.arange(1, len(losses) + 1, 1.0))
+
+    plt.title('Test Loss vs. Epochs')
+    plt.ylabel('Avg Test Loss')
+    plt.xlabel('Epochs')
+   
     # plt.show()
-    plt.savefig('loss_plot.png')
+    plt.savefig('./plots/loss_plot.png')
 
 
 if __name__== '__main__':
-    # Autoencoder Model
-    model = Autoencoder_PT(32, 
+    Autoencoder Model
+    model = Autoencoder(32, 
         encoder_hidden_layers = (250,100,50), 
         decoder_hidden_layers = (50,100,250))
 
     model = model.to(device)
 
-    # for param in model.parameters():
-    #     print(type(param), param.size())
 
+    batch_size = 4
     learning_rate = .0001
     l2_factor = 5e-3
 
     loss_fn = torch.nn.MSELoss()
+
     optimizer = torch.optim.SGD(
         model.parameters(), 
         lr=learning_rate, 
         momentum=0.9, 
         weight_decay=l2_factor)
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
@@ -219,15 +218,11 @@ if __name__== '__main__':
             eps=1e-6,
         )
 
-
-    # Writer for tensorboard
-    # writer = SummaryWriter('runs/practicing')
-
-    batch_size = 4
+    # Print out the model architecture
     input_size = (4,1,8,8,8)
     summary(model, input_size)
 
-    
+    # Get datasets and form dataloaders
     data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
     train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True)
     
@@ -239,8 +234,6 @@ if __name__== '__main__':
         transform=None,
         for_autoencoder = True
     )
-
-    # print(f'Length of train dataset: {train_dataset.__len__()}')
 
     test_dataset = data.ELMDataset(
         *test_data,
@@ -254,12 +247,12 @@ if __name__== '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
-    # Train the model
-    losses = Autoencoder_PT.train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
+    # Train the model and plot loss
+    losses = Autoencoder.train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
     plot_loss(losses)
 
     # Save the model - weights and structure
-    model_save_path = './trained_model.pth'
+    model_save_path = './trained_models/trained_ae.pth'
     torch.save(model, model_save_path)
     
         
