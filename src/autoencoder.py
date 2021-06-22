@@ -9,7 +9,6 @@ from typing import Tuple
 
 import data, config
 
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
