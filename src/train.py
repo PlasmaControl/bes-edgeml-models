@@ -135,6 +135,7 @@ def train_loop(
         config.signal_window_size,
         config.label_look_ahead,
         stack_elm_events=config.stack_elm_events,
+        add_noise=config.add_noise,
         transform=transforms,
     )
 

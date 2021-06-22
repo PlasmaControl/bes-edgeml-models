@@ -30,6 +30,9 @@ transition_halfwidth = 3
 # number of time data points to be used for a whole signal
 signal_window_size = 8
 
+# add gaussian noise
+add_noise = True
+
 # size of the input after stitching and resizing
 size = 12
 stack_elm_events = False
