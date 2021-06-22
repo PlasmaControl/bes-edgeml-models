@@ -2,9 +2,9 @@
 file_name = "labeled-elm-events.hdf5"
 
 # output directory
-output_dir = "outputs"
-data_dir = "data"
-model_dir = "models"
+output_dir = "../outputs"
+data_dir = "../data"
+model_dir = "../models"
 
 # set universal random state
 seed = 15
@@ -22,7 +22,7 @@ batch_size = 64
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = -1
+max_elms = 6 #-1
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
