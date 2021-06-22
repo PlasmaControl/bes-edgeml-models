@@ -1,18 +1,14 @@
 import torch
-# from autoencoder_pt import Autoencoder_PT
-from ae_easy import Autoencoder_easy
-# from ae_one_piece import Autoencoder_OP
-from ae_easy import device
-import data, config
 from matplotlib import pyplot as plt
-from matplotlib.animation import FuncAnimation, FFMpegWriter
+# from matplotlib.animation import FuncAnimation, FFMpegWriter
 import seaborn as sb
 import numpy as np
-from scipy.ndimage.filters import gaussian_filter
 
-fold = 1
-data_ = data.Data(kfold=True, balance_classes=config.balance_classes)
-train_data, test_data, _ = data_.get_data(shuffle_sample_indices=False, fold=fold)
+from autoencoder_pt import Autoencoder_PT, device
+import data, config
+
+data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+train_data, test_data, _ = data_.get_data(shuffle_sample_indices=False)
 
 train_dataset = data.ELMDataset(
         *train_data,
@@ -28,7 +24,6 @@ PATH = './easy_model.pth'
 model = torch.load(PATH)
 model = model.to(device)
 model.eval()
-
 
 
 def plot(index):
@@ -86,14 +81,6 @@ def animate(i):
 def show_animation():
     anim = FuncAnimation(fig, animate, init_func=init, frames=len(s), interval = 1, repeat = False)
     plt.show()
-
-
-# def save_animation(save_path):
-#     anim = FuncAnimation(fig, animate, init_func=init, frames=len(s), interval = 1, repeat = False)
-#     writer = FFMpegWriter(fps=60, metadata=dict(artist='PA'), bitrate=1800)
-#     anim.save(save_path)
-#     plt.close()
-
 
 if __name__ == '__main__':
     for i in range(0, 11000, 1000):

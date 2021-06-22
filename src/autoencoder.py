@@ -187,7 +187,6 @@ def plot_loss(losses):
     # plt.show()
     plt.savefig('./plots/loss_plot.png')
 
-
 if __name__== '__main__':
     Autoencoder Model
     model = Autoencoder(32, 

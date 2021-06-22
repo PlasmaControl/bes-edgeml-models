@@ -22,7 +22,7 @@ batch_size = 64
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = 6 #-1
+max_elms = 10 #-1
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
