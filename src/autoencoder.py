@@ -12,7 +12,7 @@ import data, config
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print('Using {} device'.format(device))
 
-# Autoencoder class
+# Flexible Autoencoder class
 class Autoencoder(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
@@ -102,6 +102,51 @@ class Autoencoder(torch.nn.Module):
         # print(reconstructed.shape)
         return reconstructed
 
+# Simple/easy Autoencoder class
+class AE_simple(torch.nn.Module):
+    # Constructor - sets up encoder and decoder layers
+    def __init__(self,
+        latent_dim: int, 
+        relu_negative_slope: float = 0.1,
+        signal_window_shape: Tuple = (1,8,8,8),
+        signal_window_size: int = 8,
+        learning_rate: float = .0001,
+        l2_factor: float = 5e-3,
+        dropout_rate: float = 0.3):
+
+        super(AE_simple, self).__init__()
+
+        self.latent_dim = latent_dim
+
+        self.signal_window_shape = signal_window_shape # (channels, signal window size, height, width)
+        self.signal_window_size = signal_window_size # Initialized to 8 frames 
+        self.relu_negative_slope = relu_negative_slope
+        self.dropout_rate = dropout_rate
+
+        # 1x8x8x8 = 512 input features
+        self.num_input_features = self.signal_window_shape[0]
+        for i in range(1, len(self.signal_window_shape)):
+            self.num_input_features *= self.signal_window_shape[i]
+        # print(f'total number of features: {self.num_input_features}')
+
+        self.flatten = torch.nn.Flatten()
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(512, self.latent_dim)
+            )
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(self.latent_dim, 512)
+            )
+
+    # Forward pass of the autoencoder - returns the reshaped output of net
+    def forward(self, x):
+        input_shape = x.shape
+        x = self.flatten(x)
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        reconstructed = decoded.view(*input_shape)
+        # print(reconstructed.shape)
+        return reconstructed
+
 def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
     model.train()
     size = len(dataloader.dataset)
@@ -119,10 +164,10 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
 
         if batch % 1000 == 0:
             loss, current = loss.item(), batch * len(X)
-            for name, param in model.named_parameters():
-                if param.requires_grad:
-                    print (name, param.data)
-                    break
+            # for name, param in model.named_parameters():
+            #     if param.requires_grad:
+            #         print (name, param.data)
+            #         break
             # param = model.parameters()[0][0,0]
             if(print_output):
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
@@ -162,8 +207,8 @@ def train_model(
     for t in range(epochs):
         if(print_output):
             print(f"Epoch {t+1}\n-------------------------------")
-        model.train_loop(model, train_dataloader, optimizer, loss_fn)
-        epoch_loss = model.test_loop(model, test_dataloader, loss_fn)
+        train_loop(model, train_dataloader, optimizer, loss_fn)
+        epoch_loss = test_loop(model, test_dataloader, loss_fn)
 
         all_losses.append(epoch_loss)
 
@@ -187,10 +232,12 @@ def plot_loss(losses):
     plt.savefig('./plots/loss_plot.png')
 
 if __name__== '__main__':
-    Autoencoder Model
-    model = Autoencoder(32, 
-        encoder_hidden_layers = (250,100,50), 
-        decoder_hidden_layers = (50,100,250))
+    # Autoencoder Model
+    # model = Autoencoder(32, 
+    #     encoder_hidden_layers = (250,100,50), 
+    #     decoder_hidden_layers = (50,100,250))
+
+    model = AE_simple(512)
 
     model = model.to(device)
 
@@ -246,11 +293,11 @@ if __name__== '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model and plot loss
-    losses = Autoencoder.train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
+    losses = train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
     plot_loss(losses)
 
     # Save the model - weights and structure
-    model_save_path = './trained_models/trained_ae.pth'
+    model_save_path = './trained_models/simple_ae.pth'
     torch.save(model, model_save_path)
     
         
