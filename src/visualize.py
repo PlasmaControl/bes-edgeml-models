@@ -20,7 +20,7 @@ train_dataset = data.ELMDataset(
     )
 
 # Load model
-PATH = './trained_models/simple_ae.pth'
+PATH = './trained_models/latent_300_no_activation.pth'
 model = torch.load(PATH)
 model = model.to(device)
 model.eval()

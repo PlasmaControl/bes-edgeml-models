@@ -131,7 +131,8 @@ class AE_simple(torch.nn.Module):
 
         self.flatten = torch.nn.Flatten()
         self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(512, self.latent_dim)
+            torch.nn.Linear(512, self.latent_dim),
+            torch.nn.LeakyReLU(negative_slope = self.relu_negative_slope)
             )
         self.decoder = torch.nn.Sequential(
             torch.nn.Linear(self.latent_dim, 512)
@@ -237,7 +238,7 @@ if __name__== '__main__':
     #     encoder_hidden_layers = (250,100,50), 
     #     decoder_hidden_layers = (50,100,250))
 
-    model = AE_simple(512)
+    model = AE_simple(300)
 
     model = model.to(device)
 
@@ -293,7 +294,7 @@ if __name__== '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model and plot loss
-    losses = train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 3, print_output = True)
+    losses = train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 10, print_output = True)
     plot_loss(losses)
 
     # Save the model - weights and structure
