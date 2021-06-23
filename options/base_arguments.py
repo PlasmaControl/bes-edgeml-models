@@ -86,6 +86,13 @@ class BaseArguments:
             help="size of the test dataset. Default: 0.1",
         )
         parser.add_argument(
+            "--size",
+            type=int,
+            default=8,
+            help="size of the input. Must be specified when using stacked ELM model."
+            "Default: 8",
+        )
+        parser.add_argument(
             "--data_mode",
             type=str,
             default="unbalanced",
