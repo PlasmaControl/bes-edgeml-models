@@ -93,6 +93,14 @@ class BaseArguments:
             "'unbalanced' uses the raw data as is. Default: unbalanced",
         )
         parser.add_argument(
+            "--num_workers",
+            type=int,
+            default=0,
+            help="turns on the multi-processing data loading with `num_workers` loader"
+            "worker processes. Default: 0 meaning the data loading step will be done by"
+            "the main process.",
+        )
+        parser.add_argument(
             "--add_noise",
             action="store_false",
             help="if true, add Gaussian noise to the data with user supplied mean and std dev"
