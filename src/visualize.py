@@ -1,12 +1,12 @@
 import torch
 from matplotlib import pyplot as plt
-# from matplotlib.animation import FuncAnimation, FFMpegWriter
 import seaborn as sb
 import numpy as np
 
-from autoencoder_pt import Autoencoder_PT, device
+from autoencoder import Autoencoder, AE_simple, device
 import data, config
 
+# Get data and form dataset
 data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
 train_data, test_data, _ = data_.get_data(shuffle_sample_indices=False)
 
@@ -20,12 +20,12 @@ train_dataset = data.ELMDataset(
     )
 
 # Load model
-PATH = './easy_model.pth'
+PATH = './trained_models/simple_ae.pth'
 model = torch.load(PATH)
 model = model.to(device)
 model.eval()
 
-
+# Plots the actual vs model reconstructed frames (0, 2, 4, 6)
 def plot(index):
     actual_window = train_dataset[index][0].to(device)
     pred_window = train_dataset[index][1]
@@ -55,37 +55,8 @@ def plot(index):
     # fig.savefig('plot.png') 
     plt.show()
 
-# train_data[0] is a numpy array of many 8x8 signal frames
-signal_frames = train_data[0]
-signal_labels = train_data[1]
-
-
-s = signal_frames[15000:15300,...]
-l = signal_labels[15000:15300,...]
-
-# fig = plt.figure()
-
-def init():
-    sb.heatmap(np.zeros((8, 8)), square=True, cbar=True, xticklabels=False, yticklabels=False, cmap = 'hot')
-
-def animate(i):
-    plt.clf()
-    # print(f'Label at frame {i}: {l[i]}')
-    data = s[i]
-    label = l[i]
-    # print(i)
-    plt.title(f'Label: {label}')
-    sb.heatmap(data, vmin = -1, vmax = 1, square=True, cbar=True, xticklabels=False, yticklabels=False, cmap = 'hot')
-
-
-def show_animation():
-    anim = FuncAnimation(fig, animate, init_func=init, frames=len(s), interval = 1, repeat = False)
-    plt.show()
-
 if __name__ == '__main__':
+    # Plot 10 model predictions
     for i in range(0, 11000, 1000):
         # print(i)
         plot(i)
-    
-    # show_animation()
-    # save_animation('elm_event_animation')
