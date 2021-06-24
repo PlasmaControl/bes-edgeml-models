@@ -1,6 +1,4 @@
-import os
 import argparse
-import torch
 
 
 class BaseArguments:
@@ -147,14 +145,14 @@ class BaseArguments:
         It will print both current arguments as well as the default values (if different).
         """
         message = ""
-        message += "----------- Parameters used: -----------\n"
+        message += "------------- Parameters used: -------------\n"
         for k, v in sorted(vars(args).items()):
             comment = ""
             default = self.parser.get_default(k)
             if v != default:
                 comment = f"\t[default: {default}]"
-            message += f"{str(k):>25}: {str(v):<30} {comment}\n"
-        message += "---------- End -----------\n"
+            message += f"{str(k):>20}: {str(v):<15} {comment}\n"
+        message += "-------------- End ---------------\n"
 
         print(message)
 
