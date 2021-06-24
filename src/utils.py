@@ -2,8 +2,9 @@ import os
 import logging
 import time
 import math
+import argparse
 
-import config
+from . import config
 
 
 # log the model and data preprocessing outputs
@@ -90,3 +91,57 @@ class MetricMonitor:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+def test_args_compat(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    infer_mode: bool = False,
+):
+    """Checks if all the parameters with dependencies are passed."""
+    compat = True
+    # check the basic arguments and their dependencies
+    if (
+        args.model_name == "StackedELMModel"
+        and (not args.stack_elm_events)
+        and ("size" in vars(args))
+    ):
+        parser.error(
+            f"{args.model_name} requires arguments `size` and `stack_elm_events` set to True."
+        )
+        compat = False
+
+    if "smoothen_transition" in vars(
+        args
+    ) and "transition_halfwidth" not in vars(args):
+        parser.error(
+            "`smoothen_transition` argument requires argument `transition_halfwidth`."
+        )
+        compat = False
+    if (
+        (args.add_noise)
+        and ("mu" not in vars(args))
+        and ("sigma" not in vars(args))
+    ):
+        parser.error(
+            "`add_noise` argument requires arguments `mu` and `sigma`."
+        )
+        compat = False
+    # check the inference related parameters
+    if infer_mode:
+        if (
+            (args.plot_num == 12)
+            and (args.num_rows != 4)
+            and (args.num_cols != 3)
+        ) or (
+            (args.plot_num == 6)
+            and (args.num_rows != 3)
+            and (args.num_cols != 2)
+        ):
+            parser.error(
+                f"number of rows: {args.num_rows} and number of columns: {args.num_cols} "
+                f"are not compatible with total number of plots: {args.plot_num}"
+            )
+            compat = False
+    if compat:
+        print("All the parsed parameters are compatible with each other!")
