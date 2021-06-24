@@ -2,7 +2,7 @@
 Data class to package BES data for training using PyTorch
 """
 import os
-import utils
+import argparse
 from typing import Tuple
 
 import h5py
@@ -13,27 +13,15 @@ import torch
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+import utils
 import config
-
-
-# create the logger object
-LOGGER = utils.get_logger(
-    script_name=__name__,
-    stream_handler=False,
-    log_file=f"output_logs_{config.data_mode}.log",
-)
 
 
 class Data:
     def __init__(
         self,
+        args: argparse.ArgumentParser,
         datafile: str = None,
-        fraction_validate: float = 0.2,
-        fraction_test: float = 0.1,
-        signal_dtype: str = "float32",
-        kfold: bool = False,
-        smoothen_transition: bool = False,
-        balance_classes: bool = False,
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -43,34 +31,24 @@ class Data:
         Args:
         -----
             datafile (str, optional): Path to the input datafile. Defaults to None.
-            fraction_validate (float, optional): Fraction of the total data to
-                be used as a validation set. Ignored when using K-fold cross-
-                validation. Defaults to 0.2.
-            fraction_test (float, optional): Fraction of the total data to be
-                used as test set. Defaults to 0.1.
-            signal_dtype (str, optional): Datatype of the signals. Defaults to "float32".
-            kfold (bool, optional): Boolean showing whether to use K-fold cross-
-                validation or not. Defaults to False.
-            smoothen_transition (bool, optional): Boolean showing whether to smoothen
-                the labels so that there is a gradual transition of the labels from
-                0 to 1 with respect to the input time series. Defaults to False.
-            balance_classes (bool, optional): Boolean representing whether or not
-                to oversample the data to balance the label classes. Defaults to
-                False.
+
         """
+        self.args = args
         self.datafile = datafile
         if self.datafile is None:
-            self.datafile = os.path.join("data", config.file_name)
-        self.fraction_validate = fraction_validate
-        self.fraction_test = fraction_test
-        self.signal_dtype = signal_dtype
-        self.kfold = kfold
-        self.smoothen_transition = smoothen_transition
-        self.balance_classes = balance_classes
-        self.max_elms = config.max_elms
+            self.datafile = os.path.join("data", self.args.input_file)
+        self.fraction_validate = self.args.fraction_valid
+        self.fraction_test = self.args.fraction_test
+        self.signal_dtype = self.args.signal_dtype
+        self.kfold = self.args.kfold
+        self.smoothen_transition = self.args.smoothen_transition
+        self.data_mode = self.args.data_mode
+        self.max_elms = self.args.max_elms
 
         self.df = pd.DataFrame()
-        self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
+        self.transition = np.linspace(
+            0, 1, 2 * self.args.transition_halfwidth + 3
+        )
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
@@ -89,7 +67,7 @@ class Data:
             Tuple: Tuple containing data for training, validation and test sets.
         """
         training_elms, validation_elms, test_elms = self._partition_elms(
-            max_elms=config.max_elms, fold=fold
+            max_elms=self.args.max_elms, fold=fold
         )
         LOGGER.info("Reading ELM events and creating datasets")
         LOGGER.info("-" * 30)
@@ -254,13 +232,13 @@ class Data:
             elm_index[:n_elms],
             test_size=self.fraction_test,
             shuffle=True,
-            random_state=config.seed,
+            random_state=self.args.seed,
         )
 
         # kfold cross validation
         if self.kfold and fold is None:
             raise Exception(
-                f"K-fold cross validation is passed but fold index in range [0, {config.folds}) is not specified."
+                f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
             )
 
         if self.kfold:
@@ -289,7 +267,7 @@ class Data:
             training_elms (np.ndarray): Indices for training ELM events.
         """
         kf = model_selection.KFold(
-            n_splits=config.folds, shuffle=True, random_state=config.seed
+            n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
         )
         self.df["elm_events"] = training_elms
         self.df["fold"] = -1
@@ -360,7 +338,7 @@ class Data:
         # allowed indices; time data points which can be used for creating the data chunks
         _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
         _valid_t0[
-            -(config.signal_window_size + config.label_look_ahead) + 1 :
+            -(self.args.signal_window_size + self.args.label_look_ahead) + 1 :
         ] = 0
 
         # indices for active elm events in each elm event
@@ -436,7 +414,7 @@ class Data:
         LOGGER.info(
             f"Active ELM oversampling for balanced data: {oversample_count}"
         )
-        if self.balance_classes:
+        if self.data_mode == "balanced":
             for i_start, i_stop in zip(elm_start, elm_stop):
                 assert np.all(_labels[i_start : i_stop + 1] >= 0.5)
                 active_elm_window = np.arange(
@@ -461,14 +439,11 @@ class Data:
 class ELMDataset(torch.utils.data.Dataset):
     def __init__(
         self,
+        args: argparse.ArgumentParser,
         signals: np.ndarray,
         labels: np.ndarray,
         sample_indices: np.ndarray,
         window_start: np.ndarray,
-        signal_window_size: int,
-        label_look_ahead: int,
-        stack_elm_events: bool = False,
-        add_noise: bool = False,
         transform=None,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
@@ -492,15 +467,16 @@ class ELMDataset(torch.utils.data.Dataset):
                 the input 3d-tensor together to get a 2d tensor representation on
                 which larger CNNs can be trained. Defaults to False.
         """
+        self.args = args
         self.signals = signals
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
-        self.signal_window_size = signal_window_size
-        self.label_look_ahead = label_look_ahead
-        self.stack_elm_events = stack_elm_events
+        self.signal_window_size = self.args.signal_window_size
+        self.label_look_ahead = self.args.label_look_ahead
+        self.stack_elm_events = self.args.stack_elm_events
         self.transform = transform
-        self.add_noise = add_noise
+        self.add_noise = self.args.add_noise
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -520,25 +496,27 @@ class ELMDataset(torch.utils.data.Dataset):
             elm_idx + self.signal_window_size + self.label_look_ahead - 1
         ].astype("int")
         if self.stack_elm_events:
-            if config.signal_window_size == 8:
+            if self.args.signal_window_size == 8:
                 signal_window = np.hsplit(
                     np.concatenate(signal_window, axis=-1), 2
                 )
                 signal_window = np.concatenate(signal_window)
-            elif config.signal_window_size == 16:
+            elif self.args.signal_window_size == 16:
                 signal_window = np.hsplit(
                     np.concatenate(signal_window, axis=-1), 4
                 )
                 signal_window = np.concatenate(signal_window)
             else:
                 raise Exception(
-                    f"Expected signal window size is 8 or 16 but got {config.signal_window_size}."
+                    f"Expected signal window size is 8 or 16 but got {self.args.signal_window_size}."
                 )
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
         if self.add_noise:
             noise = np.random.normal(
-                loc=config.mean, scale=config.stdev, size=signal_window.shape
+                loc=self.args.mu,
+                scale=self.args.sigma,
+                size=signal_window.shape,
             )
             signal_window += noise
 
@@ -548,17 +526,27 @@ class ELMDataset(torch.utils.data.Dataset):
         return signal_window, label
 
 
-def get_transforms():
-    return A.Compose([A.Resize(config.size, config.size)])
+def get_transforms(args):
+    return A.Compose([A.Resize(args.size, args.size)])
 
 
 if __name__ == "__main__":
-    fold = 1
-    data = Data(kfold=True, balance_classes=config.balance_classes)
+    import sys
+
+    sys.path.append("../")
+    from bes_edgeml_models.options.base_arguments import BaseArguments
+
+    args = BaseArguments().parse()
+
+    # create the logger object
+    LOGGER = utils.get_logger(
+        script_name=__name__,
+        stream_handler=True,
+        log_file=f"output_logs_{args.data_mode}.log",
+    )
+    data = Data(args)
     LOGGER.info("-" * 10)
-    LOGGER.info(f" Fold: {fold}")
-    LOGGER.info("-" * 10)
-    train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=fold)
+    train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)
     _, _, sample_indices, window_start = train_data
 
     LOGGER.info(f"Sample indices: {sample_indices[:10]}")
@@ -569,15 +557,12 @@ if __name__ == "__main__":
     LOGGER.info(
         f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
     )
-    transforms = get_transforms()
+    transforms = get_transforms(args)
 
     train_dataset = ELMDataset(
+        args,
         *train_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=False,
         transform=transforms,
-        add_noise=True,
     )
     sample = train_dataset.__getitem__(0)
     print(sample[1])
