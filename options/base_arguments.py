@@ -131,6 +131,13 @@ class BaseArguments:
             help="if true, smoothen the labels so that there is a gradual transition "
             "of the labels from 0 to 1 with respect to the input time series.",
         )
+        parser.add_argument(
+            "--transition_halfwidth",
+            action="store_true",
+            default=False,
+            help="transition halfwidth (used to smoothen the labels). Only applies "
+            "when `smoothen_transition` is set to True.",
+        )
         self.initialized = True
 
         return parser
