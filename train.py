@@ -1,24 +1,23 @@
 import os
 import time
 import pickle
+import argparse
 from typing import Union
 
 import torch
 import torch.nn as nn
 import numpy as np
-import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-import config, data, utils, run, cnn_feature_model, model
+from options.train_arguments import TrainArguments
+from src import config, data, utils, run, cnn_feature_model, model
 
 
-LOGGER = utils.get_logger(
-    script_name=__name__,
-    log_file=f"output_logs_{config.data_mode}_noise_{config.stdev}.log",
-)
-
-
-def get_lr_scheduler(optimizer, scheduler_name, dataloader):
+def get_lr_scheduler(
+    optimizer: torch.optim.Optimizer,
+    scheduler_name: str,
+    dataloader: torch.utils.data.DataLoader,
+):
     # learning rate scheduler
     if scheduler_name == "ReduceLROnPlateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -54,7 +53,7 @@ def get_lr_scheduler(optimizer, scheduler_name, dataloader):
     elif scheduler_name == "OneCycleLR":
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
-            epochs=config.epochs,
+            epochs=args.epochs,
             steps_per_epoch=len(dataloader),
             max_lr=1e-3,
             pct_start=0.2,
@@ -79,7 +78,7 @@ def train_loop(
     # TODO: Implement K-fold cross-validation
     if kfold and (fold is None):
         raise Exception(
-            f"K-fold cross validation is passed but fold index in range [0, {config.folds}) is not specified."
+            f"K-fold cross validation is passed but fold index in range [0, {args.folds}) is not specified."
         )
     if (not kfold) and (fold is not None):
         LOGGER.info(
@@ -89,10 +88,10 @@ def train_loop(
         fold = None
 
     # test data file path
-    test_data_file = os.path.join(config.data_dir, test_datafile_name)
+    test_data_file = os.path.join(args.data_dir, test_datafile_name)
 
     LOGGER.info("-" * 60)
-    if config.balance_classes:
+    if args.balance_classes:
         LOGGER.info("Training with balanced classes.")
     else:
         LOGGER.info("Training using unbalanced (original) classes.")
@@ -133,18 +132,18 @@ def train_loop(
     # create datasets
     train_dataset = data.ELMDataset(
         *train_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=config.stack_elm_events,
-        add_noise=config.add_noise,
+        args.signal_window_size,
+        args.label_look_ahead,
+        stack_elm_events=args.stack_elm_events,
+        add_noise=args.add_noise,
         transform=transforms,
     )
 
     valid_dataset = data.ELMDataset(
         *valid_data,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=config.stack_elm_events,
+        args.signal_window_size,
+        args.label_look_ahead,
+        stack_elm_events=args.stack_elm_events,
         transform=transforms,
     )
 
@@ -304,9 +303,16 @@ def train_loop(
 
 
 if __name__ == "__main__":
-    data_obj = data.Data(kfold=False, balance_classes=config.balance_classes)
-    train_loop(
-        data_obj,
-        model_class=cnn_feature_model.FeatureModel,
-        test_datafile_name=f"test_data_{config.data_mode}_lookahead_{config.label_look_ahead}.pkl",
+    args, parser = TrainArguments().parse()
+    utils.test_args_compat(args, parser)
+    LOGGER = utils.get_logger(
+        script_name=__name__,
+        log_file=f"output_logs_{args.data_mode}_noise_{args.sigma}.log",
     )
+    data_obj = data.Data(args)
+    print(data_obj)
+    # train_loop(
+    #     data_obj,
+    #     model_class=cnn_feature_model.FeatureModel,
+    #     test_datafile_name=f"test_data_{config.data_mode}_lookahead_{config.label_look_ahead}.pkl",
+    # )
