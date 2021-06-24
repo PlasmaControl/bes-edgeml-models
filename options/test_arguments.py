@@ -18,6 +18,7 @@ class TestArguments(BaseArguments):
         parser.add_argument(
             "--test_data_info",
             action="store_false",
+            default=False,
             help="if true, show the information about the test data.",
         )
         parser.add_argument(
@@ -41,11 +42,13 @@ class TestArguments(BaseArguments):
         parser.add_argument(
             "--plot_data",
             action="store_true",
+            default=True,
             help="if true, randomly select `plot_num` elm events with ground truth and predictions.",
         )
         parser.add_argument(
             "--show_metrics",
             action="store_true",
+            default=True,
             help="if true, show and save classfication report, roc details and "
             "confusion matrix.",
         )
