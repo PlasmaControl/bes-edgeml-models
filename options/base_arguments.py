@@ -115,8 +115,7 @@ class BaseArguments:
         parser.add_argument(
             "--size",
             type=int,
-            default=8,
-            help="size of the input. Must be specified when using stacked ELM model.",
+            help="size of the input, [8 | 12 | 16 | 24]. Must be specified when using stacked ELM model.",
         )
         parser.add_argument(
             "--data_mode",
@@ -142,28 +141,24 @@ class BaseArguments:
         parser.add_argument(
             "--mu",
             type=float,
-            default=0,
             help="mean of the Gaussian noise. Must be passed "
             "when `add_noise=True`.",
         )
         parser.add_argument(
             "--sigma",
             type=float,
-            default=0.01,
             help="standard deviation of the Gaussian noise. Must be passed "
             "when `add_noise=True`.",
         )
         parser.add_argument(
             "--smoothen_transition",
             action="store_true",
-            default=False,
             help="if true, smoothen the labels so that there is a gradual transition "
             "of the labels from 0 to 1 with respect to the input time series.",
         )
         parser.add_argument(
             "--transition_halfwidth",
-            action="store_true",
-            default=False,
+            type=int,
             help="transition halfwidth (used to smoothen the labels). Only applies "
             "when `smoothen_transition` is set to True.",
         )
@@ -183,7 +178,7 @@ class BaseArguments:
         self.parser = parser
         args = parser.parse_args()
 
-        return args
+        return args, parser
 
     def _print_args(self, args):
         """Print command line arguments.
@@ -203,8 +198,8 @@ class BaseArguments:
 
     def parse(self):
         """Parse our arguments."""
-        args = self._gather_args()
+        args, parser = self._gather_args()
         self._print_args(args)
 
         self.args = args
-        return args
+        return args, parser
