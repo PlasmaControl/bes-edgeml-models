@@ -11,10 +11,6 @@ import pandas as pd
 from sklearn import model_selection
 import torch
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
-
-import utils
-import config
 
 
 class Data:
@@ -46,9 +42,9 @@ class Data:
         self.max_elms = self.args.max_elms
 
         self.df = pd.DataFrame()
-        self.transition = np.linspace(
-            0, 1, 2 * self.args.transition_halfwidth + 3
-        )
+        # self.transition = np.linspace(
+        #     0, 1, 2 * self.args.transition_halfwidth + 3
+        # )
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
@@ -532,11 +528,12 @@ def get_transforms(args):
 
 if __name__ == "__main__":
     import sys
+    import utils
 
     sys.path.append("../")
     from bes_edgeml_models.options.base_arguments import BaseArguments
 
-    args = BaseArguments().parse()
+    args, _ = BaseArguments().parse()
 
     # create the logger object
     LOGGER = utils.get_logger(
