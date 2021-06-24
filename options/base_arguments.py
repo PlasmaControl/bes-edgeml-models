@@ -38,7 +38,8 @@ class BaseArguments:
         )
         parser.add_argument(
             "--k_fold",
-            action="store_false",
+            action="store_true",
+            default=False,
             help="if true, use K-fold cross-validation other makes standard train-test split.",
         )
         parser.add_argument(
@@ -105,7 +106,8 @@ class BaseArguments:
         )
         parser.add_argument(
             "--add_noise",
-            action="store_false",
+            action="store_true",
+            default=False,
             help="if true, add Gaussian noise to the data with user supplied mean and std dev.",
         )
         parser.add_argument(
@@ -121,6 +123,13 @@ class BaseArguments:
             default=0.01,
             help="standard deviation of the Gaussian noise. Must be passed "
             "when `add_noise=True`.",
+        )
+        parser.add_argument(
+            "--smoothen_transition",
+            action="store_true",
+            default=False,
+            help="if true, smoothen the labels so that there is a gradual transition "
+            "of the labels from 0 to 1 with respect to the input time series.",
         )
         self.initialized = True
 

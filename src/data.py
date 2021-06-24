@@ -51,7 +51,7 @@ class Data:
             signal_dtype (str, optional): Datatype of the signals. Defaults to "float32".
             kfold (bool, optional): Boolean showing whether to use K-fold cross-
                 validation or not. Defaults to False.
-            smoothen_transition (bool, optional): Boolean showing whether to smooth
+            smoothen_transition (bool, optional): Boolean showing whether to smoothen
                 the labels so that there is a gradual transition of the labels from
                 0 to 1 with respect to the input time series. Defaults to False.
             balance_classes (bool, optional): Boolean representing whether or not

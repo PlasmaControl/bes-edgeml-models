@@ -11,7 +11,8 @@ class TrainArguments(BaseArguments):
         # training parameters
         parser.add_argument(
             "--focal_loss",
-            action="store_false",
+            action="store_true",
+            default=False,
             help="if true, use focal loss instead of `BCELossWithLogits`.",
         )
         parser.add_argument(
@@ -112,7 +113,8 @@ class TrainArguments(BaseArguments):
         )
         parser.add_argument(
             "--cycle_momentum",
-            action="store_false",
+            action="store_true",
+            default=False,
             help="if true, momentum is cycled inversely to lr. Applies only to "
             "`CyclicLR` and must be set to False if `Adam` or `AdamW` are used as "
             "optimizers.",
