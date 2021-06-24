@@ -15,14 +15,17 @@ class BaseArguments:
         """Define the options common for training and testing."""
         # basic parameters
         parser.add_argument(
-            "--input_file", required=True, help="path to the input hdf5 file."
+            "--input_file",
+            type=str,
+            default="labeled-elm-events.hdf5",
+            help="path to the input hdf5 file.",
         )
         parser.add_argument(
             "--model_name",
             type=str,
-            required=True,
+            default="FeatureModel",
             help="name of the model to be used for training, "
-            "[FeatureModel | CNNModel | ...].",
+            "[FeatureModel | CNNModel | StackedELMModel].",
         )
         parser.add_argument(
             "--n_epochs",
@@ -37,7 +40,13 @@ class BaseArguments:
             help="device to be used for training and testing, [cpu | cuda].",
         )
         parser.add_argument(
-            "--k_fold",
+            "--seed",
+            type=int,
+            default=0,
+            help="seed of the PRNG for reproducibity of results.",
+        )
+        parser.add_argument(
+            "--kfold",
             action="store_true",
             default=False,
             help="if true, use K-fold cross-validation other makes standard train-test split.",
@@ -64,12 +73,32 @@ class BaseArguments:
             "[8 | 16].",
         )
         parser.add_argument(
+            "--signal_dtype",
+            type=str,
+            default="float32",
+            help="data type of input BES signals.",
+        )
+        parser.add_argument(
             "--label_look_ahead",
             type=int,
             default=0,
             help="`look ahead`, meaning the label for the entire signal window is taken to "
             "be label corresponding to the last element (0 ahead) of the signal window, "
             "[0 | 4 | 8 | ...].",
+        )
+        parser.add_argument(
+            "--shuffle_sample_indices",
+            action="store_true",
+            default=False,
+            help="if true, shuffle the sample indices calculated based on `signal_window_size` "
+            "and `label_look_ahead`.",
+        )
+        parser.add_argument(
+            "--stack_elm_events",
+            action="store_true",
+            default=False,
+            help="if true, elm events must be stacked together. Only used when "
+            "`StackedELMModel` is used.",
         )
         parser.add_argument(
             "--fraction_valid",
