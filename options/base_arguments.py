@@ -94,8 +94,8 @@ class BaseArguments:
             "--data_mode",
             type=str,
             default="unbalanced",
-            help="which data mode to use, `balanced` upsamples the data to reduce class imbalance "
-            "`unbalanced` uses the raw data as is.",
+            help="which data mode to use, [balanced | unbalanced]. `balanced` upsamples "
+            "the data to reduce class imbalance, `unbalanced` uses the raw data as is.",
         )
         parser.add_argument(
             "--num_workers",
