@@ -28,6 +28,12 @@ class BaseArguments:
             "[feature_model | cnn_model | stacked_elm_model].",
         )
         parser.add_argument(
+            "--data_dir",
+            type=str,
+            default="data",
+            help="path to the input data.",
+        )
+        parser.add_argument(
             "--n_epochs",
             type=int,
             default=10,
