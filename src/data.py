@@ -2,6 +2,7 @@
 Data class to package BES data for training using PyTorch
 """
 import os
+import logging
 import argparse
 from typing import Tuple
 
@@ -17,6 +18,7 @@ class Data:
     def __init__(
         self,
         args: argparse.ArgumentParser,
+        logger: logging.getLogger,
         datafile: str = None,
     ):
         """Helper class that takes care of all the data preparation steps: reading
@@ -40,6 +42,7 @@ class Data:
         self.smoothen_transition = self.args.smoothen_transition
         self.data_mode = self.args.data_mode
         self.max_elms = self.args.max_elms
+        self.logger = logger
 
         self.df = pd.DataFrame()
         # self.transition = np.linspace(
@@ -65,22 +68,22 @@ class Data:
         training_elms, validation_elms, test_elms = self._partition_elms(
             max_elms=self.args.max_elms, fold=fold
         )
-        LOGGER.info("Reading ELM events and creating datasets")
-        LOGGER.info("-" * 30)
-        LOGGER.info("  Creating training data")
-        LOGGER.info("-" * 30)
+        self.logger.info("Reading ELM events and creating datasets")
+        self.logger.info("-" * 30)
+        self.logger.info("  Creating training data")
+        self.logger.info("-" * 30)
         train_data = self._preprocess_data(
             training_elms, shuffle_sample_indices=shuffle_sample_indices
         )
-        LOGGER.info("-" * 30)
-        LOGGER.info("  Creating validation data")
-        LOGGER.info("-" * 30)
+        self.logger.info("-" * 30)
+        self.logger.info("  Creating validation data")
+        self.logger.info("-" * 30)
         validation_data = self._preprocess_data(
             validation_elms, shuffle_sample_indices=shuffle_sample_indices
         )
-        LOGGER.info("-" * 30)
-        LOGGER.info("  Creating test dataset")
-        LOGGER.info("-" * 30)
+        self.logger.info("-" * 30)
+        self.logger.info("  Creating test dataset")
+        self.logger.info("-" * 30)
         test_data = self._preprocess_data(
             test_elms, shuffle_sample_indices=shuffle_sample_indices
         )
@@ -165,7 +168,7 @@ class Data:
         if shuffle_sample_indices:
             np.random.shuffle(sample_indices)
 
-        LOGGER.info(
+        self.logger.info(
             "Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:"
         )
         for tensor in [
@@ -179,13 +182,13 @@ class Data:
             tmp += f" min {np.min(tensor):.3f}, max {np.max(tensor):.3f}"
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
-            LOGGER.info(tmp)
+            self.logger.info(tmp)
 
         hf.close()
         if hf:
-            LOGGER.info("File is open.")
+            self.logger.info("File is open.")
         else:
-            LOGGER.info("File is closed.")
+            self.logger.info("File is closed.")
         return signals, labels, sample_indices, window_start
 
     def _partition_elms(
@@ -218,7 +221,7 @@ class Data:
 
         # limit the data according to the max number of events passed
         if max_elms is not None and max_elms != -1:
-            LOGGER.info(f"Limiting data read to {max_elms} events.")
+            self.logger.info(f"Limiting data read to {max_elms} events.")
             n_elms = max_elms
         else:
             n_elms = len(elm_index)
@@ -238,20 +241,22 @@ class Data:
             )
 
         if self.kfold:
-            LOGGER.info("Using K-fold cross validation")
+            self.logger.info("Using K-fold cross validation")
             self._kfold_cross_val(training_elms)
             training_elms = self.df[self.df["fold"] != fold]["elm_events"]
             validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
         else:
-            LOGGER.info(
+            self.logger.info(
                 "Creating training and validation datasets by simple splitting"
             )
             training_elms, validation_elms = model_selection.train_test_split(
                 training_elms, test_size=self.fraction_validate
             )
-        LOGGER.info(f"Number of training ELM events: {training_elms.size}")
-        LOGGER.info(f"Number of validation ELM events: {validation_elms.size}")
-        LOGGER.info(f"Number of test ELM events: {test_elms.size}")
+        self.logger.info(f"Number of training ELM events: {training_elms.size}")
+        self.logger.info(
+            f"Number of validation ELM events: {validation_elms.size}"
+        )
+        self.logger.info(f"Number of test ELM events: {test_elms.size}")
 
         return training_elms, validation_elms, test_elms
 
@@ -278,11 +283,11 @@ class Data:
             Tuple[np.ndarray, h5py.File]: Tuple containing ELM indices and file object.
         """
         assert os.path.exists(self.datafile)
-        LOGGER.info(f"Found datafile: {self.datafile}")
+        self.logger.info(f"Found datafile: {self.datafile}")
 
         # get ELM indices from datafile
         hf = h5py.File(self.datafile, "r")
-        LOGGER.info(f"Number of ELM events in the datafile: {len(hf)}")
+        self.logger.info(f"Number of ELM events in the datafile: {len(hf)}")
         elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
 
@@ -405,9 +410,9 @@ class Data:
 
         # oversample active ELM periods to reduce class imbalance
         fraction_elm = np.count_nonzero(_labels >= 0.5) / _labels.shape[0]
-        LOGGER.info(f"Active ELM fraction (raw data): {fraction_elm:.3f}")
+        self.logger.info(f"Active ELM fraction (raw data): {fraction_elm:.3f}")
         oversample_count = int((1 - fraction_elm) / fraction_elm) - 1
-        LOGGER.info(
+        self.logger.info(
             f"Active ELM oversampling for balanced data: {oversample_count}"
         )
         if self.data_mode == "balanced":
@@ -426,7 +431,7 @@ class Data:
                 np.count_nonzero(_labels[sample_indices] >= 0.5)
                 / sample_indices.size
             )
-            LOGGER.info(
+            self.logger.info(
                 f"Active ELM fraction (balanced data): {fraction_elm:.3f}"
             )
         return sample_indices
@@ -440,6 +445,7 @@ class ELMDataset(torch.utils.data.Dataset):
         labels: np.ndarray,
         sample_indices: np.ndarray,
         window_start: np.ndarray,
+        logger: logging.getLogger,
         transform=None,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
@@ -473,12 +479,13 @@ class ELMDataset(torch.utils.data.Dataset):
         self.stack_elm_events = self.args.stack_elm_events
         self.transform = transform
         self.add_noise = self.args.add_noise
-        LOGGER.info("-" * 15)
-        LOGGER.info(" Dataset class")
-        LOGGER.info("-" * 15)
-        LOGGER.info(f"Signals shape: {signals.shape}")
-        LOGGER.info(f"Labels shape: {labels.shape}")
-        LOGGER.info(f"Sample indices shape: {sample_indices.shape}")
+        self.logger = logger
+        self.logger.info("-" * 15)
+        self.logger.info(" Dataset class")
+        self.logger.info("-" * 15)
+        self.logger.info(f"Signals shape: {signals.shape}")
+        self.logger.info(f"Labels shape: {labels.shape}")
+        self.logger.info(f"Sample indices shape: {sample_indices.shape}")
 
     def __len__(self):
         return len(self.sample_indices)
@@ -536,22 +543,22 @@ if __name__ == "__main__":
     args, _ = BaseArguments().parse()
 
     # create the logger object
-    LOGGER = utils.get_logger(
+    logger = utils.get_logger(
         script_name=__name__,
         stream_handler=True,
         log_file=f"output_logs_{args.data_mode}.log",
     )
-    data = Data(args)
-    LOGGER.info("-" * 10)
+    data = Data(args, logger)
+    logger.info("-" * 10)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)
     _, _, sample_indices, window_start = train_data
 
-    LOGGER.info(f"Sample indices: {sample_indices[:10]}")
+    logger.info(f"Sample indices: {sample_indices[:10]}")
     values, counts = np.unique(sample_indices, return_counts=True)
-    LOGGER.info(f"Values: {values[counts > 1]}")
-    LOGGER.info(f"Counts: {counts[counts > 1]}")
-    LOGGER.info(f"Number of non-unique values: {len(values[counts > 1])}")
-    LOGGER.info(
+    logger.info(f"Values: {values[counts > 1]}")
+    logger.info(f"Counts: {counts[counts > 1]}")
+    logger.info(f"Number of non-unique values: {len(values[counts > 1])}")
+    logger.info(
         f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
     )
     transforms = get_transforms(args)
@@ -559,6 +566,7 @@ if __name__ == "__main__":
     train_dataset = ELMDataset(
         args,
         *train_data,
+        logger=logger,
         transform=transforms,
     )
     sample = train_dataset.__getitem__(0)

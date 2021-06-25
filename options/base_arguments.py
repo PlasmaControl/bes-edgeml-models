@@ -23,9 +23,9 @@ class BaseArguments:
         parser.add_argument(
             "--model_name",
             type=str,
-            default="FeatureModel",
+            default="feature_model",
             help="name of the model to be used for training, "
-            "[FeatureModel | CNNModel | StackedELMModel].",
+            "[feature_model | cnn_model | stacked_elm_model].",
         )
         parser.add_argument(
             "--n_epochs",
@@ -50,6 +50,12 @@ class BaseArguments:
             action="store_true",
             default=False,
             help="if true, use K-fold cross-validation other makes standard train-test split.",
+        )
+        parser.add_argument(
+            "--n_folds",
+            type=int,
+            help="number of folds for k-fold cross validation. Only passed when "
+            "`kfold` is set to True.",
         )
         parser.add_argument(
             "--max_elms",
@@ -196,10 +202,11 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self):
+    def parse(self, verbose: bool = False):
         """Parse our arguments."""
         args, parser = self._gather_args()
-        self._print_args(args)
+        if verbose:
+            self._print_args(args)
 
         self.args = args
         return args, parser

@@ -3,8 +3,39 @@ import logging
 import time
 import math
 import argparse
+import importlib
+
+import torch
+from torchinfo import summary
 
 from . import config
+
+
+class MetricMonitor:
+    """Calculates and stores the average value of the metrics/loss"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """Reset all the parameters to zero."""
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n: int = 1):
+        """Update the value of the metrics and calculate their
+        average value over the whole dataset.
+        Args:
+        -----
+            val (float): Computed metric (per batch)
+            n (int, optional): Batch size. Defaults to 1.
+        """
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
 # log the model and data preprocessing outputs
@@ -28,9 +59,7 @@ def get_logger(
     logger.setLevel(logging.INFO)
 
     # create handlers
-    f_handler = logging.FileHandler(
-        os.path.join(config.output_dir, log_file), mode="w"
-    )
+    f_handler = logging.FileHandler(os.path.join(log_file), mode="w")
 
     # create formatters and add it to the handlers
     f_format = logging.Formatter(
@@ -66,33 +95,6 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-class MetricMonitor:
-    """Calculates and stores the average value of the metrics/loss"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        """Reset all the parameters to zero."""
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n: int = 1):
-        """Update the value of the metrics and calculate their
-        average value over the whole dataset.
-        Args:
-        -----
-            val (float): Computed metric (per batch)
-            n (int, optional): Batch size. Defaults to 1.
-        """
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
 def test_args_compat(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
@@ -101,6 +103,10 @@ def test_args_compat(
     """Checks if all the parameters with dependencies are passed."""
     compat = True
     # check the basic arguments and their dependencies
+    if args.kfold and "n_folds" not in vars(args):
+        parser.error(
+            "K-fold cross validation is set to True but `n_folds` argument is not passed."
+        )
     if (
         args.model_name == "StackedELMModel"
         and (not args.stack_elm_events)
@@ -145,3 +151,89 @@ def test_args_compat(
             compat = False
     if compat:
         print("All the parsed parameters are compatible with each other!")
+
+
+def get_params(model: object) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
+    print("\t\t\t\tMODEL SUMMARY")
+    summary(model, input_size=input_size)
+    print(f"Output size: {model(x).shape}")
+    print(f"Model contains {get_params(model)} trainable parameters!")
+
+
+def find_model_using_name(model_name: str):
+    model_name = model_name
+    model_path = "models." + model_name
+    model_lib = importlib.import_module(model_path)
+    model = None
+    _model_name = model_name.replace("_", "")
+    for name, cls in model_lib.__dict__.items():
+        if name.lower() == _model_name.lower():
+            model = cls
+
+    return model
+
+
+def get_lr_scheduler(
+    args: argparse.Namespace,
+    optimizer: torch.optim.Optimizer,
+    dataloader: torch.utils.data.DataLoader,
+):
+    # learning rate scheduler
+    if args.scheduler == "ReduceLROnPlateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=args.lr_plateau_mode,
+            factor=args.decay_factor,
+            patience=args.patience,
+            verbose=True,
+        )
+    elif args.scheduler == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.T_max, eta_min=args.eta_min, verbose=False
+        )
+    elif args.scheduler == "CyclicLR":
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            base_lr=args.base_lr,
+            max_lr=args.max_lr,
+            mode=args.cyclic_mode,
+            cycle_momentum=args.cycle_momentum,
+            verbose=False,
+        )
+    elif args.scheduler == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            epochs=args.epochs,
+            steps_per_epoch=len(dataloader),
+            max_lr=args.max_lr,
+            pct_start=args.pct_start,
+            anneal_strategy=args.anneal_policy,
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=args.decay_factor, verbose=True
+        )
+
+    return scheduler
+
+
+def get_optimizer(
+    args: argparse.ArgumentParser, model: object
+) -> torch.optim.Optimizer:
+    if args.optimizer == "SGD":
+        optimizer = torch.optim.SGD(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    elif args.optimizer == "Adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    else:
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    return optimizer

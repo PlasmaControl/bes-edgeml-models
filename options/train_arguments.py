@@ -68,7 +68,8 @@ class TrainArguments(BaseArguments):
             type=str,
             default="min",
             help="[min | max]. In `min` (`max`) mode, lr will be reduced when the "
-            "quantity monitored (loss, accuracy, etc.) has stopped decreasing (increasing).",
+            "quantity monitored (loss, accuracy, etc.) has stopped decreasing (increasing). "
+            "Only used with `ReduceLROnPlateau` scheduler.",
         )
         parser.add_argument(
             "--decay_factor",
@@ -76,7 +77,8 @@ class TrainArguments(BaseArguments):
             default=0.5,
             help="multiplicative factor by which the learning rate be reduced, "
             "`new_lr = decay_factor * lr`. This factor also serves as the `gamma` "
-            "value when `ExponentialLR` is used as the scheduler.",
+            "value when `ExponentialLR` is used as the scheduler. Only used with "
+            "`ReduceLROnPlateau` and `ExponentialLR` schedulers.",
         )
         parser.add_argument(
             "--patience",
