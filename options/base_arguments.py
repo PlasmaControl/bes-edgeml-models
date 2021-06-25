@@ -34,6 +34,18 @@ class BaseArguments:
             help="path to the input data.",
         )
         parser.add_argument(
+            "--log_dir",
+            type=str,
+            default="logs",
+            help="path to save the logs.",
+        )
+        parser.add_argument(
+            "--dry_run",
+            action="store_true",
+            default=False,
+            help="if true, train (test) the model without saving anything.",
+        )
+        parser.add_argument(
             "--n_epochs",
             type=int,
             default=10,

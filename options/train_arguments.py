@@ -10,7 +10,7 @@ class TrainArguments(BaseArguments):
         parser = BaseArguments.create_parser(self, parser)
         # basic parameters
         parser.add_argument(
-            "--saved_model_dir",
+            "--model_ckpts",
             type=str,
             default="model_checkpoints",
             help="path to the pretrained weights of the saved models.",
