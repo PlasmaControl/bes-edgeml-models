@@ -46,6 +46,9 @@ class Data:
 
         self.df = pd.DataFrame()
         self.elm_indices, self.hf = self._read_file()
+        self.logger.info(
+            f"Total frames in the whole data: {self._get_total_frames()}"
+        )
         # self.transition = np.linspace(
         #     0, 1, 2 * self.args.transition_halfwidth + 3
         # )
@@ -96,6 +99,14 @@ class Data:
             self.logger.info("File is closed.")
         return train_data, validation_data, test_data
 
+    def _get_total_frames(self):
+        count = 0
+        for elm_index in self.elm_indices:
+            elm_key = f"{elm_index:05d}"
+            elm_event = self.hf[elm_key]
+            count += np.array(elm_event["labels"]).shape[0]
+        return count
+
     def _preprocess_data(
         self,
         elm_indices: np.ndarray = None,
@@ -125,7 +136,6 @@ class Data:
         labels = []
 
         # get ELM indices from the data file if not provided
-        print(f"h5py file object: {self.hf}")
         if elm_indices is None:
             elm_indices = self.elm_indices
 
@@ -544,7 +554,6 @@ if __name__ == "__main__":
         # log_file=f"output_logs_{args.data_mode}.log",
     )
     data = Data(args, logger)
-    logger.info("-" * 10)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)
     _, _, sample_indices, window_start = train_data
 
@@ -556,14 +565,14 @@ if __name__ == "__main__":
     logger.info(
         f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
     )
-    # transforms = get_transforms(args)
+    transforms = get_transforms(args)
 
-    # train_dataset = ELMDataset(
-    #     args,
-    #     *train_data,
-    #     logger=logger,
-    #     transform=transforms,
-    # )
-    # sample = train_dataset.__getitem__(0)
-    # print(sample[1])
-    # print(sample[0].shape)
+    train_dataset = ELMDataset(
+        args,
+        *train_data,
+        logger=logger,
+        transform=transforms,
+    )
+    sample = train_dataset.__getitem__(0)
+    print(sample[1])
+    print(sample[0].shape)
