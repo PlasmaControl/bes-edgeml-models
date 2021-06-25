@@ -45,6 +45,7 @@ class Data:
         self.logger = logger
 
         self.df = pd.DataFrame()
+        self.elm_indices, self.hf = self._read_file()
         # self.transition = np.linspace(
         #     0, 1, 2 * self.args.transition_halfwidth + 3
         # )
@@ -88,6 +89,11 @@ class Data:
             test_elms, shuffle_sample_indices=shuffle_sample_indices
         )
 
+        self.hf.close()
+        if self.hf:
+            self.logger.info("File is open.")
+        else:
+            self.logger.info("File is closed.")
         return train_data, validation_data, test_data
 
     def _preprocess_data(
@@ -115,20 +121,18 @@ class Data:
         window_start = None
         elm_start = None
         elm_stop = None
-        hf = None
         valid_t0 = []
         labels = []
 
         # get ELM indices from the data file if not provided
+        print(f"h5py file object: {self.hf}")
         if elm_indices is None:
-            elm_indices, hf = self._read_file()
-        else:
-            _, hf = self._read_file()
+            elm_indices = self.elm_indices
 
         # iterate through all the ELM indices
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
-            elm_event = hf[elm_key]
+            elm_event = self.hf[elm_key]
             _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
@@ -183,12 +187,6 @@ class Data:
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
             self.logger.info(tmp)
-
-        hf.close()
-        if hf:
-            self.logger.info("File is open.")
-        else:
-            self.logger.info("File is closed.")
         return signals, labels, sample_indices, window_start
 
     def _partition_elms(
@@ -216,19 +214,16 @@ class Data:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing training,
                 validation and test ELM indices.
         """
-        # get ELM indices from datafile
-        elm_index, _ = self._read_file()
-
         # limit the data according to the max number of events passed
         if max_elms is not None and max_elms != -1:
             self.logger.info(f"Limiting data read to {max_elms} events.")
             n_elms = max_elms
         else:
-            n_elms = len(elm_index)
+            n_elms = len(self.elm_indices)
 
         # split the data into train, validation and test sets
         training_elms, test_elms = model_selection.train_test_split(
-            elm_index[:n_elms],
+            self.elm_indices[:n_elms],
             test_size=self.fraction_test,
             shuffle=True,
             random_state=self.args.seed,
@@ -236,7 +231,7 @@ class Data:
 
         # kfold cross validation
         if self.kfold and fold is None:
-            raise Exception(
+            raise ValueError(
                 f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
             )
 
@@ -546,7 +541,7 @@ if __name__ == "__main__":
     logger = utils.get_logger(
         script_name=__name__,
         stream_handler=True,
-        log_file=f"output_logs_{args.data_mode}.log",
+        # log_file=f"output_logs_{args.data_mode}.log",
     )
     data = Data(args, logger)
     logger.info("-" * 10)
@@ -561,14 +556,14 @@ if __name__ == "__main__":
     logger.info(
         f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
     )
-    transforms = get_transforms(args)
+    # transforms = get_transforms(args)
 
-    train_dataset = ELMDataset(
-        args,
-        *train_data,
-        logger=logger,
-        transform=transforms,
-    )
-    sample = train_dataset.__getitem__(0)
-    print(sample[1])
-    print(sample[0].shape)
+    # train_dataset = ELMDataset(
+    #     args,
+    #     *train_data,
+    #     logger=logger,
+    #     transform=transforms,
+    # )
+    # sample = train_dataset.__getitem__(0)
+    # print(sample[1])
+    # print(sample[0].shape)
