@@ -14,20 +14,6 @@ from src import data, utils, run
 import models
 
 
-def create_output_paths(args: argparse.Namespace) -> str:
-    if args.signal_window_size == 8:
-        test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
-        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
-    elif args.signal_window_size == 16:
-        test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
-        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
-    else:
-        raise ValueError(
-            f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
-        )
-    return test_data_path, model_ckpt_path
-
-
 def train_loop(
     args,
     data_obj: data.Data,
@@ -44,7 +30,9 @@ def train_loop(
         fold = None
 
     # test data file path
-    test_data_path, model_ckpt_path = create_output_paths(args)
+    test_data_path, model_ckpt_path = utils.create_output_paths(
+        args, mode="train"
+    )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
     LOGGER.info("-" * 60)
@@ -123,7 +111,7 @@ def train_loop(
     )
 
     # model
-    model_cls = utils.find_model_using_name(args.model_name)
+    model_cls = utils.create_model(args.model_name)
     model = model_cls(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)

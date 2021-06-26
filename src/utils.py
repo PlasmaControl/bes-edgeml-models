@@ -153,6 +153,25 @@ def test_args_compat(
         print("All the parsed parameters are compatible with each other!")
 
 
+def create_output_paths(args: argparse.Namespace, mode: str = "train") -> str:
+    if mode == "train":
+        if args.signal_window_size == 8:
+            test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
+            model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
+        elif args.signal_window_size == 16:
+            test_data_path = os.path.join(
+                args.test_data_dir, "signal_window_16"
+            )
+            model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
+        else:
+            raise ValueError(
+                f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
+            )
+        return test_data_path, model_ckpt_path
+    else:
+        pass
+
+
 def get_params(model: object) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -164,7 +183,7 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 
-def find_model_using_name(model_name: str):
+def create_model(model_name: str):
     model_name = model_name
     model_path = "models." + model_name
     model_lib = importlib.import_module(model_path)
