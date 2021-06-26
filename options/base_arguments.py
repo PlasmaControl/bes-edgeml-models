@@ -52,12 +52,6 @@ class BaseArguments:
             help="total number of epochs for training.",
         )
         parser.add_argument(
-            "--device",
-            type=str,
-            default="cpu",
-            help="device to be used for training and testing, [cpu | cuda].",
-        )
-        parser.add_argument(
             "--seed",
             type=int,
             default=0,

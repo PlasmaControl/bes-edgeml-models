@@ -4,11 +4,10 @@ import time
 import math
 import argparse
 import importlib
+from typing import Union
 
 import torch
 from torchinfo import summary
-
-from . import config
 
 
 class MetricMonitor:
@@ -40,7 +39,9 @@ class MetricMonitor:
 
 # log the model and data preprocessing outputs
 def get_logger(
-    script_name: str, log_file: str, stream_handler: bool = True
+    script_name: str,
+    log_file: Union[str, None] = None,
+    stream_handler: bool = True,
 ) -> logging.getLogger:
     """Initiate the logger to log the progress into a file.
 
@@ -58,17 +59,16 @@ def get_logger(
     logger = logging.getLogger(name=script_name)
     logger.setLevel(logging.INFO)
 
-    # create handlers
-    f_handler = logging.FileHandler(os.path.join(log_file), mode="w")
-
-    # create formatters and add it to the handlers
-    f_format = logging.Formatter(
-        "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
-    )
-    f_handler.setFormatter(f_format)
-
-    # add handlers to the logger
-    logger.addHandler(f_handler)
+    if log_file is not None:
+        # create handlers
+        f_handler = logging.FileHandler(os.path.join(log_file), mode="w")
+        # create formatters and add it to the handlers
+        f_format = logging.Formatter(
+            "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
+        )
+        f_handler.setFormatter(f_format)
+        # add handlers to the logger
+        logger.addHandler(f_handler)
 
     # display the logs in console
     if stream_handler:
