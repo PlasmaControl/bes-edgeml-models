@@ -207,7 +207,7 @@ def get_lr_scheduler(
     elif args.scheduler == "OneCycleLR":
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
-            epochs=args.epochs,
+            epochs=args.n_epochs,
             steps_per_epoch=len(dataloader),
             max_lr=args.max_lr,
             pct_start=args.pct_start,
