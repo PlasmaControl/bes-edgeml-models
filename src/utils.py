@@ -4,7 +4,7 @@ import time
 import math
 import argparse
 import importlib
-from typing import Union
+from typing import Union, Tuple
 
 import torch
 from torchinfo import summary
@@ -153,23 +153,42 @@ def test_args_compat(
         print("All the parsed parameters are compatible with each other!")
 
 
-def create_output_paths(args: argparse.Namespace, mode: str = "train") -> str:
-    if mode == "train":
+def create_output_paths(
+    args: argparse.Namespace, infer_mode: bool = False
+) -> Tuple[str]:
+    if args.signal_window_size == 8:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
+    elif args.signal_window_size == 16:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
+    else:
+        raise ValueError(
+            f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
+        )
+    if infer_mode:
         if args.signal_window_size == 8:
-            test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
-            model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
+            base_path = os.path.join(args.output_dir, "signal_window_8")
+            clf_report_path = os.path.join(base_path, "classification_reports")
+            plot_path = os.path.join(base_path, "plots")
+            roc_path = os.path.join(base_path, "roc")
         elif args.signal_window_size == 16:
-            test_data_path = os.path.join(
-                args.test_data_dir, "signal_window_16"
-            )
-            model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
+            base_path = os.path.join(args.output_dir, "signal_window_16")
+            clf_report_path = os.path.join(base_path, "classification_reports")
+            plot_path = os.path.join(base_path, "plots")
+            roc_path = os.path.join(base_path, "roc")
         else:
             raise ValueError(
                 f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
             )
-        return test_data_path, model_ckpt_path
-    else:
-        pass
+        return (
+            test_data_path,
+            model_ckpt_path,
+            clf_report_path,
+            plot_path,
+            roc_path,
+        )
+    return test_data_path, model_ckpt_path
 
 
 def get_params(model: object) -> int:

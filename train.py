@@ -31,11 +31,11 @@ def train_loop(
 
     # test data file path
     test_data_path, model_ckpt_path = utils.create_output_paths(
-        args, mode="train"
+        args, infer_mode=False
     )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
-    LOGGER.info("-" * 60)
+    LOGGER.info("-" * 30)
     if args.data_mode == "balanced":
         LOGGER.info("Training with balanced classes.")
     else:
@@ -211,17 +211,17 @@ def train_loop(
             f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}"
         )
 
-        # save the model if best ROC is found
-        model_save_path = os.path.join(
-            model_ckpt_path,
-            f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth",
-        )
         if roc_score > best_score:
             best_score = roc_score
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
             )
             if not args.dry_run:
+                # save the model if best ROC is found
+                model_save_path = os.path.join(
+                    model_ckpt_path,
+                    f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth",
+                )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
                     model_save_path,

@@ -28,10 +28,22 @@ class BaseArguments:
             "[feature_model | cnn_model | stacked_elm_model].",
         )
         parser.add_argument(
+            "--model_ckpts",
+            type=str,
+            default="model_checkpoints",
+            help="path to the pretrained weights of the saved models.",
+        )
+        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
             help="path to the input data.",
+        )
+        parser.add_argument(
+            "--test_data_dir",
+            type=str,
+            default="data/test_data",
+            help="path to save the test data.",
         )
         parser.add_argument(
             "--log_dir",

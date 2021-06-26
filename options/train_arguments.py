@@ -8,19 +8,6 @@ class TrainArguments(BaseArguments):
 
     def create_parser(self, parser):
         parser = BaseArguments.create_parser(self, parser)
-        # basic parameters
-        parser.add_argument(
-            "--model_ckpts",
-            type=str,
-            default="model_checkpoints",
-            help="path to the pretrained weights of the saved models.",
-        )
-        parser.add_argument(
-            "--test_data_dir",
-            type=str,
-            default="data/test_data",
-            help="path to save the test data.",
-        )
         # training parameters
         parser.add_argument(
             "--focal_loss",
