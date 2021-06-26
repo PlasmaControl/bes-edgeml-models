@@ -1,11 +1,12 @@
 import os
 import pickle
 from typing import Tuple
-import torch
+import argparse
 
 import matplotlib
 
 matplotlib.use("TkAgg")
+import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,18 +14,17 @@ import seaborn as sns
 from sklearn import metrics
 from tqdm import tqdm
 
-import config, data, cnn_feature_model, model
+from src import data, utils, run
+from options.test_arguments import TestArguments
 
 sns.set_style("white")
 sns.set_palette("deep")
 
 
 def get_test_dataset(
-    file_name: str, transforms=None
+    args: argparse.Namespace, file_name: str, logger=None, transforms=None
 ) -> Tuple[tuple, data.ELMDataset]:
-    file_path = os.path.join(config.data_dir, file_name)
-
-    with open(file_path, "rb") as f:
+    with open(file_name, "rb") as f:
         test_data = pickle.load(f)
 
     signals = np.array(test_data["signals"])
@@ -32,28 +32,24 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = data.ELMDataset(
-        *data_attrs,
-        config.signal_window_size,
-        config.label_look_ahead,
-        stack_elm_events=config.stack_elm_events,
-        transform=transforms,
-    )
+    test_dataset = data.ELMDataset(args, *data_attrs, logger=logger)
 
     return data_attrs, test_dataset
 
 
 def plot(
+    args: argparse.Namespace,
     test_data: tuple,
-    elm_model,
+    model: object,
     device: torch.device,
+    plot_dir: str,
 ) -> None:
     signals = test_data[0]
     labels = test_data[1]
     sample_indices = test_data[2]
     window_start = test_data[3]
     num_elms = len(window_start)
-    i_elms = np.random.choice(num_elms, 12, replace=False)
+    i_elms = np.random.choice(num_elms, args.plot_num, replace=False)
 
     fig = plt.figure(figsize=(14, 12))
     for i, i_elm in enumerate(i_elms):
@@ -62,7 +58,7 @@ def plot(
             i_stop = window_start[i_elm + 1] - 1
         else:
             i_stop = labels.size
-        if (i_stop - i_start + 1) <= config.label_look_ahead:
+        if (i_stop - i_start + 1) <= args.label_look_ahead:
             print(
                 f"Skipping ELM {i+1} of 12 with {i_stop-i_start+1} time points"
             )
@@ -73,28 +69,28 @@ def plot(
             elm_labels = labels[i_start:i_stop]
             predictions = np.zeros(
                 elm_labels.size
-                - config.signal_window_size
-                - config.label_look_ahead
+                - args.signal_window_size
+                - args.label_look_ahead
                 + 1
             )
             for j in range(predictions.size):
                 if j % 500 == 0:
                     print(f"  Time {j}")
                 input_signals = torch.as_tensor(
-                    elm_signals[
-                        j : j + config.signal_window_size, :, :
-                    ].reshape([1, 1, config.signal_window_size, 8, 8]),
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
+                    ),
                     dtype=torch.float32,
                 )
                 input_signals = input_signals.to(device)
-                predictions[j] = elm_model(input_signals, batch_size=12)
+                predictions[j] = model(input_signals)
         # convert logits to probability
         predictions = (
             torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
             .cpu()
             .numpy()
         )
-        plt.subplot(4, 3, i + 1)
+        plt.subplot(args.num_rows, args.num_cols, i + 1)
         elm_time = np.arange(elm_labels.size)
         plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
         plt.plot(
@@ -105,10 +101,8 @@ def plot(
             lw=2.5,
         )
         plt.plot(
-            elm_time[
-                (config.signal_window_size + config.label_look_ahead - 1) :
-            ]
-            - config.label_look_ahead,
+            elm_time[(args.signal_window_size + args.label_look_ahead - 1) :]
+            - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",
@@ -118,15 +112,16 @@ def plot(
         plt.ylabel("Signal | label")
         plt.ylim([None, 1.1])
         plt.legend(fontsize=9, frameon=False)
-        plt.suptitle(f"Model output on {config.data_mode} classes", fontsize=20)
+        plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
     plt.tight_layout()
-    fig.savefig(
-        os.path.join(
-            config.output_dir,
-            f"{type(elm_model).__name__}_{config.data_mode}_lookahead_{config.label_look_ahead}_classes_output_noise_{config.stdev}.png",
-        ),
-        dpi=200,
-    )
+    if not args.dry_run:
+        fig.savefig(
+            os.path.join(
+                plot_dir,
+                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series.png",
+            ),
+            dpi=100,
+        )
     plt.show()
 
 
@@ -143,24 +138,19 @@ def show_details(test_data: tuple) -> None:
 
 
 def show_metrics(
-    model_name: str,
+    args: argparse.Namespace,
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    threshold: float = 0.5,
+    report_dir: str,
+    roc_dir: str,
+    plot_dir: str,
 ):
-    preds = (y_pred > threshold).astype(int)
+    preds = (y_pred > args.threshold).astype(int)
 
     # creating a classification report
     cm = metrics.confusion_matrix(y_true, preds)
     cr = metrics.classification_report(y_true, preds, output_dict=True)
     df = pd.DataFrame(cr).transpose()
-    df.to_csv(
-        os.path.join(
-            config.output_dir,
-            f"{model_name}_classification_report_{config.data_mode}_lookahead_{config.label_look_ahead}_{config.stdev}.csv",
-        ),
-        index=True,
-    )
     print(f"Classification report:\n{df}")
 
     # ROC details
@@ -169,41 +159,49 @@ def show_metrics(
     roc_details["fpr"] = fpr
     roc_details["tpr"] = tpr
     roc_details["threshold"] = thresh
-    roc_details.to_csv(
-        os.path.join(
-            config.output_dir,
-            f"{model_name}_roc_details_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.csv",
-        ),
-        index=False,
-    )
 
     cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
     cm_disp.plot()
-    fig = cm_disp.figure_
-    fig.savefig(
-        os.path.join(
-            config.output_dir,
-            f"{model_name}_confusion_matrix_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.png",
-        ),
-        dpi=200,
-    )
+    if not args.dry_run:
+        df.to_csv(
+            os.path.join(
+                report_dir,
+                f"{args.model_name}_classification_report_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+            ),
+            index=True,
+        )
+        roc_details.to_csv(
+            os.path.join(
+                roc_dir,
+                f"{args.model_name}_roc_details_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+            ),
+            index=False,
+        )
+        fig = cm_disp.figure_
+        fig.savefig(
+            os.path.join(
+                plot_dir,
+                f"{args.model_name}_confusion_matrix_{args.data_mode}_lookahead_{args.label_look_ahead}.png",
+            ),
+            dpi=100,
+        )
     plt.show()
 
 
 def model_predict(
-    elm_model,
+    model,
     device: torch.device,
     data_loader: torch.utils.data.DataLoader,
 ) -> Tuple[np.ndarray, np.ndarray]:
     # put the elm_model to eval mode
-    elm_model.eval()
+    model.eval()
     predictions = []
     targets = []
     for images, labels in tqdm(data_loader):
         images = images.to(device)
 
         with torch.no_grad():
-            preds = elm_model(images)
+            preds = model(images)
         preds = preds.view(-1)
         predictions.append(torch.sigmoid(preds).cpu().numpy())
         targets.append(labels.cpu().numpy())
@@ -215,56 +213,71 @@ def model_predict(
 
 
 def main(
-    fold: None = None,
-    show_info: bool = True,
-    plot_data: bool = False,
-    display_metrics: bool = False,
+    args: argparse.Namespace,
 ) -> None:
+    logger = utils.get_logger(
+        script_name=__name__,
+        stream_handler=True,
+    )
     # instantiate the elm_model and load the checkpoint
-    elm_model = cnn_feature_model.FeatureModel()
-    # elm_model = model.StackedELMModel()
-    model_name = type(elm_model).__name__
+    model_cls = utils.create_model(args.model_name)
+    model = model_cls(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    # load the model checkpoint and other paths
+    output_paths = utils.create_output_paths(args, infer_mode=True)
+    (
+        test_data_dir,
+        model_ckpt_dir,
+        clf_report_dir,
+        plot_dir,
+        roc_dir,
+    ) = output_paths
     model_ckpt_path = os.path.join(
-        config.model_dir,
-        f"{model_name}_fold{fold}_best_roc_{config.data_mode}_lookahead_{config.label_look_ahead}_noise_{config.stdev}.pth",
+        model_ckpt_dir,
+        f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
-    elm_model.load_state_dict(
+    model.load_state_dict(
         torch.load(
             model_ckpt_path,
             map_location=device,
         )["model"]
     )
-    elm_model = elm_model.to(device)
 
     # get the test data and dataloader
-    f_name = (
-        f"test_data_{config.data_mode}_lookahead_{config.label_look_ahead}.pkl"
+    test_fname = os.path.join(
+        test_data_dir,
+        f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}.pkl",
     )
-    print(f"Using test data file: {f_name}")
-    test_transforms = data.get_transforms()
+
+    print(f"Using test data file: {test_fname}")
     test_data, test_dataset = get_test_dataset(
-        file_name=f_name, transforms=test_transforms
+        args, file_name=test_fname, logger=logger
     )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
-        batch_size=config.batch_size,
+        batch_size=args.batch_size,
         shuffle=False,
         drop_last=True,
     )
 
-    if show_info:
+    if args.test_data_info:
         show_details(test_data)
 
-    targets, predictions = model_predict(elm_model, device, test_loader)
+    targets, predictions = model_predict(model, device, test_loader)
 
-    if plot_data:
-        plot(test_data, elm_model, device)
+    if args.plot_data:
+        plot(args, test_data, model, device, plot_dir)
 
-    if display_metrics:
-        show_metrics(model_name, targets, predictions)
+    if args.show_metrics:
+        show_metrics(
+            args, targets, predictions, clf_report_dir, roc_dir, plot_dir
+        )
 
 
 if __name__ == "__main__":
-    main(plot_data=True, display_metrics=True)
+    args, parser = TestArguments().parse(verbose=True)
+    utils.test_args_compat(args, parser, infer_mode=True)
+    main(args)
