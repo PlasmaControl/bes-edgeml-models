@@ -10,8 +10,22 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 
 from options.train_arguments import TrainArguments
-from src import config, data, utils, run
+from src import data, utils, run
 import models
+
+
+def create_output_paths(args: argparse.Namespace) -> str:
+    if args.signal_window_size == 8:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
+    elif args.signal_window_size == 16:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
+    else:
+        raise ValueError(
+            f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
+        )
+    return test_data_path, model_ckpt_path
 
 
 def train_loop(
@@ -30,7 +44,8 @@ def train_loop(
         fold = None
 
     # test data file path
-    test_data_file = os.path.join(test_datafile_name)
+    test_data_path, model_ckpt_path = create_output_paths(args)
+    test_data_file = os.path.join(test_data_path, test_datafile_name)
 
     LOGGER.info("-" * 60)
     if args.data_mode == "balanced":
@@ -38,7 +53,8 @@ def train_loop(
     else:
         LOGGER.info("Training using unbalanced (original) classes.")
 
-    LOGGER.info(f"Test data will be saved to: {test_data_file}")
+    if not args.dry_run:
+        LOGGER.info(f"Test data will be saved to: {test_data_file}")
     LOGGER.info("-" * 30)
     LOGGER.info(f"       Training fold: {fold}       ")
     LOGGER.info("-" * 30)
@@ -54,16 +70,17 @@ def train_loop(
     )
 
     # dump test data into to a file
-    with open(test_data_file, "wb") as f:
-        pickle.dump(
-            {
-                "signals": test_data[0],
-                "labels": test_data[1],
-                "sample_indices": test_data[2],
-                "window_start": test_data[3],
-            },
-            f,
-        )
+    if not args.dry_run:
+        with open(test_data_file, "wb") as f:
+            pickle.dump(
+                {
+                    "signals": test_data[0],
+                    "labels": test_data[1],
+                    "sample_indices": test_data[2],
+                    "window_start": test_data[3],
+                },
+                f,
+            )
 
     # create image transforms
     if args.model_name in ["FeatureModel", "CNNModel"]:
@@ -108,7 +125,6 @@ def train_loop(
     # model
     model_cls = utils.find_model_using_name(args.model_name)
     model = model_cls(args)
-    print(model)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     LOGGER.info("-" * 50)
@@ -154,7 +170,7 @@ def train_loop(
     )
 
     # iterate through all the epochs
-    for epoch in range(args.epochs):
+    for epoch in range(args.n_epochs):
         start_time = time.time()
 
         if args.scheduler in [
@@ -209,25 +225,27 @@ def train_loop(
 
         # save the model if best ROC is found
         model_save_path = os.path.join(
-            args.model_dir,
-            f"{args.model_name}_fold{fold}_best_roc_{args.data_mode}_lookahead_{args.label_look_ahead}_noise_{args.sigma}.pth",
+            model_ckpt_path,
+            f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth",
         )
         if roc_score > best_score:
             best_score = roc_score
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
             )
-            torch.save(
-                {"model": model.state_dict(), "preds": preds},
-                model_save_path,
-            )
+            if not args.dry_run:
+                torch.save(
+                    {"model": model.state_dict(), "preds": preds},
+                    model_save_path,
+                )
 
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
-        LOGGER.info(f"Model saved to: {model_save_path}")
+        if not args.dry_run:
+            LOGGER.info(f"Model saved to: {model_save_path}")
     # # # save the predictions in the valid dataframe
     # # valid_folds["preds"] = torch.load(
     # #     os.path.join(
@@ -244,7 +262,9 @@ if __name__ == "__main__":
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(
         script_name=__name__,
-        log_file=f"output_logs_{args.data_mode}_noise_{args.sigma}.log",
+        log_file=os.path.join(
+            args.log_dir, f"output_logs_{args.model_name}_{args.data_mode}.log"
+        ),
     )
     data_obj = data.Data(args, LOGGER)
     train_loop(
