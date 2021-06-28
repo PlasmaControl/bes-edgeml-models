@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import argparse
 
-# import matplotlib
+import matplotlib
 
-# matplotlib.use("TkAgg")
+matplotlib.use("TkAgg")
 import torch
 import numpy as np
 import pandas as pd
@@ -42,7 +42,7 @@ def predict(
     test_data: tuple,
     model: object,
     device: torch.device,
-):
+) -> dict:
     signals = test_data[0]
     labels = test_data[1]
     _ = test_data[2]  # sample_indices
@@ -104,63 +104,24 @@ def predict(
 
 def plot(
     args: argparse.Namespace,
-    test_data: tuple,
-    model: object,
-    device: torch.device,
+    elm_predictions: dict,
     plot_dir: str,
 ) -> None:
-    signals = test_data[0]
-    labels = test_data[1]
-    sample_indices = test_data[2]
-    window_start = test_data[3]
-    num_elms = len(window_start)
-    i_elms = np.random.choice(num_elms, args.plot_num, replace=False)
+    elm_id = list(elm_predictions.keys())
+    i_elms = np.random.choice(elm_id, args.plot_num, replace=False)
 
     fig = plt.figure(figsize=(14, 12))
     for i, i_elm in enumerate(i_elms):
-        i_start = window_start[i_elm]
-        if i_elm < num_elms - 1:
-            i_stop = window_start[i_elm + 1] - 1
-        else:
-            i_stop = labels.size
-        if (i_stop - i_start + 1) <= args.label_look_ahead:
-            print(
-                f"Skipping ELM {i+1} of 12 with {i_stop-i_start+1} time points"
-            )
-            continue
-        else:
-            print(f"ELM {i+1} of 12 with {i_stop-i_start+1} time points")
-            elm_signals = signals[i_start:i_stop, :, :]
-            elm_labels = labels[i_start:i_stop]
-            predictions = np.zeros(
-                elm_labels.size
-                - args.signal_window_size
-                - args.label_look_ahead
-                + 1
-            )
-            for j in range(predictions.size):
-                if j % 500 == 0:
-                    print(f"  Time {j}")
-                input_signals = torch.as_tensor(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                        [1, 1, args.signal_window_size, 8, 8]
-                    ),
-                    dtype=torch.float32,
-                )
-                input_signals = input_signals.to(device)
-                predictions[j] = model(input_signals)
-        # convert logits to probability
-        predictions = (
-            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
-            .cpu()
-            .numpy()
-        )
+        signals = elm_predictions[i_elm]["signals"]
+        labels = elm_predictions[i_elm]["labels"]
+        predictions = elm_predictions[i_elm]["predictions"]
+        elm_time = elm_predictions[i_elm]["elm_time"]
+        print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
         plt.subplot(args.num_rows, args.num_cols, i + 1)
-        elm_time = np.arange(elm_labels.size)
-        plt.plot(elm_time, elm_signals[:, 2, 6], label="BES ch. 22")
+        plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22")
         plt.plot(
             elm_time,
-            elm_labels + 0.02,
+            labels + 0.02,
             label="Ground truth",
             ls="-.",
             lw=2.5,
@@ -333,15 +294,14 @@ def main(
 
     targets, predictions = model_predict(model, device, test_loader)
 
+    pred_dict = predict(args, test_data, model, device)
     if args.plot_data:
-        plot(args, test_data, model, device, plot_dir)
+        plot(args, pred_dict, plot_dir)
 
     if args.show_metrics:
         show_metrics(
             args, targets, predictions, clf_report_dir, roc_dir, plot_dir
         )
-    pred_dict = predict(args, test_data, model, device)
-    print(pred_dict)
 
 
 if __name__ == "__main__":
