@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import argparse
 
-import matplotlib
+# import matplotlib
 
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 import torch
 import numpy as np
 import pandas as pd
@@ -35,6 +35,71 @@ def get_test_dataset(
     test_dataset = data.ELMDataset(args, *data_attrs, logger=logger)
 
     return data_attrs, test_dataset
+
+
+def predict(
+    args: argparse.Namespace,
+    test_data: tuple,
+    model: object,
+    device: torch.device,
+):
+    signals = test_data[0]
+    labels = test_data[1]
+    _ = test_data[2]  # sample_indices
+    window_start = test_data[3]
+    num_elms = len(window_start)
+    elm_predictions = dict()
+    for i_elm in range(num_elms):
+        print(f"Processing elm event with start index: {window_start[i_elm]}")
+        i_start = window_start[i_elm]
+        if i_elm < num_elms - 1:
+            i_stop = window_start[i_elm + 1] - 1
+        else:
+            i_stop = labels.size
+        # gathering the indices for active elm events
+        elm_signals = signals[i_start:i_stop]
+        elm_labels = labels[i_start:i_stop]
+        active_elm = np.where(elm_labels > 0.0)[0]
+        elm_start = active_elm[0]
+        elm_end = active_elm[-1]
+        # add a buffer of a given number of time frames
+        # in both start and end
+        elm_start_extended = (elm_start - 500) if (elm_start - 500) > 0 else 0
+        elm_end_extended = (
+            (elm_end + 500)
+            if (elm_end + 500) < len(elm_labels) - 1
+            else len(elm_labels) - 1
+        )
+        elm_signals_extended = elm_signals[elm_start_extended:elm_end_extended]
+        elm_labels_extended = elm_labels[elm_start_extended:elm_end_extended]
+        predictions = np.zeros(
+            elm_labels_extended.size
+            - args.signal_window_size
+            - args.label_look_ahead
+            + 1
+        )
+        for j in range(predictions.size):
+            input_signals = torch.as_tensor(
+                elm_signals_extended[
+                    j : j + args.signal_window_size, :, :
+                ].reshape([1, 1, args.signal_window_size, 8, 8]),
+                dtype=torch.float32,
+            )
+            input_signals = input_signals.to(device)
+            predictions[j] = model(input_signals)
+        # convert logits to probability
+        predictions = (
+            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+            .cpu()
+            .numpy()
+        )
+        elm_predictions[window_start[i_elm]] = {
+            "signals": elm_signals_extended,
+            "labels": elm_labels_extended,
+            "predictions": predictions,
+            "elm_time": np.arange(elm_start_extended, elm_end_extended),
+        }
+    return elm_predictions
 
 
 def plot(
@@ -275,6 +340,8 @@ def main(
         show_metrics(
             args, targets, predictions, clf_report_dir, roc_dir, plot_dir
         )
+    pred_dict = predict(args, test_data, model, device)
+    print(pred_dict)
 
 
 if __name__ == "__main__":
