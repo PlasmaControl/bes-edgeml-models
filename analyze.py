@@ -64,10 +64,14 @@ def predict(
         elm_end = active_elm[-1]
         # add a buffer of a given number of time frames
         # in both start and end
-        elm_start_extended = (elm_start - 500) if (elm_start - 500) > 0 else 0
+        elm_start_extended = (
+            (elm_start - args.buffer_frames)
+            if (elm_start - args.buffer_frames) > 0
+            else 0
+        )
         elm_end_extended = (
-            (elm_end + 500)
-            if (elm_end + 500) < len(elm_labels) - 1
+            (elm_end + args.buffer_frames)
+            if (elm_end + args.buffer_frames) < len(elm_labels) - 1
             else len(elm_labels) - 1
         )
         elm_signals_extended = elm_signals[elm_start_extended:elm_end_extended]
