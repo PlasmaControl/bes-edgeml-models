@@ -5,7 +5,7 @@ The whole project can be structured as follows:
 <p align='center'>
     <img src='assets/project_structure.png' alt='project_structure' width='300'/>
 </p>
-
+The code consists of the PyTorch implementations for various models which are located inside the `models/`
 `archives/model_tools/` is a Python module and the primary set of tools for training ML models.
 
 - `model_tools/data.py` - Prepare BES data for training runs.  The module looks for BES data in `data/` (ignored
