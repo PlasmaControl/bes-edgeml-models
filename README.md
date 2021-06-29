@@ -18,6 +18,33 @@ The code consists of the PyTorch implementations for various models which are lo
 
 `options/` directory contains helper classes for various command line arguments which can be used to change the various parameters ranging from data-preprocessing to model training and inference.
 
-`archives/` directory contains previous code files which are implemented in TensorFlow. It is just for reference and is not in active development.
+`model_checkpoints/` contains the saved models which can be used for inference.
+
+`archives/` directory contains previous code files which are implemented in TensorFlow. It also contains plots generated earlier using PyTorch. It is just for reference and is not in active development.
 `archives/model_tools/` is a Python module and the primary set of tools for training ML models. `archives/hpo/` is a directory with python modules and Slurm scripts to perform hyper-parameter optimization with Optuna. `archives/multitrain/` is out-of-date but similar to `hpo/`.  The scripts and python modules in `multi-train/` are intended
 to perform multiple training runs for a single set of model parameters, for example, the "best" parameters from HPO.
+
+`train.py` and `analyze.py` are the main scripts used for training and inference. 
+
+## Getting started
+There are certain command line arguments which should be passed along with the training script. You can find more help about these by running
+```
+python train.py --help
+```
+or 
+```
+python analyze.py --help
+```
+### Train the model
+Training a model can be easily done by running something like (from the project directory) -
+```
+python train.py --model_name cnn_model --n_epochs 5 --signal_window_size 16 --label_look_ahead 0 --scheduler CyclicLR --num_workers 4
+```
+
+`train.py` script expects the input `.hdf5` file to be stored in the `data/` directory 
+
+### Test the model
+Testing can be done similarly -
+```
+python analyze.py --model_name cnn_model --signal_window_size 16 --output_dir outputs --threshold 0.45 --plot_data --show_metrics
+```
