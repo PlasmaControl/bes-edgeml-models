@@ -1,4 +1,8 @@
 # BES EdgeML project
+BES EdgeML project is an effort to develop machine learning (ML) models for the real-time identification of edge-localized-mode (ELM) events and the turbulence properties of confinement regimes using the 2D Beam Emission Spectroscopy (BES) system at DIII-D. The “edge ML” models will be deployed on a high-throughput FPGA accelerator for integration in the real-time plasma control system (PCS).
+
+The whole project can be structured as follows:
+![project_structure](assets/project_structure.png)
 
 `archives/model_tools/` is a Python module and the primary set of tools for training ML models.
 

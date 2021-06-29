@@ -10,6 +10,7 @@ figures/
 slurm*
 *.db
 *.log
+.DS_Store
 
 # standard python gitignore templates
 # Byte-compiled / optimized / DLL files
