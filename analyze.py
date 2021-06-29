@@ -87,17 +87,32 @@ def predict(
             )
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
+        elm_signals_extended = elm_signals_extended[
+            : (-args.signal_window_size - args.label_look_ahead + 1), ...
+        ]
+        elm_labels_extended = elm_labels_extended[
+            : (-args.signal_window_size - args.label_look_ahead + 1)
+        ]
         # convert logits to probability
-        predictions = (
+        # calculate micro predictions for each time step
+        micro_predictions = (
             torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
             .cpu()
             .numpy()
         )
+        # calculate macro predictions for each elm event
+        macro_predictions = np.array(
+            [(np.sum(micro_predictions > 0.8) > 0).astype(int)]
+        )
+        elm_time = np.arange(elm_start_extended, elm_end_extended)[
+            : (-args.signal_window_size - args.label_look_ahead + 1)
+        ]
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals_extended,
             "labels": elm_labels_extended,
-            "predictions": predictions,
-            "elm_time": np.arange(elm_start_extended, elm_end_extended),
+            "micro_predictions": micro_predictions,
+            "macro_predictions": macro_predictions,
+            "elm_time": elm_time,
         }
     return elm_predictions
 
@@ -114,11 +129,11 @@ def plot(
     for i, i_elm in enumerate(i_elms):
         signals = elm_predictions[i_elm]["signals"]
         labels = elm_predictions[i_elm]["labels"]
-        predictions = elm_predictions[i_elm]["predictions"]
+        predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
         plt.subplot(args.num_rows, args.num_cols, i + 1)
-        plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22")
+        plt.plot(elm_time, signals[:, 2, 6] / 10, label="BES ch. 22")
         plt.plot(
             elm_time,
             labels + 0.02,
@@ -127,8 +142,7 @@ def plot(
             lw=2.5,
         )
         plt.plot(
-            elm_time[(args.signal_window_size + args.label_look_ahead - 1) :]
-            - args.label_look_ahead,
+            elm_time - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",
@@ -138,8 +152,8 @@ def plot(
         plt.ylabel("Signal | label")
         plt.ylim([None, 1.1])
         plt.legend(fontsize=9, frameon=False)
-        plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
-    plt.tight_layout()
+    plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
         fig.savefig(
             os.path.join(
@@ -166,59 +180,118 @@ def show_details(test_data: tuple) -> None:
 def show_metrics(
     args: argparse.Namespace,
     y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_probas: np.ndarray,
     report_dir: str,
     roc_dir: str,
     plot_dir: str,
+    pred_mode: str,
 ):
-    preds = (y_pred > args.threshold).astype(int)
+    if pred_mode == "micro":
+        if np.array_equal(y_probas, y_probas.astype(bool)):
+            raise ValueError(
+                "Metrics for micro mode require micro_predictions but macro_predictions are passed."
+            )
+        y_preds = (y_probas > args.threshold).astype(int)
 
-    # creating a classification report
-    cm = metrics.confusion_matrix(y_true, preds)
-    cr = metrics.classification_report(y_true, preds, output_dict=True)
-    df = pd.DataFrame(cr).transpose()
-    print(f"Classification report:\n{df}")
+        # creating a classification report
+        cm = metrics.confusion_matrix(y_true, y_preds)
+        cr = metrics.classification_report(y_true, y_preds, output_dict=True)
+        df = pd.DataFrame(cr).transpose()
+        print(f"Classification report:\n{df}")
 
-    # ROC details
-    fpr, tpr, thresh = metrics.roc_curve(y_true, y_pred)
-    roc_details = pd.DataFrame()
-    roc_details["fpr"] = fpr
-    roc_details["tpr"] = tpr
-    roc_details["threshold"] = thresh
+        # ROC details
+        fpr, tpr, thresh = metrics.roc_curve(y_true, y_probas)
+        roc_details = pd.DataFrame()
+        roc_details["fpr"] = fpr
+        roc_details["tpr"] = tpr
+        roc_details["threshold"] = thresh
 
-    cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
-    cm_disp.plot()
-    if not args.dry_run:
-        df.to_csv(
-            os.path.join(
-                report_dir,
-                f"{args.model_name}_classification_report_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
-            ),
-            index=True,
-        )
-        roc_details.to_csv(
-            os.path.join(
-                roc_dir,
-                f"{args.model_name}_roc_details_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
-            ),
-            index=False,
-        )
+        cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
+        cm_disp.plot()
         fig = cm_disp.figure_
-        fig.savefig(
-            os.path.join(
-                plot_dir,
-                f"{args.model_name}_confusion_matrix_{args.data_mode}_lookahead_{args.label_look_ahead}.png",
-            ),
-            dpi=100,
+        ax = cm_disp.ax_
+        ax.set_title("Micro predictions", fontsize=16)
+        if not args.dry_run:
+            df.to_csv(
+                os.path.join(
+                    report_dir,
+                    f"{args.model_name}_classification_report_micro_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+                ),
+                index=True,
+            )
+            roc_details.to_csv(
+                os.path.join(
+                    roc_dir,
+                    f"{args.model_name}_roc_details_micro_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+                ),
+                index=False,
+            )
+            fig.savefig(
+                os.path.join(
+                    plot_dir,
+                    f"{args.model_name}_confusion_matrix_micro_{args.data_mode}_lookahead_{args.label_look_ahead}.png",
+                ),
+                dpi=100,
+            )
+        plt.show()
+    elif pred_mode == "macro":
+        if not np.array_equal(y_probas, y_probas.astype(bool)):
+            raise ValueError(
+                "Metrics for macro mode require macro_predictions but micro_predictions are passed."
+            )
+
+        # creating a classification report
+        cm = metrics.confusion_matrix(y_true, y_probas)
+        cr = metrics.classification_report(y_true, y_probas, output_dict=True)
+        df = pd.DataFrame(cr).transpose()
+        print(f"Classification report:\n{df}")
+
+        # ROC details
+        fpr, tpr, thresh = metrics.roc_curve(y_true, y_probas)
+        roc_details = pd.DataFrame()
+        roc_details["fpr"] = fpr
+        roc_details["tpr"] = tpr
+        roc_details["threshold"] = thresh
+
+        cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
+        cm_disp.plot()
+        fig = cm_disp.figure_
+        ax = cm_disp.ax_
+        ax.set_title("Macro predictions", fontsize=16)
+        if not args.dry_run:
+            df.to_csv(
+                os.path.join(
+                    report_dir,
+                    f"{args.model_name}_classification_report_macro_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+                ),
+                index=True,
+            )
+            roc_details.to_csv(
+                os.path.join(
+                    roc_dir,
+                    f"{args.model_name}_roc_details_macro_{args.data_mode}_lookahead_{args.label_look_ahead}.csv",
+                ),
+                index=False,
+            )
+            fig.savefig(
+                os.path.join(
+                    plot_dir,
+                    f"{args.model_name}_confusion_matrix_macro_{args.data_mode}_lookahead_{args.label_look_ahead}.png",
+                ),
+                dpi=100,
+            )
+        plt.show()
+    else:
+        raise ValueError(
+            f"Expected pred_mode to be either `micro` or`macro` but {pred_mode} is passed."
         )
-    plt.show()
 
 
 def model_predict(
     model,
     device: torch.device,
     data_loader: torch.utils.data.DataLoader,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> None:
     # put the elm_model to eval mode
     model.eval()
     predictions = []
@@ -234,8 +307,31 @@ def model_predict(
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
     print(predictions[:10], targets[:10])
-    print(metrics.roc_auc_score(targets, predictions))
-    return targets, predictions
+    print(
+        f"ROC score on test data: {metrics.roc_auc_score(targets, predictions)}"
+    )
+
+
+def get_dict_values(pred_dict: dict, mode: str):
+    if mode == "micro":
+        targets = []
+        predictions = []
+        for vals in pred_dict.values():
+            for k, v in vals.items():
+                if k == "labels":
+                    targets.append(v)
+                elif k == "micro_predictions":
+                    predictions.append(v)
+        return np.concatenate(targets), np.concatenate(predictions)
+    elif mode == "macro":
+        predictions = []
+        for vals in pred_dict.values():
+            for k, v in vals.items():
+                if k == "macro_predictions":
+                    predictions.append(v)
+        return np.ones(len(predictions), dtype="int"), np.concatenate(
+            predictions
+        )
 
 
 def main(
@@ -292,16 +388,43 @@ def main(
     if args.test_data_info:
         show_details(test_data)
 
-    targets, predictions = model_predict(model, device, test_loader)
+    model_predict(model, device, test_loader)
 
+    # get prediction dictionary containing truncated signals, labels,
+    # micro-/macro-predictions and elm_time
     pred_dict = predict(args, test_data, model, device)
+
     if args.plot_data:
         plot(args, pred_dict, plot_dir)
 
     if args.show_metrics:
-        show_metrics(
-            args, targets, predictions, clf_report_dir, roc_dir, plot_dir
+        # show metrics for micro predictions
+        targets_micro, predictions_micro = get_dict_values(
+            pred_dict, mode="micro"
         )
+        show_metrics(
+            args,
+            targets_micro,
+            predictions_micro,
+            clf_report_dir,
+            roc_dir,
+            plot_dir,
+            pred_mode="micro",
+        )
+        # show metrics for macro predictions
+        targets_macro, predictions_macro = get_dict_values(
+            pred_dict, mode="macro"
+        )
+        show_metrics(
+            args,
+            targets_macro,
+            predictions_macro,
+            clf_report_dir,
+            roc_dir,
+            plot_dir,
+            pred_mode="macro",
+        )
+    # print(pred_dict)
 
 
 if __name__ == "__main__":
