@@ -3,9 +3,9 @@ __pycache__/
 .idea/
 .vscode/
 data/
-model_checkpoints/
 jobs/
 figures/
+model_checkpoints/
 
 slurm*
 *.db
