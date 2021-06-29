@@ -3,7 +3,7 @@ __pycache__/
 .idea/
 .vscode/
 data/
-models/
+model_checkpoints/
 jobs/
 figures/
 
