@@ -15,7 +15,7 @@ import models
 
 
 def train_loop(
-    args,
+    args: argparse.Namespace,
     data_obj: data.Data,
     test_datafile_name: str,
     fold: Union[int, None] = None,

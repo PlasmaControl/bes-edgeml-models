@@ -203,11 +203,11 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
 
 
 def create_model(model_name: str):
-    model_name = model_name
-    model_path = "models." + model_name
+    model_filename = model_name + "_model"
+    model_path = "models." + model_filename
     model_lib = importlib.import_module(model_path)
     model = None
-    _model_name = model_name.replace("_", "")
+    _model_name = model_name.replace("_", "") + "model"
     for name, cls in model_lib.__dict__.items():
         if name.lower() == _model_name.lower():
             model = cls

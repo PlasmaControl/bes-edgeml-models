@@ -23,9 +23,9 @@ class BaseArguments:
         parser.add_argument(
             "--model_name",
             type=str,
-            default="feature_model",
+            default="feature",
             help="name of the model to be used for training, "
-            "[feature_model | cnn_model | stacked_elm_model].",
+            "[feature | cnn | cnn_v2 | stacked_elm].",
         )
         parser.add_argument(
             "--model_ckpts",
