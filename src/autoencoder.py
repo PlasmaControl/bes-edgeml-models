@@ -148,101 +148,7 @@ class AE_simple(torch.nn.Module):
         # print(reconstructed.shape)
         return reconstructed
 
-def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
-    model.train()
-    size = len(dataloader.dataset)
-    for batch, (X, y) in enumerate(dataloader):
-        # Compute prediction and loss
-        X = X.to(device)
-        y = y.to(device)
-        pred = model(X)
-        loss = loss_fn(pred, y)
-
-        # Backpropagation
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if batch % 1000 == 0:
-            loss, current = loss.item(), batch * len(X)
-            # for name, param in model.named_parameters():
-            #     if param.requires_grad:
-            #         print (name, param.data)
-            #         break
-            # param = model.parameters()[0][0,0]
-            if(print_output):
-                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-
-def test_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
-    size = len(dataloader.dataset)
-    test_loss, correct = 0, 0
-
-    model.eval()
-    
-    with torch.no_grad():
-        for X, y in dataloader:
-            X = X.to(device)
-            y = y.to(device)
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-
-    test_loss /= size
-
-    if(print_output):
-        print(f"Test Dataset Avg loss: {test_loss:>8f} \n")
-
-    return test_loss
-
-def train_model(
-    model,  
-    train_dataloader: DataLoader, 
-    test_dataloader: DataLoader,
-    optimizer,
-    scheduler, 
-    loss_fn,
-    epochs: int = 10, 
-    print_output: bool = True):
-
-    all_losses = []
-
-    for t in range(epochs):
-        if(print_output):
-            print(f"Epoch {t+1}\n-------------------------------")
-        train_loop(model, train_dataloader, optimizer, loss_fn)
-        epoch_loss = test_loop(model, test_dataloader, loss_fn)
-
-        all_losses.append(epoch_loss)
-
-        # Change optimizer learning rate
-        scheduler.step(epoch_loss)
-    
-    if(print_output):
-        print("Done Training!")
-
-        return all_losses
-
-def plot_loss(losses):
-    plt.plot(np.arange(1, len(losses)+1), losses, linestyle='-', marker='o', color='b')
-    plt.xticks(np.arange(1, len(losses) + 1, 1.0))
-
-    plt.title('Test Loss vs. Epochs')
-    plt.ylabel('Avg Test Loss')
-    plt.xlabel('Epochs')
-   
-    # plt.show()
-    plt.savefig('./plots/loss_plot.png')
-
 if __name__== '__main__':
-    # Autoencoder Model
-    # model = Autoencoder(32, 
-    #     encoder_hidden_layers = (250,100,50), 
-    #     decoder_hidden_layers = (50,100,250))
-
-    model = AE_simple(300)
-
-    model = model.to(device)
-
-
     batch_size = 4
     learning_rate = .0001
     l2_factor = 5e-3
@@ -294,12 +200,21 @@ if __name__== '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
 
     # Train the model and plot loss
-    losses = train_model(model, train_dataloader, test_dataloader, optimizer, scheduler, loss_fn, epochs  = 10, print_output = True)
-    plot_loss(losses)
+    avg_losses, all_losses = train_model(model, 
+        train_dataloader, 
+        test_dataloader, 
+        optimizer, 
+        scheduler, 
+        loss_fn, 
+        epochs  = 1)
+
+    # print(all_losses)
+
+    plot(avg_losses, all_losses)
 
     # Save the model - weights and structure
-    model_save_path = './trained_models/simple_ae.pth'
-    torch.save(model, model_save_path)
+    # model_save_path = './trained_models/simple_ae.pth'
+    # torch.save(model, model_save_path)
     
         
 

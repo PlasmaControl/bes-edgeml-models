@@ -18,11 +18,11 @@ fraction_validate = 0.2
 fraction_test = 0.1
 
 # batch size
-batch_size = 64
+batch_size = 4
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = 40 #-1
+max_elms = 10 #-1
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
@@ -43,7 +43,7 @@ label_look_ahead = 0
 folds = 5
 
 # number of training epochs
-epochs = 5
+epochs = 10
 
 # hidden units in fully connected layers
 dense_layers = (40, 20)
@@ -66,6 +66,6 @@ maxpool_size = 2  # 0 to skip maxpool
 filters = 16
 
 # optimization kwargs
-learning_rate = 3e-4
+learning_rate = .0001
 weight_decay = 5e-5
 scheduler = "CyclicLR2"

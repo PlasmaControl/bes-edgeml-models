@@ -91,6 +91,8 @@ class Data:
         training_elms, validation_elms, test_elms = self._partition_elms(
             max_elms=config.max_elms, fold=fold
         )
+        # print(training_elms[0:5])
+        # print()
         LOGGER.info("Reading ELM events and creating datasets")
         LOGGER.info("-" * 30)
         LOGGER.info("  Creating training data")
@@ -241,6 +243,9 @@ class Data:
         """
         # get ELM indices from datafile
         elm_index, _ = self._read_file()
+        print(elm_index[0:config.max_elms])
+
+        # print(elm_index[0:10])
 
         # limit the data according to the max number of events passed
         if max_elms is not None and max_elms != -1:
@@ -256,6 +261,10 @@ class Data:
             shuffle=True,
             random_state=config.seed,
         )
+
+        # print(f'training_elms: {training_elms}')
+        # print(f'validation_elms: {validation_elms}')
+        # print(f'test_elms: {test_elms}')
 
         # kfold cross validation
         if self.kfold and fold is None:
@@ -273,11 +282,16 @@ class Data:
                 "Creating training and validation datasets by simple splitting"
             )
             training_elms, validation_elms = model_selection.train_test_split(
-                training_elms, test_size=self.fraction_validate
+                training_elms, test_size=self.fraction_validate, shuffle = True, random_state = config.seed
             )
         LOGGER.info(f"Number of training ELM events: {training_elms.size}")
         LOGGER.info(f"Number of validation ELM events: {validation_elms.size}")
         LOGGER.info(f"Number of test ELM events: {test_elms.size}")
+
+        print(f'training_elms: {training_elms}')
+        print(f'validation_elms: {validation_elms}')
+        print(f'test_elms: {test_elms}')
+
 
         return training_elms, validation_elms, test_elms
 
@@ -552,12 +566,12 @@ def get_transforms():
 
 
 if __name__ == "__main__":
-    fold = 1
-    data = Data(kfold=True, balance_classes=config.balance_classes)
+    # fold = 1
+    data = Data(kfold=False, balance_classes=config.balance_classes)
     LOGGER.info("-" * 10)
-    LOGGER.info(f" Fold: {fold}")
+    # LOGGER.info(f" Fold: {fold}")
     LOGGER.info("-" * 10)
-    train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=fold)
+    train_data, _, _ = data.get_data(shuffle_sample_indices=False)
     _, _, sample_indices, window_start = train_data
 
     LOGGER.info(f"Sample indices: {sample_indices[:10]}")
@@ -578,6 +592,6 @@ if __name__ == "__main__":
         transform=transforms,
     )
     sample = train_dataset.__getitem__(0)
-    print(sample[1])
-    print(sample[0].shape)
-    print(sample[0])
+    # print(sample[1])
+    # print(sample[0].shape)
+    # print(sample[0])
