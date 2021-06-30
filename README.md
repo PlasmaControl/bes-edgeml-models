@@ -38,7 +38,7 @@ python analyze.py --help
 ### Train the model
 Training a model can be easily done by running something like (from the project directory) -
 ```
-python train.py --model_name cnn_model --n_epochs 5 --signal_window_size 16 --label_look_ahead 0 --scheduler CyclicLR --num_workers 4
+python train.py --model_name cnn --n_epochs 5 --signal_window_size 16 --label_look_ahead 0 --scheduler CyclicLR --num_workers 4
 ```
 
 `train.py` script expects the input `.hdf5` file to be stored in the `data/` directory 
@@ -46,5 +46,5 @@ python train.py --model_name cnn_model --n_epochs 5 --signal_window_size 16 --la
 ### Test the model
 Testing can be done similarly -
 ```
-python analyze.py --model_name cnn_model --signal_window_size 16 --output_dir outputs --threshold 0.45 --plot_data --show_metrics
+python analyze.py --model_name cnn --signal_window_size 16 --output_dir outputs --threshold 0.45 --plot_data --show_metrics
 ```
