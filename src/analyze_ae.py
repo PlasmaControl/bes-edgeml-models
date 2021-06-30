@@ -8,9 +8,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import metrics
-from tqdm import tqdm
+# from tqdm import tqdm
+from typing import Tuple
 
-import config, data, cnn_feature_model, model
+# import config, data, cnn_feature_model, model
 
 sns.set_style("white")
 sns.set_palette("deep")
