@@ -218,7 +218,7 @@ def run_training(params: OrderedDict, save: bool = True):
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [500, 400]
+        latent = [500, 400, 300, 200, 100, 50]
         )
 
     run_training(params)
