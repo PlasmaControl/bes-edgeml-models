@@ -3,9 +3,9 @@ import pickle
 from typing import Tuple
 import argparse
 
-import matplotlib
+# import matplotlib
 
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 import torch
 import numpy as np
 import pandas as pd
