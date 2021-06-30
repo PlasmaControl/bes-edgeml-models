@@ -1,12 +1,18 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
 import pickle
 from matplotlib import pyplot as plt
 from autoencoder import AE_simple, device
-import config, data
 import numpy as np
 
+import config, data
+
+# ------------------------------------------------------------------------------------------------
+
+# Train function - this trains the passed in model by cycling 
+# between the train_loop() and validation_loop()
 def train(model: AE_simple, 
     train_dataloader: DataLoader, 
     test_dataloader: DataLoader, 
@@ -15,8 +21,10 @@ def train(model: AE_simple,
     loss_fn, 
     epochs: int = config.epochs,
     print_output: bool = True):
+    
+    run_name = model.latent_dim
 
-    tb = SummaryWriter(log_dir = 'runs/one_hidden_layer_', comment = '300')
+    tb = SummaryWriter(log_dir = f'runs/one_layer_{run_name}')
 
     epoch_avg_losses = []
     all_losses = None
@@ -27,13 +35,13 @@ def train(model: AE_simple,
 
         train_loop(model, train_dataloader, optimizer, loss_fn)
 
-        if(t == epochs - 1):
+        if(t == epochs - 1): # Last epoch
             epoch_avg_loss, all_losses = validation_loop(model, test_dataloader, loss_fn, all_losses = True)
         else:
             epoch_avg_loss = validation_loop(model, test_dataloader, loss_fn)
 
         epoch_avg_losses.append(epoch_avg_loss)
-        tb.add_scalar('Epoch Avg Loss', epoch_avg_loss, t)
+        tb.add_scalar('Epoch Avg Loss', epoch_avg_loss, t + 1)
 
         # Change optimizer learning rate
         scheduler.step(epoch_avg_loss)
