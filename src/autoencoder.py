@@ -148,73 +148,7 @@ class AE_simple(torch.nn.Module):
         # print(reconstructed.shape)
         return reconstructed
 
-# if __name__== '__main__':
-#     batch_size = 4
-#     learning_rate = .0001
-#     l2_factor = 5e-3
 
-#     loss_fn = torch.nn.MSELoss()
-
-#     optimizer = torch.optim.SGD(
-#         model.parameters(), 
-#         lr=learning_rate, 
-#         momentum=0.9, 
-#         weight_decay=l2_factor)
-
-#     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-#             optimizer,
-#             mode="min",
-#             factor=0.5,
-#             patience=2,
-#             verbose=True,
-#             eps=1e-6,
-#         )
-
-#     # Print out the model architecture
-#     input_size = (4,1,8,8,8)
-#     summary(model, input_size)
-
-#     # Get datasets and form dataloaders
-#     data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
-#     train_data, test_data, _ = data_.get_data(shuffle_sample_indices=True)
-    
-#     train_dataset = data.ELMDataset(
-#         *train_data,
-#         config.signal_window_size,
-#         config.label_look_ahead,
-#         stack_elm_events=False,
-#         transform=None,
-#         for_autoencoder = True
-#     )
-
-#     test_dataset = data.ELMDataset(
-#         *test_data,
-#         config.signal_window_size,
-#         config.label_look_ahead,
-#         stack_elm_events=False,
-#         transform=None,
-#         for_autoencoder = True
-#     )
-
-#     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-#     test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
-
-#     # Train the model and plot loss
-#     avg_losses, all_losses = train_model(model, 
-#         train_dataloader, 
-#         test_dataloader, 
-#         optimizer, 
-#         scheduler, 
-#         loss_fn, 
-#         epochs  = 1)
-
-#     # print(all_losses)
-
-#     plot(avg_losses, all_losses)
-
-#     # Save the model - weights and structure
-#     # model_save_path = './trained_models/simple_ae.pth'
-#     # torch.save(model, model_save_path)
     
         
 
