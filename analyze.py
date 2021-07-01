@@ -132,11 +132,7 @@ def predict(
             [(np.sum(micro_predictions_pre_active_elms > 0.4) > 0).astype(int)]
         )
         macro_predictions_post_active_elms = np.array(
-            [
-                (np.mean(micro_predictions_post_active_elms > 0.4) > 0).astype(
-                    int
-                )
-            ]
+            [(np.sum(micro_predictions_post_active_elms > 0.4) > 0).astype(int)]
         )
         macro_labels = np.array(
             [
