@@ -25,7 +25,6 @@ model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
 
-# Plots the actual vs model reconstructed frames (0, 2, 4, 6)
 def plot(index):
     actual_window = train_dataset[index][0].to(device)
     pred_window = train_dataset[index][1]
@@ -36,10 +35,12 @@ def plot(index):
     fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
 
     # Plot the actual frames 0,2,4,6
-    actual = actual_window.cpu().detach().numpy()[0]
+    actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
+    actual_min = np.amin(actual)
+    actual_max = np.amax(actual)
     for i in range(number_frames):
         cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'hot')
+        cur_ax.imshow(actual[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'A {2*i}')
         cur_ax.axis('off')
 
@@ -47,7 +48,7 @@ def plot(index):
     pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'hot')
+        cur_ax.imshow(pred[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'P {2*i}')
         cur_ax.axis('off')
 
