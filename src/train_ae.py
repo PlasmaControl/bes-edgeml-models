@@ -98,7 +98,7 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = False, print_output: bool = True):
-    size = len(dataloader.dataset)
+    size = len(dataloader)
     test_loss = 0
 
     if(all_losses):
@@ -219,7 +219,7 @@ def run_training(params: OrderedDict, folder: str = 'test_runs', save: bool = Tr
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [200, 100, 50],
+        latent = [400, 300, 200, 100, 50],
         encoder_hidden_layers = [[400]],
         decoder_hidden_layers = [[400]]
         )
