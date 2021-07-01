@@ -125,8 +125,16 @@ def predict(
             active_elm_end_extended:
         ]
         # calculate macro predictions for each elm event
+        active_elm_true_frames_count = active_elm_end - active_elm_start + 1
+        active_elm_prediction_count = np.sum(
+            micro_predictions_active_elms > 0.4
+        )
         macro_predictions_active_elms = np.array(
-            [(np.mean(micro_predictions_active_elms) > 0.4).astype(int)]
+            [
+                (
+                    active_elm_prediction_count > active_elm_true_frames_count
+                ).astype(int)
+            ]
         )
         macro_predictions_pre_active_elms = np.array(
             [(np.sum(micro_predictions_pre_active_elms > 0.4) > 0).astype(int)]
