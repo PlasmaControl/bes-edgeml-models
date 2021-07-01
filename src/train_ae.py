@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 import pickle
 import os
 from matplotlib import pyplot as plt
-from autoencoder import AE_simple, device
+from autoencoder import AE_simple, Autoencoder, device
 import numpy as np
 
 from itertools import product
@@ -152,12 +152,12 @@ def save_model(model, folder, model_name):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, save: bool = True):
+def run_training(params: OrderedDict, folder: str = 'test_runs', save: bool = True):
     runs = RunBuilder.get_runs(params)
-    folder = 'one_hidden_layer'
 
     for run in runs:
-        model = AE_simple(run.latent)
+        print(run)
+        model = Autoencoder(run.latent, run.encoder_hidden_layers, run.decoder_hidden_layers)
         model = model.to(device)
 
         loss_fn = torch.nn.MSELoss()
@@ -219,7 +219,10 @@ def run_training(params: OrderedDict, save: bool = True):
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [500, 400, 300, 200, 100, 50]
+        latent = [200, 100, 50],
+        encoder_hidden_layers = [[400]],
+        decoder_hidden_layers = [[400]]
         )
 
+    # print(RunBuilder.get_runs(params))
     run_training(params)
