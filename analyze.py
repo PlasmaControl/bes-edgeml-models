@@ -14,7 +14,7 @@ import seaborn as sns
 from sklearn import metrics
 from tqdm import tqdm
 
-from src import data, utils, run
+from src import data, utils
 from options.test_arguments import TestArguments
 
 sns.set_style("white")
