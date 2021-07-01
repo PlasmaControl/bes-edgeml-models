@@ -79,13 +79,14 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         X = X.to(device)
         y = y.to(device)
         pred = model(X)
-        loss = loss_fn(pred, y)
+        loss = loss_fn(pred, y) # Average loss for the given batch
 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+        # For every 1000th batch:
         if batch % 1000 == 0:
             loss, current = loss.item(), batch * len(X)
             # for name, param in model.named_parameters():
@@ -110,11 +111,11 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = F
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            cur_sample_loss = loss_fn(pred, y).item()
-            test_loss += cur_sample_loss 
+            cur_avg_batch_loss = loss_fn(pred, y).item()
+            test_loss += cur_avg_batch_loss 
 
             if(all_losses):
-                all_epoch_losses.append(cur_sample_loss)
+                all_epoch_losses.append(cur_avg_batch_loss)
 
     test_loss /= size
 
