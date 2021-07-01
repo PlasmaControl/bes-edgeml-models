@@ -179,8 +179,9 @@ def plot(
     elm_predictions: dict,
     plot_dir: str,
 ) -> None:
+    state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
-    i_elms = np.random.choice(elm_id, args.plot_num, replace=False)
+    i_elms = state.choice(elm_id, args.plot_num, replace=False)
 
     fig = plt.figure(figsize=(14, 12))
     for i, i_elm in enumerate(i_elms):
