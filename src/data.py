@@ -255,7 +255,10 @@ class Data:
                 "Creating training and validation datasets by simple splitting"
             )
             training_elms, validation_elms = model_selection.train_test_split(
-                training_elms, test_size=self.fraction_validate
+                training_elms,
+                test_size=self.fraction_validate,
+                shuffle=True,
+                random_state=self.args.seed,
             )
         self.logger.info(f"Number of training ELM events: {training_elms.size}")
         self.logger.info(
