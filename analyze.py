@@ -57,44 +57,42 @@ def predict(
         else:
             i_stop = labels.size
         # gathering the indices for active elm events
-        elm_signals = signals[i_start:i_stop]
+        elm_signals = signals[i_start:i_stop, ...]
         elm_labels = labels[i_start:i_stop]
         active_elm = np.where(elm_labels > 0.0)[0]
-        elm_start = active_elm[0]
-        elm_end = active_elm[-1]
+        active_elm_start = active_elm[0]
+        active_elm_end = active_elm[-1]
         # add a buffer of a given number of time frames
         # in both start and end
-        elm_start_extended = (
-            (elm_start - args.buffer_frames)
-            if (elm_start - args.buffer_frames) > 0
+        active_elm_start_extended = (
+            (active_elm_start - args.buffer_frames)
+            if (active_elm_start - args.buffer_frames) > 0
             else 0
         )
-        elm_end_extended = (
-            (elm_end + args.buffer_frames)
-            if (elm_end + args.buffer_frames) < len(elm_labels) - 1
+        active_elm_end_extended = (
+            (active_elm_end + args.buffer_frames)
+            if (active_elm_end + args.buffer_frames) < len(elm_labels) - 1
             else len(elm_labels) - 1
         )
-        elm_signals_extended = elm_signals[elm_start_extended:elm_end_extended]
-        elm_labels_extended = elm_labels[elm_start_extended:elm_end_extended]
         predictions = np.zeros(
-            elm_labels_extended.size
+            elm_labels.size
             - args.signal_window_size
             - args.label_look_ahead
             + 1
         )
         for j in range(predictions.size):
             input_signals = torch.as_tensor(
-                elm_signals_extended[
-                    j : j + args.signal_window_size, :, :
-                ].reshape([1, 1, args.signal_window_size, 8, 8]),
+                elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    [1, 1, args.signal_window_size, 8, 8]
+                ),
                 dtype=torch.float32,
             )
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
-        elm_signals_extended = elm_signals_extended[
+        elm_signals = elm_signals[
             : (-args.signal_window_size - args.label_look_ahead + 1), ...
         ]
-        elm_labels_extended = elm_labels_extended[
+        elm_labels = elm_labels[
             : (-args.signal_window_size - args.label_look_ahead + 1)
         ]
         # convert logits to probability
@@ -104,17 +102,68 @@ def predict(
             .cpu()
             .numpy()
         )
-        # calculate macro predictions for each elm event
-        macro_predictions = np.array(
-            [(np.sum(micro_predictions > 0.8) > 0).astype(int)]
-        )
-        elm_time = np.arange(elm_start_extended, elm_end_extended)[
-            : (-args.signal_window_size - args.label_look_ahead + 1)
+        # filter signals, labels and micro-predictions for active elm regions
+        # elm_signals_active_elms = elm_signals[
+        #     active_elm_start_extended:active_elm_end_extended
+        # ]
+        elm_labels_active_elms = elm_labels[
+            active_elm_start_extended:active_elm_end_extended
         ]
+        micro_predictions_active_elms = micro_predictions[
+            active_elm_start_extended:active_elm_end_extended
+        ]
+
+        # filter signals, labels and micro-predictions for non-active elm regions
+        # elm_signals_pre_active_elms = elm_signals[:active_elm_start_extended]
+        # elm_signals_post_active_elms = elm_signals[active_elm_end_extended:]
+        elm_labels_pre_active_elms = elm_labels[:active_elm_start_extended]
+        elm_labels_post_active_elms = elm_labels[active_elm_end_extended:]
+        micro_predictions_pre_active_elms = micro_predictions[
+            :active_elm_start_extended
+        ]
+        micro_predictions_post_active_elms = micro_predictions[
+            active_elm_end_extended:
+        ]
+        # calculate macro predictions for each elm event
+        macro_predictions_active_elms = np.array(
+            [(np.mean(micro_predictions_active_elms) > 0.4).astype(int)]
+        )
+        macro_predictions_pre_active_elms = np.array(
+            [(np.sum(micro_predictions_pre_active_elms > 0.4) > 0).astype(int)]
+        )
+        macro_predictions_post_active_elms = np.array(
+            [
+                (np.mean(micro_predictions_post_active_elms > 0.4) > 0).astype(
+                    int
+                )
+            ]
+        )
+        macro_labels = np.array(
+            [
+                np.mean(elm_labels_pre_active_elms).astype(int),
+                int(
+                    np.sum(elm_labels_active_elms)
+                    / (active_elm_end - active_elm_start + 1)
+                ),
+                np.mean(elm_labels_post_active_elms).astype(int),
+            ]
+        )
+        macro_predictions = np.concatenate(
+            [
+                macro_predictions_pre_active_elms,
+                macro_predictions_active_elms,
+                macro_predictions_post_active_elms,
+            ]
+        )
+        # elm_time = np.arange(
+        #     active_elm_start_extended, active_elm_end_extended
+        # )  [: (-args.signal_window_size - args.label_look_ahead + 1)]
+        elm_time = np.arange(elm_labels.size)
         elm_predictions[window_start[i_elm]] = {
-            "signals": elm_signals_extended,
-            "labels": elm_labels_extended,
+            "signals": elm_signals,
+            "labels": elm_labels,
             "micro_predictions": micro_predictions,
+            "macro_labels": macro_labels,
             "macro_predictions": macro_predictions,
             "elm_time": elm_time,
         }
@@ -143,14 +192,14 @@ def plot(
             labels + 0.02,
             label="Ground truth",
             ls="-.",
-            lw=2.5,
+            lw=1.5,
         )
         plt.plot(
             elm_time - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",
-            lw=2.5,
+            lw=1.5,
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
@@ -317,25 +366,24 @@ def model_predict(
 
 
 def get_dict_values(pred_dict: dict, mode: str):
+    targets = []
+    predictions = []
     if mode == "micro":
-        targets = []
-        predictions = []
         for vals in pred_dict.values():
             for k, v in vals.items():
                 if k == "labels":
                     targets.append(v)
-                elif k == "micro_predictions":
+                if k == "micro_predictions":
                     predictions.append(v)
         return np.concatenate(targets), np.concatenate(predictions)
     elif mode == "macro":
-        predictions = []
         for vals in pred_dict.values():
             for k, v in vals.items():
+                if k == "macro_labels":
+                    targets.append(v)
                 if k == "macro_predictions":
                     predictions.append(v)
-        return np.ones(len(predictions), dtype="int"), np.concatenate(
-            predictions
-        )
+        return np.concatenate(targets), np.concatenate(predictions)
 
 
 def main(
@@ -428,7 +476,6 @@ def main(
             plot_dir,
             pred_mode="macro",
         )
-    # print(pred_dict)
 
 
 if __name__ == "__main__":
