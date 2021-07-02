@@ -494,6 +494,8 @@ class ELMDataset(torch.utils.data.Dataset):
         self.logger.info(f"Signals shape: {signals.shape}")
         self.logger.info(f"Labels shape: {labels.shape}")
         self.logger.info(f"Sample indices shape: {sample_indices.shape}")
+        self.interpolate = self.args.interpolate
+        self.interpolate_size = self.args.interpolate_size
 
     def __len__(self):
         return len(self.sample_indices)
@@ -530,6 +532,15 @@ class ELMDataset(torch.utils.data.Dataset):
                 size=signal_window.shape,
             )
             signal_window += noise
+        if self.interpolate:
+            interp_size = (
+                self.signal_window_size,
+                self.interpolate_size,
+                self.interpolate_size,
+            )
+            signal_window = torch.nn.functional.interpolate(
+                signal_window, size=interp_size, align_corners=True
+            )
 
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
