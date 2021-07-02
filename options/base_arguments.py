@@ -117,6 +117,18 @@ class BaseArguments:
             "[0 | 4 | 8 | ...].",
         )
         parser.add_argument(
+            "--interpolate",
+            action="store_true",
+            default=False,
+            help="if true, interpolate the spatial dimensions to `interpolate_size` dimensions.",
+        )
+        parser.add_argument(
+            "--interpolate_size",
+            type=int,
+            default=12,
+            help="final size of the spatial dimensions of the input if interpolation is done.",
+        )
+        parser.add_argument(
             "--shuffle_sample_indices",
             action="store_true",
             default=False,
