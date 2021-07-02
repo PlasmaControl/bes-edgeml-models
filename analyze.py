@@ -46,6 +46,7 @@ def predict(
     device: torch.device,
 ) -> dict:
     signals = test_data[0]
+    print(f"Signals shape: {signals.shape}")
     labels = test_data[1]
     _ = test_data[2]  # sample_indices
     window_start = test_data[3]
@@ -83,12 +84,34 @@ def predict(
             + 1
         )
         for j in range(predictions.size):
-            input_signals = torch.as_tensor(
-                elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                    [1, 1, args.signal_window_size, 8, 8]
-                ),
-                dtype=torch.float32,
-            )
+            if args.interpolate:
+                input_signals = torch.as_tensor(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [
+                            1,
+                            1,
+                            args.signal_window_size,
+                            8,
+                            8,
+                        ]
+                    ),
+                    dtype=torch.float32,
+                )
+                interp_size = (
+                    args.signal_window_size,
+                    args.interpolate_size,
+                    args.interpolate_size,
+                )
+                input_signals = torch.nn.functional.interpolate(
+                    input_signals, size=interp_size
+                )
+            else:
+                input_signals = torch.as_tensor(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
+                    ),
+                    dtype=torch.float32,
+                )
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
         elm_signals = elm_signals[
@@ -443,6 +466,8 @@ def main(
         shuffle=False,
         drop_last=True,
     )
+    inputs, _ = next(iter(test_loader))
+    print(f"Input size: {inputs.shape}")
 
     if args.test_data_info:
         show_details(test_data)
