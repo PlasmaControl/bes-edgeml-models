@@ -103,12 +103,12 @@ def test_args_compat(
     """Checks if all the parameters with dependencies are passed."""
     compat = True
     # check the basic arguments and their dependencies
-    if args.kfold and "n_folds" not in vars(args):
+    if args.kfold and args.n_folds is None:
         parser.error(
             "K-fold cross validation is set to True but `n_folds` argument is not passed."
         )
         compat = False
-    if args.interpolate and "interpolate_size" not in vars(args):
+    if args.interpolate and args.interpolate_size is None:
         parser.error(
             "Interpolation is set to True but interpolation size is not passed."
         )
@@ -116,25 +116,19 @@ def test_args_compat(
     if (
         args.model_name == "StackedELMModel"
         and (not args.stack_elm_events)
-        and ("size" in vars(args))
+        and (args.size is None)
     ):
         parser.error(
             f"{args.model_name} requires arguments `size` and `stack_elm_events` set to True."
         )
         compat = False
 
-    if "smoothen_transition" in vars(
-        args
-    ) and "transition_halfwidth" not in vars(args):
+    if args.smoothen_transition and args.transition_halfwidth is None:
         parser.error(
             "`smoothen_transition` argument requires argument `transition_halfwidth`."
         )
         compat = False
-    if (
-        (args.add_noise)
-        and ("mu" not in vars(args))
-        and ("sigma" not in vars(args))
-    ):
+    if (args.add_noise) and ((args.mu is None) or (args.sigma is None)):
         parser.error(
             "`add_noise` argument requires arguments `mu` and `sigma`."
         )
