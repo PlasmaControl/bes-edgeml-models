@@ -87,6 +87,13 @@ class BaseArguments:
             default=-1,
             help="total number of elm events to be used. Use -1 to use all of them.",
         )
+        parser.add_argument(
+            "--filename_suffix",
+            type=str,
+            default="",
+            help="suffix in the file name. It can be passed when args like interpolate, "
+            "etc. are passed. Must be passed with a leading underscore '_'.",
+        )
         # dataset parameters
         parser.add_argument(
             "--batch_size",

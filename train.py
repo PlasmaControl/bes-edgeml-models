@@ -11,7 +11,6 @@ from sklearn.metrics import roc_auc_score
 
 from options.train_arguments import TrainArguments
 from src import data, utils, run
-import models
 
 
 def train_loop(
@@ -124,13 +123,22 @@ def train_loop(
         if args.stack_elm_events and args.model_name == "stacked_elm_model":
             input_size = (args.batch_size, 1, args.size, args.size)
         else:
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                8,
-                8,
-            )
+            if args.interpolate:
+                input_size = (
+                    args.batch_size,
+                    1,
+                    args.signal_window_size,
+                    args.interpolate_size,
+                    args.interpolate_size,
+                )
+            else:
+                input_size = (
+                    args.batch_size,
+                    1,
+                    args.signal_window_size,
+                    8,
+                    8,
+                )
         x = torch.rand(*input_size)
         x = x.to(device)
         utils.model_details(model, x, input_size)
@@ -220,7 +228,7 @@ def train_loop(
                 # save the model if best ROC is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
-                    f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth",
+                    f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
                 )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
@@ -247,16 +255,18 @@ def train_loop(
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
+    print(f"Interpolation size is passed: {args.interpolate_size}")
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(
         script_name=__name__,
         log_file=os.path.join(
-            args.log_dir, f"output_logs_{args.model_name}_{args.data_mode}.log"
+            args.log_dir,
+            f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
         ),
     )
     data_obj = data.Data(args, LOGGER)
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}.pkl",
+        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pkl",
     )
