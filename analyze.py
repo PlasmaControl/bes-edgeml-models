@@ -32,7 +32,9 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = data.ELMDataset(args, *data_attrs, logger=logger)
+    test_dataset = data.ELMDataset(
+        args, *data_attrs, logger=logger, transform=transforms
+    )
 
     return data_attrs, test_dataset
 

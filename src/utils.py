@@ -107,6 +107,12 @@ def test_args_compat(
         parser.error(
             "K-fold cross validation is set to True but `n_folds` argument is not passed."
         )
+        compat = False
+    if args.interpolate and "interpolate_size" not in vars(args):
+        parser.error(
+            "Interpolation is set to True but interpolation size is not passed."
+        )
+        compat = False
     if (
         args.model_name == "StackedELMModel"
         and (not args.stack_elm_events)

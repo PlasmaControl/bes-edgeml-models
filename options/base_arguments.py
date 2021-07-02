@@ -125,8 +125,8 @@ class BaseArguments:
         parser.add_argument(
             "--interpolate_size",
             type=int,
-            default=12,
-            help="final size of the spatial dimensions of the input if interpolation is done.",
+            help="final size of the spatial dimensions of the input if interpolation is done. "
+            "Must be passed if `interpolate` is set to True.",
         )
         parser.add_argument(
             "--shuffle_sample_indices",
