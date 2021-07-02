@@ -532,18 +532,18 @@ class ELMDataset(torch.utils.data.Dataset):
                 size=signal_window.shape,
             )
             signal_window += noise
+
+        signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
+        signal_window.unsqueeze_(0)
+
         if self.interpolate:
             interp_size = (
-                self.signal_window_size,
                 self.interpolate_size,
                 self.interpolate_size,
             )
             signal_window = torch.nn.functional.interpolate(
-                signal_window, size=interp_size, align_corners=True
+                signal_window, size=interp_size
             )
-
-        signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
-        signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
 
