@@ -73,7 +73,7 @@ def train(model: AE_simple,
     
 def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
     model.train()
-    size = len(dataloader.dataset)
+    size = len(dataloader.dataset) #Num sample windows in dataloader = batch_size * len(dataloader)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
         X = X.to(device)
@@ -88,7 +88,7 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
 
         # For every 1000th batch:
         if batch % 1000 == 0:
-            loss, current = loss.item(), batch * len(X)
+            loss, current = loss.item(), batch * len(X) # len(X) is the batch size
             # for name, param in model.named_parameters():
             #     if param.requires_grad:
             #         print (name, param.data)
@@ -98,8 +98,8 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = False, print_output: bool = True):
-    size = len(dataloader)
-    test_loss = 0
+    batches_in_dataloader = len(dataloader)
+    validation_loss = 0
 
     if(all_losses):
         all_epoch_losses = []
@@ -112,22 +112,22 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = F
             y = y.to(device)
             pred = model(X)
             cur_avg_batch_loss = loss_fn(pred, y).item()
-            test_loss += cur_avg_batch_loss 
+            validation_loss += cur_avg_batch_loss 
 
             if(all_losses):
                 all_epoch_losses.append(cur_avg_batch_loss)
 
-    test_loss /= size
+    validation_loss /= batches_in_dataloader
 
     if(print_output):
-        print(f"Validation Dataset Avg loss: {test_loss:>8f} \n")
+        print(f"Validation Dataset Avg loss: {validation_loss:>8f} \n")
 
     if(all_losses):
-        return test_loss, all_epoch_losses
+        return validation_loss, all_epoch_losses
     else:
-        return test_loss
+        return validation_loss
 
-def save_test_dataset(test_data, folder, filename):
+def save_test_dataset(test_dataset, filename, folder = config.test_data_ae):
     parent_path = f'test_datasets/{folder}'
     os.makedirs(parent_path, exist_ok = True)
     filepath = parent_path + f'/{filename}'
@@ -152,12 +152,15 @@ def save_model(model, folder, model_name):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, folder: str = 'test_runs', save: bool = True):
+def run_training(params: OrderedDict, save: bool = True):
     runs = RunBuilder.get_runs(params)
 
     for run in runs:
         print(run)
-        model = Autoencoder(run.latent, run.encoder_hidden_layers, run.decoder_hidden_layers)
+        model = Autoencoder(
+            run.latent, 
+            run.encoder_hidden_layers, 
+            run.decoder_hidden_layers)
         model = model.to(device)
 
         loss_fn = torch.nn.MSELoss()
@@ -181,7 +184,7 @@ def run_training(params: OrderedDict, folder: str = 'test_runs', save: bool = Tr
         data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
         train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
 
-        save_test_dataset(test_data, folder, f'latent_{run.latent}')
+        save_test_dataset(test_data, f'latent_{run.latent}')
 
         train_dataset = data.ELMDataset(
             *train_data,
@@ -224,5 +227,5 @@ if __name__ == '__main__':
         decoder_hidden_layers = [[400]]
         )
 
-    # print(RunBuilder.get_runs(params))
+    print(RunBuilder.get_runs(params))
     run_training(params)
