@@ -2,6 +2,7 @@ import torch
 from matplotlib import pyplot as plt
 import seaborn as sb
 import numpy as np
+import os
 
 from autoencoder import Autoencoder, AE_simple, device
 import data, config
@@ -19,16 +20,31 @@ train_dataset = data.ELMDataset(
         for_autoencoder = True
     )
 
+train_data = data.ELMDataset(
+        *train_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=False,
+        transform=None,
+        for_autoencoder = False
+    )
+
 # Load model
-PATH = './trained_models/one_hidden_layer/simple_ae_latent_50'
+# PATH = './trained_models/one_hidden_layer/simple_ae_latent_50'
+PATH = 'BEST_AE_batch_size_4.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
+
+loss_fn = torch.nn.MSELoss()
 
 def plot(index):
     actual_window = train_dataset[index][0].to(device)
     pred_window = train_dataset[index][1]
     model_window = model(actual_window)
+
+    loss = loss_fn(model_window, actual_window)
+    print(loss.item())
     
     number_frames = 4
     number_rows = 2
@@ -40,7 +56,7 @@ def plot(index):
     actual_max = np.amax(actual)
     for i in range(number_frames):
         cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'A {2*i}')
         cur_ax.axis('off')
 
@@ -48,7 +64,7 @@ def plot(index):
     pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'P {2*i}')
         cur_ax.axis('off')
 
@@ -58,6 +74,12 @@ def plot(index):
 
 if __name__ == '__main__':
     # Plot 10 model predictions
-    for i in range(0, 11000, 1000):
+
+    for i in range(len(train_dataset)):
+        if train_data[i][1].item() == 1:
+            print(i, (train_data[i][1]).item())
+
+    for i in range(1000, 3000, 200):
         # print(i)
         plot(i)
+   
