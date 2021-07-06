@@ -4,6 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchinfo import summary
 
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 from typing import Tuple
 from collections import OrderedDict
@@ -172,44 +173,65 @@ class AE_simple(torch.nn.Module):
 # This train function is just for quick debugging - actual train function is in train_ae.py
 def train(model, 
     train_dataloader: DataLoader, 
-    test_dataloader: DataLoader, 
+    valid_dataloader: DataLoader, 
     optimizer,
     scheduler, 
     loss_fn, 
     epochs: int = config.epochs,
     print_output: bool = True):
 
-    epoch_avg_losses = []
+    tb = SummaryWriter(log_dir = f'outputs/tensorboard/practice_batch_size_4')
+    
+    avg_training_losses = []
+    avg_validation_losses = []
 
     for t in range(epochs):
         if(print_output):
             print(f"Epoch {t+1}\n-------------------------------")
 
-        train_loop(model, train_dataloader, optimizer, loss_fn)
+        avg_train_loss = train_loop(model, train_dataloader, optimizer, loss_fn)
 
-        epoch_avg_loss = validation_loop(model, test_dataloader, loss_fn)
+        avg_validation_loss = validation_loop(model, valid_dataloader, loss_fn)
 
-        epoch_avg_losses.append(epoch_avg_loss)
-        # tb.add_scalar('Epoch Avg Loss', epoch_avg_loss, t + 1)
+        avg_training_losses.append(avg_train_loss)
+        avg_validation_losses.append(avg_validation_loss)
+
+        tb.add_scalar('Training: Average Sample Loss vs. Epochs', avg_train_loss, t + 1)
+        tb.add_scalar('Validation: Average Sample Loss vs. Epochs', avg_validation_loss, t + 1)
 
         # Change optimizer learning rate
-        scheduler.step(epoch_avg_loss)
+        # scheduler.step(epoch_avg_loss)
     
     if(print_output):
         print("Done Training!")
 
-    return epoch_avg_losses
+    return avg_training_losses, avg_validation_losses
 
 # Train loop for quick debugging    
 def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
     model.train()
-    size = len(dataloader.dataset) #Num sample windows in dataloader = batch_size * len(dataloader)
+    total_loss = 0
+
+    # Sample windows in dataloader = batch_size * len(dataloader)
+    samples_in_dataset = len(dataloader.dataset)
+    batches_in_dataloader = len(dataloader)
+    batch_size =  math.ceil(samples_in_dataset / batches_in_dataloader)
+
+    if(print_output):
+        print('Batch size:', batch_size)
+        print('Number of samples in Train Dataset:', samples_in_dataset)
+        print('Number of batches in Train Dataloader:', batches_in_dataloader)
+
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
         X = X.to(device)
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y) # Average loss for the given batch
+        total_loss += loss.item() * len(X)
+
+        # if(len(X) < batch_size):
+        #     print(batch, batch * batch_size, len(X))
 
         # Backpropagation
         optimizer.zero_grad()
@@ -217,14 +239,23 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         optimizer.step()
 
         # For every 1000th batch:
-        if batch % 1000 == 0:
-            loss, current = loss.item(), batch * len(X) # len(X) is the batch size
+        if (batch + 1) % 1000 == 0:
+            loss, current = loss.item(), (batch + 1) * batch_size
             if(print_output):
-                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+                print(f"loss: {loss:>7f}  [{current:>5d}/{samples_in_dataset:>5d}]")
+
+    avg_sample_loss = total_loss / samples_in_dataset
+
+    if(print_output):
+        print(f"Training Avg. Sample loss: {avg_sample_loss:>8f}")
+    
+    # Return the average sample loss 
+    return avg_sample_loss
 
 # Validation loop for quick debugging        
 def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
     batches_in_dataloader = len(dataloader)
+    samples_in_dataset = len(dataloader.dataset)
 
     validation_loss = 0
 
@@ -235,15 +266,16 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            cur_avg_batch_loss = loss_fn(pred, y).item()
-            validation_loss += cur_avg_batch_loss 
+            avg_batch_loss = loss_fn(pred, y).item()
+            validation_loss += (avg_batch_loss) * len(X)
 
-    validation_loss /= batches_in_dataloader
+    avg_sample_loss = validation_loss / samples_in_dataset
 
     if(print_output):
-        print(f"Validation Dataset Avg loss: {validation_loss:>8f} \n")
+        print(f"Validation Avg. Sample loss: {avg_sample_loss:>8f} \n")
     
-    return validation_loss
+    # Return the average sample loss 
+    return avg_sample_loss
 
 if __name__ == '__main__':
     model = Autoencoder(
@@ -296,17 +328,17 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    epoch_avg_losses = train(model, 
+    train_avg_losses, validation_avg_losses = train(model, 
         train_dataloader, 
         valid_dataloader, 
         optimizer, 
         scheduler, 
         loss_fn)
 
-    plt.plot(epoch_avg_losses)
+    plt.plot(train_avg_losses)
     plt.show()
 
-    torch.save(model, './BEST_AE.pth')
+    torch.save(model, './BEST_AE_batch_size_4.pth')
 
 
     
