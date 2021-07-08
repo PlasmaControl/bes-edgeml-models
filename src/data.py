@@ -4,7 +4,7 @@ Data class to package BES data for training using PyTorch
 import os
 import logging
 import argparse
-from typing import Tuple
+from typing import Tuple, Callable
 
 import h5py
 import numpy as np
@@ -454,7 +454,8 @@ class ELMDataset(torch.utils.data.Dataset):
         sample_indices: np.ndarray,
         window_start: np.ndarray,
         logger: logging.getLogger,
-        transform=None,
+        transform: Callable = None,
+        use_rnn: bool = False,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -482,11 +483,8 @@ class ELMDataset(torch.utils.data.Dataset):
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
-        self.signal_window_size = self.args.signal_window_size
-        self.label_look_ahead = self.args.label_look_ahead
-        self.stack_elm_events = self.args.stack_elm_events
         self.transform = transform
-        self.add_noise = self.args.add_noise
+        self.use_rnn = use_rnn
         self.logger = logger
         self.logger.info("-" * 15)
         self.logger.info(" Dataset class")
@@ -494,8 +492,6 @@ class ELMDataset(torch.utils.data.Dataset):
         self.logger.info(f"Signals shape: {signals.shape}")
         self.logger.info(f"Labels shape: {labels.shape}")
         self.logger.info(f"Sample indices shape: {sample_indices.shape}")
-        self.interpolate = self.args.interpolate
-        self.interpolate_size = self.args.interpolate_size
 
     def __len__(self):
         return len(self.sample_indices)
@@ -503,12 +499,15 @@ class ELMDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int):
         elm_idx = self.sample_indices[idx]
         signal_window = self.signals[
-            elm_idx : elm_idx + self.signal_window_size
+            elm_idx : elm_idx + self.args.signal_window_size
         ]
         label = self.labels[
-            elm_idx + self.signal_window_size + self.label_look_ahead - 1
+            elm_idx
+            + self.args.signal_window_size
+            + self.args.label_look_ahead
+            - 1
         ].astype("int")
-        if self.stack_elm_events:
+        if self.args.stack_elm_events:
             if self.args.signal_window_size == 8:
                 signal_window = np.hsplit(
                     np.concatenate(signal_window, axis=-1), 2
@@ -525,7 +524,7 @@ class ELMDataset(torch.utils.data.Dataset):
                 )
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
-        if self.add_noise:
+        if self.args.add_noise:
             noise = np.random.normal(
                 loc=self.args.mu,
                 scale=self.args.sigma,
@@ -536,10 +535,14 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
 
-        if self.interpolate:
+        if self.use_rnn:
+            signal_window = signal_window.squeeze()
+            signal_window = torch.flatten(signal_window, -2)
+
+        if self.args.interpolate:
             interp_size = (
-                self.interpolate_size,
-                self.interpolate_size,
+                self.args.interpolate_size,
+                self.args.interpolate_size,
             )
             signal_window = torch.nn.functional.interpolate(
                 signal_window, size=interp_size
