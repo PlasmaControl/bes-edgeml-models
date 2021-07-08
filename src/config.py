@@ -6,6 +6,13 @@ output_dir = "../outputs"
 data_dir = "../data"
 model_dir = "../models"
 
+# Autoencoder training and analyze outputs
+ae_output_dir = "./outputs"
+ae_test_datasets_dir = ae_output_dir + '/test_datasets' 
+ae_trained_models_dir = ae_output_dir + '/trained_models'
+ae_tensorboard_dir = ae_output_dir + '/tensorboard'
+ae_plots_dir = ae_output_dir + '/plots'   
+
 # set universal random state
 seed = 15
 
@@ -22,7 +29,7 @@ batch_size = 4
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = 100 #-1
+max_elms = 10 #-1
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
