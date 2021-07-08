@@ -113,19 +113,15 @@ def test_args_compat(
             "Interpolation is set to True but interpolation size is not passed."
         )
         compat = False
-    if (
-        args.model_name == "stacked_elm"
-        and (not args.stack_elm_events)
-        and (args.size is None)
+    if args.model_name == "stacked_elm" and (
+        (not args.stack_elm_events) or (args.size is None)
     ):
         parser.error(
             f"{args.model_name} requires arguments `size` and `stack_elm_events` set to True."
         )
         compat = False
-    if (
-        args.model_name == "rnn"
-        and (not args.use_rnn)
-        and (args.hidden_size is None)
+    if args.model_name == "rnn" and (
+        (not args.use_rnn) or (args.hidden_size is None)
     ):
         parser.error(
             f"{args.model_name} requires arguments `hidden_size` and `use_rnn` set to True."

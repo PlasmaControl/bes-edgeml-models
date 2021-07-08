@@ -122,6 +122,8 @@ def train_loop(
     if desc:
         if args.stack_elm_events and args.model_name == "stacked_elm_model":
             input_size = (args.batch_size, 1, args.size, args.size)
+        elif args.model_name == "rnn":
+            input_size = (args.batch_size, args.signal_window_size, 64)
         else:
             if args.interpolate:
                 input_size = (
@@ -255,7 +257,6 @@ def train_loop(
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
-    print(f"Interpolation size is passed: {args.interpolate_size}")
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(
         script_name=__name__,

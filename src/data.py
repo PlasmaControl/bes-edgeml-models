@@ -533,7 +533,7 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
 
-        if args.use_rnn:
+        if self.args.use_rnn:
             signal_window = signal_window.squeeze()
             signal_window = torch.flatten(signal_window, -2)
 
