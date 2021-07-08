@@ -25,7 +25,7 @@ class BaseArguments:
             type=str,
             default="feature",
             help="name of the model to be used for training, "
-            "[feature | cnn | cnn_v2 | stacked_elm].",
+            "[feature | cnn | cnn_v2 | rnn | stacked_elm].",
         )
         parser.add_argument(
             "--model_ckpts",
@@ -56,6 +56,12 @@ class BaseArguments:
             action="store_true",
             default=False,
             help="if true, train (test) the model without saving anything.",
+        )
+        parser.add_argument(
+            "--use_rnn",
+            action="store_true",
+            default=False,
+            help="if true, use recurrent neural network.",
         )
         parser.add_argument(
             "--n_epochs",

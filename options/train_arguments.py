@@ -28,6 +28,12 @@ class TrainArguments(BaseArguments):
             help="learning rate.",
         )
         parser.add_argument(
+            "--hidden_size",
+            type=int,
+            help="hidden size of the RNN. Must be used "
+            "if `use_rnn` is set to True.",
+        )
+        parser.add_argument(
             "--weight_decay",
             type=float,
             default=0.005,

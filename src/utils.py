@@ -114,7 +114,7 @@ def test_args_compat(
         )
         compat = False
     if (
-        args.model_name == "StackedELMModel"
+        args.model_name == "stacked_elm"
         and (not args.stack_elm_events)
         and (args.size is None)
     ):
@@ -122,7 +122,15 @@ def test_args_compat(
             f"{args.model_name} requires arguments `size` and `stack_elm_events` set to True."
         )
         compat = False
-
+    if (
+        args.model_name == "rnn"
+        and (not args.use_rnn)
+        and (args.hidden_size is None)
+    ):
+        parser.error(
+            f"{args.model_name} requires arguments `hidden_size` and `use_rnn` set to True."
+        )
+        compat = False
     if args.smoothen_transition and args.transition_halfwidth is None:
         parser.error(
             "`smoothen_transition` argument requires argument `transition_halfwidth`."

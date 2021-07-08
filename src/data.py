@@ -455,7 +455,6 @@ class ELMDataset(torch.utils.data.Dataset):
         window_start: np.ndarray,
         logger: logging.getLogger,
         transform: Callable = None,
-        use_rnn: bool = False,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -484,7 +483,6 @@ class ELMDataset(torch.utils.data.Dataset):
         self.sample_indices = sample_indices
         self.window_start = window_start
         self.transform = transform
-        self.use_rnn = use_rnn
         self.logger = logger
         self.logger.info("-" * 15)
         self.logger.info(" Dataset class")
@@ -535,7 +533,7 @@ class ELMDataset(torch.utils.data.Dataset):
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
 
-        if self.use_rnn:
+        if args.use_rnn:
             signal_window = signal_window.squeeze()
             signal_window = torch.flatten(signal_window, -2)
 
