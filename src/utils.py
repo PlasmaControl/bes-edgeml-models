@@ -163,9 +163,16 @@ def create_output_paths(
         test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
         model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
     else:
-        raise ValueError(
-            f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
+        test_data_path = os.path.join(
+            args.test_data_dir, f"signal_window_{args.signal_window_size}"
         )
+        model_ckpt_path = os.path.join(
+            args.model_ckpts, f"signal_window_{args.signal_window_size}"
+        )
+        if not os.path.exists(test_data_path):
+            os.makedirs(test_data_path, exist_ok=True)
+        if not os.path.exists(model_ckpt_path):
+            os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
         if args.signal_window_size == 8:
             base_path = os.path.join(args.output_dir, "signal_window_8")
@@ -178,9 +185,16 @@ def create_output_paths(
             plot_path = os.path.join(base_path, "plots")
             roc_path = os.path.join(base_path, "roc")
         else:
-            raise ValueError(
-                f"Expected signal window size to be either of 8 or 16 but got {args.signal_window_size}"
+            base_path = os.path.join(
+                args.output_dir, f"signal_window_{args.signal_window_size}"
             )
+            clf_report_path = os.path.join(base_path, "classification_reports")
+            plot_path = os.path.join(base_path, "plots")
+            roc_path = os.path.join(base_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
         return (
             test_data_path,
             model_ckpt_path,
