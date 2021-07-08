@@ -31,7 +31,7 @@ train_data = data.ELMDataset(
 
 # Load model
 # PATH = './trained_models/one_hidden_layer/simple_ae_latent_50'
-PATH = 'BEST_AE_batch_size_4.pth'
+PATH = 'outputs/trained_models/three_hidden/Autoencoder_400_200_400.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
@@ -56,7 +56,7 @@ def plot(index):
     actual_max = np.amax(actual)
     for i in range(number_frames):
         cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(actual[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'A {2*i}')
         cur_ax.axis('off')
 
@@ -64,7 +64,7 @@ def plot(index):
     pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(pred[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'P {2*i}')
         cur_ax.axis('off')
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         if train_data[i][1].item() == 1:
             print(i, (train_data[i][1]).item())
 
-    for i in range(1000, 3000, 200):
+    for i in range(0, 11000, 1000):
         # print(i)
         plot(i)
    

@@ -3,9 +3,9 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 import pickle
-import os
+import os, math
 from matplotlib import pyplot as plt
-from autoencoder import AE_simple, Autoencoder, device
+from autoencoder import Autoencoder, device
 import numpy as np
 
 from itertools import product
@@ -18,7 +18,7 @@ import config, data
 
 class RunBuilder():
     @staticmethod
-    def get_runs(params):
+    def get_runs(params: OrderedDict):
         Run = namedtuple('Run', params.keys())
 
         runs = []
@@ -32,77 +32,92 @@ class RunBuilder():
 
 # Train function - this trains the passed in model by cycling 
 # between the train_loop() and validation_loop()
-def train(model: AE_simple, 
+def train(model: Autoencoder, 
     train_dataloader: DataLoader, 
-    test_dataloader: DataLoader, 
+    valid_dataloader: DataLoader, 
     optimizer,
     scheduler, 
     loss_fn,
-    folder_name: str, 
+    tb: SummaryWriter,  
     epochs: int = config.epochs,
     print_output: bool = True):
-    
-    run_name = model.latent_dim
 
-    tb = SummaryWriter(log_dir = f'runs/{folder_name}/{run_name}')
-
-    epoch_avg_losses = []
-    all_losses = None
+    avg_training_losses = []
+    avg_validation_losses = []
 
     for t in range(epochs):
         if(print_output):
             print(f"Epoch {t+1}\n-------------------------------")
 
-        train_loop(model, train_dataloader, optimizer, loss_fn)
+        avg_train_loss = train_loop(model, train_dataloader, optimizer, loss_fn)
 
-        if(t == epochs - 1): # Last epoch
-            epoch_avg_loss, all_losses = validation_loop(model, test_dataloader, loss_fn, all_losses = True)
-        else:
-            epoch_avg_loss = validation_loop(model, test_dataloader, loss_fn)
+        avg_validation_loss = validation_loop(model, valid_dataloader, loss_fn)
 
-        epoch_avg_losses.append(epoch_avg_loss)
-        tb.add_scalar('Epoch Avg Loss', epoch_avg_loss, t + 1)
+        avg_training_losses.append(avg_train_loss)
+        avg_validation_losses.append(avg_validation_loss)
+
+        tb.add_scalar('Training: Average Sample Loss vs. Epochs', avg_train_loss, t + 1)
+        tb.add_scalar('Validation: Average Sample Loss vs. Epochs', avg_validation_loss, t + 1)
 
         # Change optimizer learning rate
-        scheduler.step(epoch_avg_loss)
+        # scheduler.step(epoch_avg_loss)
     
+    # Add model graph
+    sample,label = next(iter(train_dataloader))
+    tb.add_graph(model, sample)
+
     if(print_output):
         print("Done Training!")
 
-    return epoch_avg_losses, all_losses
+    return avg_training_losses, avg_validation_losses
     
 def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
     model.train()
-    size = len(dataloader.dataset) #Num sample windows in dataloader = batch_size * len(dataloader)
+    total_loss = 0
+
+    # Sample windows in dataloader = batch_size * len(dataloader)
+    samples_in_dataset = len(dataloader.dataset)
+    batches_in_dataloader = len(dataloader)
+    batch_size =  math.ceil(samples_in_dataset / batches_in_dataloader)
+
+    if(print_output):
+        print('Training batch size:', batch_size)
+        print('# of samples in Train Dataset:', samples_in_dataset)
+        print('# of batches in Train Dataloader:', batches_in_dataloader)
+
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
         X = X.to(device)
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y) # Average loss for the given batch
+        total_loss += loss.item() * len(X)
 
-        # Backpropagation
+        # if(len(X) < batch_size):
+        #     print(batch, batch * batch_size, len(X))
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         # For every 1000th batch:
-        if batch % 1000 == 0:
-            loss, current = loss.item(), batch * len(X) # len(X) is the batch size
-            # for name, param in model.named_parameters():
-            #     if param.requires_grad:
-            #         print (name, param.data)
-            #         break
-            # param = model.parameters()[0][0,0]
+        if (batch + 1) % 1000 == 0:
+            loss, current = loss.item(), (batch + 1) * batch_size
             if(print_output):
-                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+                print(f"loss: {loss:>7f}  [{current:>5d}/{samples_in_dataset:>5d}]")
+
+    avg_sample_loss = total_loss / samples_in_dataset
+
+    if(print_output):
+        print(f"Training Avg. Sample loss: {avg_sample_loss:>8f}")
+
+    return avg_sample_loss
 
 def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = False, print_output: bool = True):
     batches_in_dataloader = len(dataloader)
-    validation_loss = 0
+    samples_in_dataset = len(dataloader.dataset)
 
-    if(all_losses):
-        all_epoch_losses = []
+    total_validation_loss = 0
 
     model.eval()
     
@@ -111,50 +126,49 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = F
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
-            cur_avg_batch_loss = loss_fn(pred, y).item()
-            validation_loss += cur_avg_batch_loss 
+            avg_batch_loss = loss_fn(pred, y).item()
+            total_validation_loss += (avg_batch_loss) * len(X)
 
-            if(all_losses):
-                all_epoch_losses.append(cur_avg_batch_loss)
-
-    validation_loss /= batches_in_dataloader
+    avg_sample_loss = total_validation_loss / samples_in_dataset
 
     if(print_output):
-        print(f"Validation Dataset Avg loss: {validation_loss:>8f} \n")
+        print(f"Validation Avg. Sample loss: {avg_sample_loss:>8f} \n")
+    
+    # Return the average sample loss 
+    return avg_sample_loss
 
-    if(all_losses):
-        return validation_loss, all_epoch_losses
-    else:
-        return validation_loss
-
-def save_test_dataset(test_dataset, filename, folder = config.test_data_ae):
-    parent_path = f'test_datasets/{folder}'
+def save_test_dataset(test_dataset, run_category, filename, folder = config.ae_test_datasets_dir):
+    # folder = 'outputs/test_datasets'
+    parent_path = folder + '/' + run_category # 'outputs/test_datasets/three_hidden'
     os.makedirs(parent_path, exist_ok = True)
-    filepath = parent_path + f'/{filename}'
+    filepath = parent_path + f'/{filename}' # 'outputs/test_datasets/three_hidden/Autoencoder_400_300_400'
 
     # dump test data into to a file
     with open(filepath, "wb") as f:
         pickle.dump(
             {
-                "signals": test_data[0],
-                "labels": test_data[1],
-                "sample_indices": test_data[2],
-                "window_start": test_data[3],
+                "signals": test_dataset[0],
+                "labels": test_dataset[1],
+                "sample_indices": test_dataset[2],
+                "window_start": test_dataset[3],
             },
             f,
         )
     return
 
-def save_model(model, folder, model_name):
-    parent_path = f'trained_models/{folder}'
+def save_model(model, run_category, folder = config.ae_trained_models_dir):
+    # folder is the run name
+    parent_path = folder + '/' + run_category 
     os.makedirs(parent_path, exist_ok = True)
-    model_save_path = parent_path + f'/{model_name}'
+    model_save_path = parent_path + f'/{model.name}' + '.pth'
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'three_hidden_batch_16', save: bool = True):
+    # Get the runs
     runs = RunBuilder.get_runs(params)
 
+    # For each run, create, train, and save model and metrics
     for run in runs:
         print(run)
         model = Autoencoder(
@@ -184,7 +198,7 @@ def run_training(params: OrderedDict, save: bool = True):
         data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
         train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
 
-        save_test_dataset(test_data, f'latent_{run.latent}')
+        save_test_dataset(test_data, run_category, model.name)
 
         train_dataset = data.ELMDataset(
             *train_data,
@@ -208,24 +222,28 @@ def run_training(params: OrderedDict, save: bool = True):
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-        epoch_avg_losses, all_losses = train(model, 
+        tb = SummaryWriter(log_dir = config.ae_tensorboard_dir + '/' + run_category + '/' + model.name)
+
+        train_avg_losses, validation_avg_losses = train(model, 
             train_dataloader, 
             valid_dataloader, 
             optimizer, 
             scheduler, 
             loss_fn,
-            folder_name = folder)
+            tb)
+
+        analyze()
 
         # Save the model - weights and structure
         if(save):
-            save_model(model, folder, f'simple_ae_latent_{run.latent}')
+            save_model(model, run_category)
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [400, 300, 200, 100, 50],
+        latent = [400, 300, 200],
         encoder_hidden_layers = [[400]],
         decoder_hidden_layers = [[400]]
         )
 
-    print(RunBuilder.get_runs(params))
+    # print(RunBuilder.get_runs(params))
     run_training(params)
