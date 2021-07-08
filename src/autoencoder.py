@@ -119,8 +119,11 @@ class Autoencoder(torch.nn.Module):
 
         s+= str(self.latent_dim) + '_'
 
-        for i in self.decoder_hidden_layers:
-            s+= str(i) + '_'
+        for i in range(len(self.decoder_hidden_layers)):
+            if i == len(self.decoder_hidden_layers) - 1:
+                s += str(self.decoder_hidden_layers[i])
+            else:
+                s += str(self.decoder_hidden_layers[i]) + '_'
 
         return s
 
@@ -282,7 +285,7 @@ if __name__ == '__main__':
             300, 
             [400], 
             [400])
-
+    print(model.name)
     model = model.to(device)
 
     loss_fn = torch.nn.MSELoss()
