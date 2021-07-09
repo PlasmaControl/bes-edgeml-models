@@ -10,13 +10,16 @@ class RNNModel(nn.Module):
         self.lstm = nn.LSTM(
             input_size=64,
             hidden_size=args.hidden_size,
-            num_layers=1,
+            num_layers=2,
             batch_first=True,
+            dropout=0.5,
         )
-        self.fc = nn.Linear(128, 1)
+        in_features = args.hidden_size
+        self.fc = nn.Linear(in_features, 1)
 
     def forward(self, x):
         x, _ = self.lstm(x)
+        # print(x.shape)
         x = self.fc(x)
         return x
 

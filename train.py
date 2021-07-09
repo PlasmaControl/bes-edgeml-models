@@ -6,6 +6,7 @@ from typing import Union
 
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
@@ -27,12 +28,24 @@ def train_loop(
             " Proceeding without using K-fold."
         )
         fold = None
+    # containers to hold train and validation losses
+    train_loss = []
+    valid_loss = []
 
     # test data file path
     test_data_path, model_ckpt_path = utils.create_output_paths(
         args, infer_mode=False
     )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
+
+    # add loss values to tensorboard
+    writer = SummaryWriter(
+        log_dir=os.path.join(
+            args.log_dir,
+            "tensorboard",
+            f"{args.model_name}_{args.data_mode}{args.filename_suffix}",
+        )
+    )
 
     LOGGER.info("-" * 30)
     if args.data_mode == "balanced":
@@ -165,6 +178,7 @@ def train_loop(
         criterion=criterion,
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
+        use_rnn=args.use_rnn,
     )
 
     # iterate through all the epochs
@@ -183,11 +197,12 @@ def train_loop(
                 scheduler=scheduler,
                 print_every=args.train_print_every,
             )
-
+            train_loss.append(avg_loss)
             # evaluate
             avg_val_loss, preds, valid_labels = engine.evaluate(
                 valid_loader, print_every=args.valid_print_every
             )
+            valid_loss.append(avg_val_loss)
             scheduler = utils.get_lr_scheduler(
                 args,
                 optimizer,
@@ -198,18 +213,29 @@ def train_loop(
             avg_loss = engine.train(
                 train_loader, epoch, print_every=args.train_print_every
             )
+            train_loss.append(avg_loss)
 
             # evaluate
             avg_val_loss, preds, valid_labels = engine.evaluate(
                 valid_loader, print_every=args.valid_print_every
             )
+            valid_loss.append(avg_val_loss)
 
             # step the scheduler
             if args.scheduler == "ReduceLROnPlateau":
                 scheduler.step(avg_val_loss)
             else:
                 scheduler.step()
-
+        # print(f"Train losses: {train_loss}")
+        # print(f"Valid losses: {valid_loss}")
+        writer.add_scalars(
+            f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
+            {
+                "train_loss": avg_loss,
+                "valid_loss": avg_val_loss,
+            },
+            epoch + 1,
+        )
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         elapsed = time.time() - start_time
@@ -244,6 +270,8 @@ def train_loop(
             )
         if not args.dry_run:
             LOGGER.info(f"Model saved to: {model_save_path}")
+
+        writer.close()
     # # # save the predictions in the valid dataframe
     # # valid_folds["preds"] = torch.load(
     # #     os.path.join(

@@ -6,6 +6,7 @@ data/
 jobs/
 figures/
 model_checkpoints/
+tensorboard/
 
 slurm*
 *.db

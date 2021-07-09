@@ -13,15 +13,17 @@ class Run:
         self,
         model,
         device: torch.device,
-        criterion: nn.BCEWithLogitsLoss,
-        optimizer: torch.optim.Adam,
+        criterion,
+        optimizer: torch.optim.Optimizer,
         use_focal_loss: bool = False,
+        use_rnn: bool = False,
     ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
         self.device = device
         self.use_focal_loss = use_focal_loss
+        self.use_rnn = use_rnn
 
     def train(
         self,
@@ -53,6 +55,9 @@ class Run:
 
             # forward pass
             y_preds = self.model(images)
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
+
             loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
 
             if self.use_focal_loss:
@@ -113,6 +118,9 @@ class Run:
             # compute loss with no backprop
             with torch.no_grad():
                 y_preds = self.model(images)
+
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
 
             y_preds = y_preds.view(-1)
             loss = self.criterion(y_preds, labels.type_as(y_preds))
