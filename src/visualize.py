@@ -35,6 +35,8 @@ PATH = 'outputs/trained_models/five_hidden_batch_32_100_elms/Autoencoder_500_400
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
+print()
+print(model)
 
 loss_fn = torch.nn.MSELoss()
 
@@ -72,14 +74,18 @@ def plot(index):
     # fig.savefig('plot.png') 
     plt.show()
 
-if __name__ == '__main__':
-    # Plot 10 model predictions
 
+def main():
+    # Plot 10 model predictions
     # for i in range(len(train_dataset)):
-        # if train_data[i][1].item() == 1:
-            # print(i, (train_data[i][1]).item())
+    #     if train_data[i][1].item() == 1:
+    #         print(i, (train_data[i][1]).item())
 
     for i in range(0, 11000, 1000):
         # print(i)
         plot(i)
+
+if __name__ == '__main__':
+    # main()
+    pass
    
