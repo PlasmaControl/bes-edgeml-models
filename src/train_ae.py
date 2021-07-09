@@ -63,8 +63,8 @@ def train(model: Autoencoder,
         # scheduler.step(epoch_avg_loss)
     
     # Add model graph
-    sample,label = next(iter(train_dataloader))
-    tb.add_graph(model, sample)
+    # sample,label = next(iter(train_dataloader))
+    # tb.add_graph(model, sample)
 
     if(print_output):
         print("Done Training!")
@@ -164,7 +164,7 @@ def save_model(model, run_category, folder = config.ae_trained_models_dir):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, run_category: str = 'three_hidden_batch_16', save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'five_hidden_batch_32_100_elms', save: bool = True):
     # Get the runs
     runs = RunBuilder.get_runs(params)
 
@@ -232,7 +232,7 @@ def run_training(params: OrderedDict, run_category: str = 'three_hidden_batch_16
             loss_fn,
             tb)
 
-        analyze()
+        # analyze()
 
         # Save the model - weights and structure
         if(save):
@@ -240,9 +240,9 @@ def run_training(params: OrderedDict, run_category: str = 'three_hidden_batch_16
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [400, 300, 200],
-        encoder_hidden_layers = [[400]],
-        decoder_hidden_layers = [[400]]
+        latent = [32, 16, 8, 4],
+        encoder_hidden_layers = [[500, 400]],
+        decoder_hidden_layers = [[400, 500]]
         )
 
     # print(RunBuilder.get_runs(params))

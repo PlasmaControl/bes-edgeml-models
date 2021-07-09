@@ -25,7 +25,7 @@ fraction_validate = 0.2
 fraction_test = 0.1
 
 # batch size
-batch_size = 16
+batch_size = 32 
 num_workers = 4
 
 # maximum number of ELM events to analyze

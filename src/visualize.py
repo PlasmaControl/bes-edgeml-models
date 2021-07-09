@@ -31,7 +31,7 @@ train_data = data.ELMDataset(
 
 # Load model
 # PATH = './trained_models/one_hidden_layer/simple_ae_latent_50'
-PATH = 'outputs/trained_models/three_hidden/Autoencoder_400_200_400.pth'
+PATH = 'outputs/trained_models/five_hidden_batch_32_100_elms/Autoencoder_500_400_4_400_500.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
@@ -75,9 +75,9 @@ def plot(index):
 if __name__ == '__main__':
     # Plot 10 model predictions
 
-    for i in range(len(train_dataset)):
-        if train_data[i][1].item() == 1:
-            print(i, (train_data[i][1]).item())
+    # for i in range(len(train_dataset)):
+        # if train_data[i][1].item() == 1:
+            # print(i, (train_data[i][1]).item())
 
     for i in range(0, 11000, 1000):
         # print(i)

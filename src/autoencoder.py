@@ -84,7 +84,7 @@ class Autoencoder(torch.nn.Module):
             if i == 0:
                 d_layer = torch.nn.Linear(self.latent_dim, self.decoder_hidden_layers[i])    
             else:
-                d_layer = torch.nn.Linear(self.decoder_hidden_layers[i-1], self.encoder_hidden_layers[i])
+                d_layer = torch.nn.Linear(self.decoder_hidden_layers[i-1], self.decoder_hidden_layers[i])
 
             # Add fully connected, then dropout, then relu layers to encoder
             layers[f'Decoder Linear Layer {i+1}'] = d_layer
