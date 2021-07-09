@@ -7,20 +7,29 @@ import torch.nn as nn
 class RNNModel(nn.Module):
     def __init__(self, args: argparse.Namespace):
         super(RNNModel, self).__init__()
+        self.bidirectional = False
         self.lstm = nn.LSTM(
             input_size=64,
             hidden_size=args.hidden_size,
             num_layers=2,
             batch_first=True,
             dropout=0.5,
+            bidirectional=self.bidirectional,
         )
-        in_features = args.hidden_size
-        self.fc = nn.Linear(in_features, 1)
+        in_features = (
+            2 * args.hidden_size if self.bidirectional else args.hidden_size
+        )
+        out_features = int(in_features / 2)
+        self.fc1 = nn.Linear(in_features, out_features)
+        self.dropout = nn.Dropout(p=0.6)
+        self.relu = nn.LeakyReLU(negative_slope=0.03)
+        self.fc2 = nn.Linear(out_features, 1)
 
     def forward(self, x):
         x, _ = self.lstm(x)
         # print(x.shape)
-        x = self.fc(x)
+        x = self.dropout(self.relu(self.fc1(x)))
+        x = self.fc2(x)
         return x
 
 
