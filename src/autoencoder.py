@@ -341,7 +341,7 @@ if __name__ == '__main__':
     # plt.plot(train_avg_losses)
     # plt.show()
 
-    torch.save(model, './untrained_autoencoder.pth')
+    # torch.save(model, './untrained_autoencoder.pth')
 
 
     
