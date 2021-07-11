@@ -17,21 +17,25 @@ train_dataset = data.ELMDataset(
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = True
+        for_autoencoder = True,
+        normalize = True
     )
 
-train_data = data.ELMDataset(
-        *train_data,
+test_dataset = data.ELMDataset(
+        *test_data,
         config.signal_window_size,
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = False
+        for_autoencoder = True,
+        normalize = True
     )
 
+print(torch.max(train_dataset.__getitem__(0)[0]))
+
 # Load model
-# PATH = './trained_models/one_hidden_layer/simple_ae_latent_50'
-PATH = 'outputs/trained_models/five_hidden_batch_32_100_elms/Autoencoder_500_400_4_400_500.pth'
+# PATH = './untrained_autoencoder.pth'
+PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
@@ -54,11 +58,13 @@ def plot(index):
 
     # Plot the actual frames 0,2,4,6
     actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
-    actual_min = np.amin(actual)
-    actual_max = np.amax(actual)
+    # actual_min = np.amin(actual)
+    # actual_max = np.amax(actual)
+    actual_min = -4
+    actual_max = 10
     for i in range(number_frames):
         cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'A {2*i}')
         cur_ax.axis('off')
 
@@ -66,7 +72,7 @@ def plot(index):
     pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'hot', vmin = actual_min, vmax = actual_max)
+        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
         cur_ax.set_title(f'P {2*i}')
         cur_ax.axis('off')
 
@@ -81,7 +87,7 @@ def main():
     #     if train_data[i][1].item() == 1:
     #         print(i, (train_data[i][1]).item())
 
-    for i in range(0, 11000, 1000):
+    for i in range(11000, 21000, 1000):
         # print(i)
         plot(i)
 

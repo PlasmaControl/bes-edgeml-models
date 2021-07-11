@@ -483,7 +483,8 @@ class ELMDataset(torch.utils.data.Dataset):
         label_look_ahead: int,
         stack_elm_events: bool = False,
         transform=None,
-        for_autoencoder: bool = False
+        for_autoencoder: bool = False,
+        normalize: bool = False
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -515,6 +516,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.stack_elm_events = stack_elm_events
         self.transform = transform
         self.for_autoencoder = for_autoencoder
+        self.normalize = normalize
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -550,6 +552,10 @@ class ELMDataset(torch.utils.data.Dataset):
                 )
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
+
+        # Makes the largest value in signal window to be 1
+        if(self.normalize):
+            signal_window = signal_window / np.amax(signal_window)
 
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
