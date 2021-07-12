@@ -164,7 +164,7 @@ def save_model(model, run_category, folder = config.ae_trained_models_dir):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, run_category: str = 'normalized_practice', save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'normalized_data_batch_32_100_elms', save: bool = True):
     # Get the runs
     runs = RunBuilder.get_runs(params)
 
@@ -195,7 +195,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_practice',
             )    
 
         # Get datasets and form dataloaders
-        data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+        data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize = True)
         train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
 
         save_test_dataset(test_data, run_category, model.name)
@@ -206,8 +206,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_practice',
             config.label_look_ahead,
             stack_elm_events=False,
             transform=None,
-            for_autoencoder = True,
-            normalize = True
+            for_autoencoder = True
         )
 
         valid_dataset = data.ELMDataset(
@@ -216,8 +215,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_practice',
             config.label_look_ahead,
             stack_elm_events=False,
             transform=None,
-            for_autoencoder = True,
-            normalize = True
+            for_autoencoder = True
         )
 
         batch_size = config.batch_size
@@ -242,7 +240,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_practice',
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [300, 200],
+        latent = [300, 200, 100, 50, 32, 16, 8, 4],
         encoder_hidden_layers = [[400]],
         decoder_hidden_layers = [[400]]
         )

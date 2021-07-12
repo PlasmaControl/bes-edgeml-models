@@ -172,7 +172,7 @@ def train(model,
     epochs: int = config.epochs,
     print_output: bool = True):
 
-    tb = SummaryWriter(log_dir = f'outputs/tensorboard/practice_batch_size_4')
+    tb = SummaryWriter(log_dir = f'outputs/tensorboard/normalized_practice')
     
     avg_training_losses = []
     avg_validation_losses = []
@@ -295,7 +295,7 @@ if __name__ == '__main__':
         )    
 
     # Get datasets and form dataloaders
-    data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+    data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize = True)
     train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
 
     train_dataset = data.ELMDataset(
@@ -304,8 +304,7 @@ if __name__ == '__main__':
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = True,
-        normalize = True
+        for_autoencoder = True
     )
 
     valid_dataset = data.ELMDataset(
@@ -314,8 +313,7 @@ if __name__ == '__main__':
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = True,
-        normalize = True
+        for_autoencoder = True
     )
 
     batch_size = config.batch_size
@@ -332,7 +330,7 @@ if __name__ == '__main__':
     plt.plot(train_avg_losses)
     plt.show()
 
-    torch.save(model, './normalized_input_autoencoder.pth')
+    torch.save(model, './outputs/trained_models/normalized_practice/normalized_input_autoencoder.pth')
 
 
     

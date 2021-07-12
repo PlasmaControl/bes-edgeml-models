@@ -4,11 +4,11 @@ import seaborn as sb
 import numpy as np
 import os
 
-from autoencoder import Autoencoder, AE_simple, device
+from autoencoder import Autoencoder, Conv_AE, device
 import data, config
 
 # Get data and form dataset
-data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize = True)
 train_data, test_data, _ = data_.get_data(shuffle_sample_indices=False)
 
 train_dataset = data.ELMDataset(
@@ -18,7 +18,6 @@ train_dataset = data.ELMDataset(
         stack_elm_events=False,
         transform=None,
         for_autoencoder = True,
-        normalize = True
     )
 
 test_dataset = data.ELMDataset(
@@ -28,70 +27,69 @@ test_dataset = data.ELMDataset(
         stack_elm_events=False,
         transform=None,
         for_autoencoder = True,
-        normalize = True
     )
 
-print(torch.max(train_dataset.__getitem__(0)[0]))
+# train_dataset.__getitem__(15500)[0]
 
 # Load model
 # PATH = './untrained_autoencoder.pth'
-PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
-model = torch.load(PATH, map_location=device)
-model = model.to(device)
-model.eval()
-print()
-print(model)
+# PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
+# model = torch.load(PATH, map_location=device)
+# model = model.to(device)
+# model.eval()
+# print()
+# print(model)
 
-loss_fn = torch.nn.MSELoss()
+# loss_fn = torch.nn.MSELoss()
 
-def plot(index):
-    actual_window = train_dataset[index][0].to(device)
-    pred_window = train_dataset[index][1]
-    model_window = model(actual_window)
+# def plot(index):
+#     actual_window = train_dataset[index][0].to(device)
+#     pred_window = train_dataset[index][1]
+#     model_window = model(actual_window)
 
-    loss = loss_fn(model_window, actual_window)
-    print(loss.item())
+#     loss = loss_fn(model_window, actual_window)
+#     print(loss.item())
     
-    number_frames = 4
-    number_rows = 2
-    fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
+#     number_frames = 4
+#     number_rows = 2
+#     fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
 
-    # Plot the actual frames 0,2,4,6
-    actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
-    # actual_min = np.amin(actual)
-    # actual_max = np.amax(actual)
-    actual_min = -4
-    actual_max = 10
-    for i in range(number_frames):
-        cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-        cur_ax.set_title(f'A {2*i}')
-        cur_ax.axis('off')
+#     # Plot the actual frames 0,2,4,6
+#     actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
+#     # actual_min = np.amin(actual)
+#     # actual_max = np.amax(actual)
+#     actual_min = -4
+#     actual_max = 10
+#     for i in range(number_frames):
+#         cur_ax = ax[0][i]
+#         cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+#         cur_ax.set_title(f'A {2*i}')
+#         cur_ax.axis('off')
 
-    # Plot the prediction frames 0,2,4,6
-    pred = model_window.cpu().detach().numpy()[0]
-    for i in range(number_frames):
-        cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-        cur_ax.set_title(f'P {2*i}')
-        cur_ax.axis('off')
+#     # Plot the prediction frames 0,2,4,6
+#     pred = model_window.cpu().detach().numpy()[0]
+#     for i in range(number_frames):
+#         cur_ax = ax[1][i]
+#         cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+#         cur_ax.set_title(f'P {2*i}')
+#         cur_ax.axis('off')
 
-    fig.tight_layout()
-    # fig.savefig('plot.png') 
-    plt.show()
+#     fig.tight_layout()
+#     # fig.savefig('plot.png') 
+#     plt.show()
 
 
-def main():
-    # Plot 10 model predictions
-    # for i in range(len(train_dataset)):
-    #     if train_data[i][1].item() == 1:
-    #         print(i, (train_data[i][1]).item())
+# def main():
+#     # Plot 10 model predictions
+#     # for i in range(len(train_dataset)):
+#     #     if train_data[i][1].item() == 1:
+#     #         print(i, (train_data[i][1]).item())
 
-    for i in range(11000, 21000, 1000):
-        # print(i)
-        plot(i)
+#     for i in range(11000, 21000, 1000):
+#         # print(i)
+#         plot(i)
 
-if __name__ == '__main__':
-    # main()
-    pass
+# if __name__ == '__main__':
+#     # main()
+#     pass
    
