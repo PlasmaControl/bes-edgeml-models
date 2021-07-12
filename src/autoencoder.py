@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchinfo import summary
+import torch.nn.functional as F
 
 import numpy as np
 import math
@@ -128,7 +129,7 @@ class Autoencoder(torch.nn.Module):
         return s
 
 # Simple/easy Autoencoder class
-class AE_simple(torch.nn.Module):
+class Conv_AE(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
         latent_dim: int, 
@@ -148,20 +149,8 @@ class AE_simple(torch.nn.Module):
         self.relu_negative_slope = relu_negative_slope
         self.dropout_rate = dropout_rate
 
-        # 1x8x8x8 = 512 input features
-        self.num_input_features = self.signal_window_shape[0]
-        for i in range(1, len(self.signal_window_shape)):
-            self.num_input_features *= self.signal_window_shape[i]
-        # print(f'total number of features: {self.num_input_features}')
-
-        self.flatten = torch.nn.Flatten()
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(512, self.latent_dim),
-            torch.nn.LeakyReLU(negative_slope = self.relu_negative_slope)
-            )
-        self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(self.latent_dim, 512)
-            )
+        
+        self.conv1 = torch.nn.Conv3d(1, 16, kernel_size = (x,y,z))
 
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
@@ -288,60 +277,62 @@ if __name__ == '__main__':
     print(model.name)
     model = model.to(device)
 
-    # loss_fn = torch.nn.MSELoss()
+    loss_fn = torch.nn.MSELoss()
 
-    # optimizer = torch.optim.SGD(
-    #     model.parameters(), 
-    #     lr=config.learning_rate, 
-    #     momentum=0.9, 
-    #     weight_decay=config.l2_factor)
+    optimizer = torch.optim.SGD(
+        model.parameters(), 
+        lr=config.learning_rate, 
+        momentum=0.9, 
+        weight_decay=config.l2_factor)
 
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #         optimizer,
-    #         mode="min",
-    #         factor=0.5,
-    #         patience=2,
-    #         verbose=True,
-    #         eps=1e-6,
-    #     )    
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True,
+            eps=1e-6,
+        )    
 
-    # # Get datasets and form dataloaders
-    # data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
-    # train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
+    # Get datasets and form dataloaders
+    data_ = data.Data(kfold=False, balance_classes=config.balance_classes)
+    train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
 
-    # train_dataset = data.ELMDataset(
-    #     *train_data,
-    #     config.signal_window_size,
-    #     config.label_look_ahead,
-    #     stack_elm_events=False,
-    #     transform=None,
-    #     for_autoencoder = True
-    # )
+    train_dataset = data.ELMDataset(
+        *train_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=False,
+        transform=None,
+        for_autoencoder = True,
+        normalize = True
+    )
 
-    # valid_dataset = data.ELMDataset(
-    #     *valid_data,
-    #     config.signal_window_size,
-    #     config.label_look_ahead,
-    #     stack_elm_events=False,
-    #     transform=None,
-    #     for_autoencoder = True
-    # )
+    valid_dataset = data.ELMDataset(
+        *valid_data,
+        config.signal_window_size,
+        config.label_look_ahead,
+        stack_elm_events=False,
+        transform=None,
+        for_autoencoder = True,
+        normalize = True
+    )
 
-    # batch_size = config.batch_size
-    # train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    # valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+    batch_size = config.batch_size
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    # train_avg_losses, validation_avg_losses = train(model, 
-    #     train_dataloader, 
-    #     valid_dataloader, 
-    #     optimizer, 
-    #     scheduler, 
-    #     loss_fn)
+    train_avg_losses, validation_avg_losses = train(model, 
+        train_dataloader, 
+        valid_dataloader, 
+        optimizer, 
+        scheduler, 
+        loss_fn)
 
-    # plt.plot(train_avg_losses)
-    # plt.show()
+    plt.plot(train_avg_losses)
+    plt.show()
 
-    # torch.save(model, './untrained_autoencoder.pth')
+    torch.save(model, './normalized_input_autoencoder.pth')
 
 
     
