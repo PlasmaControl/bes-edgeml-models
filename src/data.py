@@ -34,6 +34,7 @@ class Data:
         kfold: bool = False,
         smoothen_transition: bool = False,
         balance_classes: bool = False,
+        normalize: bool = False
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -68,6 +69,7 @@ class Data:
         self.smoothen_transition = smoothen_transition
         self.balance_classes = balance_classes
         self.max_elms = config.max_elms
+        self.normalize = normalize
 
         self.df = pd.DataFrame()
         self.transition = np.linspace(0, 1, 2 * config.transition_halfwidth + 3)
@@ -157,6 +159,9 @@ class Data:
             _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
+            if(self.normalize):
+                print(np.max(_signals))
+                _signals = _signals / np.max(_signals)
             _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
 
             # TODO: add label smoothening
@@ -484,7 +489,6 @@ class ELMDataset(torch.utils.data.Dataset):
         stack_elm_events: bool = False,
         transform=None,
         for_autoencoder: bool = False,
-        normalize: bool = False
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -516,7 +520,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.stack_elm_events = stack_elm_events
         self.transform = transform
         self.for_autoencoder = for_autoencoder
-        self.normalize = normalize
+        
         LOGGER.info("-" * 15)
         LOGGER.info(" Dataset class")
         LOGGER.info("-" * 15)
@@ -553,9 +557,6 @@ class ELMDataset(torch.utils.data.Dataset):
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
 
-        # Makes the largest value in signal window to be 1
-        if(self.normalize):
-            signal_window = signal_window / np.amax(signal_window)
 
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
         signal_window.unsqueeze_(0)
