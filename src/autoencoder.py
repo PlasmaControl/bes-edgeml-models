@@ -277,7 +277,7 @@ if __name__ == '__main__':
     print(model.name)
     model = model.to(device)
 
-    loss_fn = torch.nn.MSELoss()
+    loss_fn = torch.nn.MSELoss(reduction = 'sum')
 
     optimizer = torch.optim.SGD(
         model.parameters(), 
