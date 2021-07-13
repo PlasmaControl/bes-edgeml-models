@@ -220,7 +220,7 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y) # Average loss for the given batch
-        total_loss += loss.item() * len(X)
+        total_loss += loss.item() 
 
         # if(len(X) < batch_size):
         #     print(batch, batch * batch_size, len(X))
@@ -259,7 +259,7 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
             y = y.to(device)
             pred = model(X)
             avg_batch_loss = loss_fn(pred, y).item()
-            validation_loss += (avg_batch_loss) * len(X)
+            validation_loss += avg_batch_loss 
 
     avg_sample_loss = validation_loss / samples_in_dataset
 
