@@ -2,20 +2,23 @@ import argparse
 
 import torch
 import torch.nn as nn
+from torchinfo import summary
 
 
 class CNN2DModel(nn.Module):
-    def __init__(self, args: argparse.Namespace):
+    def __init__(self, args: argparse.Namespace, device):
         super(CNN2DModel, self).__init__()
         self.args = args
         projection_size = 512 if self.args.signal_window_size == 8 else 1024
         self.project2d = torch.empty(
             projection_size,
             dtype=torch.float32,
-            requires_grad=True,
-            device=args.device,
+            device=device,
         ).view(-1, 8, 8)
         nn.init.normal_(self.project2d)
+        self.project2d = nn.Parameter(self.project2d)
+        # self.project2d = nn.Parameter(torch.randn(16, 8, 8, device=device))
+        self.project2d.requires_grad = True
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=5)
         self.act = nn.Hardswish()
         self.dropout2d = nn.Dropout2d(p=0.4)
@@ -41,8 +44,25 @@ class CNN2DModel(nn.Module):
 
 
 # if __name__ == "__main__":
-#     x = torch.ones(16, 1, 8, 8, 8)
-#     model = CNN2DModel()
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--signal_window_size")
+#     args = parser.parse_args(
+#         ["--signal_window_size", "16"],  # ["--device", "cpu"]
+#     )
+#     shape = (16, 1, 16, 8, 8)
+#     x = torch.ones(*shape)
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     x = x.to(device)
+#     model = CNN2DModel(args, device=device)
+#     print(summary(model, input_size=shape))
+
+#     for param in list(model.named_parameters()):
+#         print(
+#             f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+#         )
+#     print(
+#         f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+#     )
 #     y = model(x)
-#     print(y)
+#     # print(y)
 #     print(y.shape)
