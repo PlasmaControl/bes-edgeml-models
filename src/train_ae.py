@@ -177,7 +177,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_data_batch
             run.decoder_hidden_layers)
         model = model.to(device)
 
-        loss_fn = torch.nn.MSELoss()
+        loss_fn = torch.nn.MSELoss(reduction = 'sum')
 
         optimizer = torch.optim.SGD(
             model.parameters(), 
