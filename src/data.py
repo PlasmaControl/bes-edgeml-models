@@ -160,7 +160,7 @@ class Data:
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
             if(self.normalize):
-                print(np.max(_signals))
+                # print(np.max(_signals))
                 _signals = _signals / np.max(_signals)
             _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
 

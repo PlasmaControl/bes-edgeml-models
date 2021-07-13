@@ -164,7 +164,7 @@ def save_model(model, run_category, folder = config.ae_trained_models_dir):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, run_category: str = 'normalized_data_batch_32_100_elms', save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'normalized_three_hidden_batch_32_100_elms', save: bool = True):
     # Get the runs
     runs = RunBuilder.get_runs(params)
 
