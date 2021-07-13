@@ -52,6 +52,18 @@ class BaseArguments:
             help="path to save the logs.",
         )
         parser.add_argument(
+            "--add_tensorboard",
+            action="store_true",
+            default=False,
+            help="if true, write loss summary to a tensorboard log file.",
+        )
+        parser.add_argument(
+            "--device",
+            type=str,
+            default="cpu",
+            help="device to use, [cuda | cpu].",
+        )
+        parser.add_argument(
             "--dry_run",
             action="store_true",
             default=False,
