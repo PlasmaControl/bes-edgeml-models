@@ -33,7 +33,7 @@ test_dataset = data.ELMDataset(
 
 # Load model
 # PATH = './untrained_autoencoder.pth'
-PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
+PATH = './outputs/trained_models/normalized_practice/normalized_input_autoencoder.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
@@ -58,8 +58,8 @@ def plot(index):
     actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
     # actual_min = np.amin(actual)
     # actual_max = np.amax(actual)
-    actual_min = -4
-    actual_max = 10
+    actual_min = -1
+    actual_max = 1
     for i in range(number_frames):
         cur_ax = ax[0][i]
         cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
@@ -85,11 +85,11 @@ def main():
     #     if train_data[i][1].item() == 1:
     #         print(i, (train_data[i][1]).item())
 
-    for i in range(11000, 21000, 1000):
+    for i in range(20000, 31000, 1000):
         # print(i)
         plot(i)
 
 if __name__ == '__main__':
-    # main()
+    main()
     pass
    
