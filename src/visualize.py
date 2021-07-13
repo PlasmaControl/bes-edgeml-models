@@ -33,63 +33,63 @@ test_dataset = data.ELMDataset(
 
 # Load model
 # PATH = './untrained_autoencoder.pth'
-# PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
-# model = torch.load(PATH, map_location=device)
-# model = model.to(device)
-# model.eval()
-# print()
-# print(model)
+PATH = 'outputs/trained_models/three_hidden_batch_32_100_elms/Autoencoder_400_300_400.pth'
+model = torch.load(PATH, map_location=device)
+model = model.to(device)
+model.eval()
+print()
+print(model)
 
-# loss_fn = torch.nn.MSELoss()
+loss_fn = torch.nn.MSELoss()
 
-# def plot(index):
-#     actual_window = train_dataset[index][0].to(device)
-#     pred_window = train_dataset[index][1]
-#     model_window = model(actual_window)
+def plot(index):
+    actual_window = train_dataset[index][0].to(device)
+    pred_window = train_dataset[index][1]
+    model_window = model(actual_window)
 
-#     loss = loss_fn(model_window, actual_window)
-#     print(loss.item())
+    loss = loss_fn(model_window, actual_window)
+    print(loss.item())
     
-#     number_frames = 4
-#     number_rows = 2
-#     fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
+    number_frames = 4
+    number_rows = 2
+    fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
 
-#     # Plot the actual frames 0,2,4,6
-#     actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
-#     # actual_min = np.amin(actual)
-#     # actual_max = np.amax(actual)
-#     actual_min = -4
-#     actual_max = 10
-#     for i in range(number_frames):
-#         cur_ax = ax[0][i]
-#         cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-#         cur_ax.set_title(f'A {2*i}')
-#         cur_ax.axis('off')
+    # Plot the actual frames 0,2,4,6
+    actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
+    # actual_min = np.amin(actual)
+    # actual_max = np.amax(actual)
+    actual_min = -4
+    actual_max = 10
+    for i in range(number_frames):
+        cur_ax = ax[0][i]
+        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.set_title(f'A {2*i}')
+        cur_ax.axis('off')
 
-#     # Plot the prediction frames 0,2,4,6
-#     pred = model_window.cpu().detach().numpy()[0]
-#     for i in range(number_frames):
-#         cur_ax = ax[1][i]
-#         cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-#         cur_ax.set_title(f'P {2*i}')
-#         cur_ax.axis('off')
+    # Plot the prediction frames 0,2,4,6
+    pred = model_window.cpu().detach().numpy()[0]
+    for i in range(number_frames):
+        cur_ax = ax[1][i]
+        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.set_title(f'P {2*i}')
+        cur_ax.axis('off')
 
-#     fig.tight_layout()
-#     # fig.savefig('plot.png') 
-#     plt.show()
+    fig.tight_layout()
+    # fig.savefig('plot.png') 
+    plt.show()
 
 
-# def main():
-#     # Plot 10 model predictions
-#     # for i in range(len(train_dataset)):
-#     #     if train_data[i][1].item() == 1:
-#     #         print(i, (train_data[i][1]).item())
+def main():
+    # Plot 10 model predictions
+    # for i in range(len(train_dataset)):
+    #     if train_data[i][1].item() == 1:
+    #         print(i, (train_data[i][1]).item())
 
-#     for i in range(11000, 21000, 1000):
-#         # print(i)
-#         plot(i)
+    for i in range(11000, 21000, 1000):
+        # print(i)
+        plot(i)
 
-# if __name__ == '__main__':
-#     # main()
-#     pass
+if __name__ == '__main__':
+    # main()
+    pass
    
