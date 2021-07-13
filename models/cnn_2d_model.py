@@ -2,25 +2,24 @@ import argparse
 
 import torch
 import torch.nn as nn
-from torchinfo import summary
 
 
 class CNN2DModel(nn.Module):
-    def __init__(self, args: argparse.Namespace, device):
+    def __init__(self, args: argparse.Namespace):
         super(CNN2DModel, self).__init__()
         self.args = args
         projection_size = 512 if self.args.signal_window_size == 8 else 1024
         self.project2d = torch.empty(
             projection_size,
             dtype=torch.float32,
-            device=device,
+            device=args.device,
         ).view(-1, 8, 8)
         nn.init.normal_(self.project2d)
         self.project2d = nn.Parameter(self.project2d)
         # self.project2d = nn.Parameter(torch.randn(16, 8, 8, device=device))
         self.project2d.requires_grad = True
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=5)
-        self.act = nn.Hardswish()
+        self.act = nn.GELU()
         self.dropout2d = nn.Dropout2d(p=0.4)
         self.conv2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3)
         self.fc1 = nn.Linear(in_features=64, out_features=16)
@@ -44,6 +43,7 @@ class CNN2DModel(nn.Module):
 
 
 # if __name__ == "__main__":
+#     from torchinfo import summary
 #     parser = argparse.ArgumentParser()
 #     parser.add_argument("--signal_window_size")
 #     args = parser.parse_args(
