@@ -10,7 +10,10 @@ class CNN2DModel(nn.Module):
         self.args = args
         projection_size = 512 if self.args.signal_window_size == 8 else 1024
         self.project2d = torch.empty(
-            projection_size, dtype=torch.float32, requires_grad=True
+            projection_size,
+            dtype=torch.float32,
+            requires_grad=True,
+            device=args.device,
         ).view(-1, 8, 8)
         nn.init.normal_(self.project2d)
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=5)

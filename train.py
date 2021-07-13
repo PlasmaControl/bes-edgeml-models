@@ -39,13 +39,14 @@ def train_loop(
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
     # add loss values to tensorboard
-    writer = SummaryWriter(
-        log_dir=os.path.join(
-            args.log_dir,
-            "tensorboard",
-            f"{args.model_name}_{args.data_mode}{args.filename_suffix}",
+    if args.add_tensorboard:
+        writer = SummaryWriter(
+            log_dir=os.path.join(
+                args.log_dir,
+                "tensorboard",
+                f"{args.model_name}_{args.data_mode}{args.filename_suffix}",
+            )
         )
-    )
 
     LOGGER.info("-" * 30)
     if args.data_mode == "balanced":
@@ -125,7 +126,9 @@ def train_loop(
     # model
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        args.device
+    )  # "cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     LOGGER.info("-" * 50)
     LOGGER.info(f"       Training with model: {args.model_name}       ")
@@ -228,14 +231,16 @@ def train_loop(
                 scheduler.step()
         # print(f"Train losses: {train_loss}")
         # print(f"Valid losses: {valid_loss}")
-        writer.add_scalars(
-            f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-            {
-                "train_loss": avg_loss,
-                "valid_loss": avg_val_loss,
-            },
-            epoch + 1,
-        )
+        if args.add_tensorboard:
+            writer.add_scalars(
+                f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
+                {
+                    "train_loss": avg_loss,
+                    "valid_loss": avg_val_loss,
+                },
+                epoch + 1,
+            )
+            writer.close()
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         elapsed = time.time() - start_time
@@ -271,7 +276,6 @@ def train_loop(
         if not args.dry_run:
             LOGGER.info(f"Model saved to: {model_save_path}")
 
-        writer.close()
     # # # save the predictions in the valid dataframe
     # # valid_folds["preds"] = torch.load(
     # #     os.path.join(
