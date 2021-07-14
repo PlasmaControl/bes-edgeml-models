@@ -19,13 +19,14 @@ class CNN2DModel(nn.Module):
         # self.project2d = nn.Parameter(torch.randn(16, 8, 8, device=device))
         self.project2d.requires_grad = True
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=3)
-        self.act = nn.GELU()
-        self.dropout2d = nn.Dropout2d(p=0.4)
         self.conv2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3)
         self.conv3 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3)
-        self.fc1 = nn.Linear(in_features=128, out_features=32)
-        self.dropout = nn.Dropout(p=0.4)
-        self.fc2 = nn.Linear(in_features=32, out_features=1)
+        self.act = nn.GELU()
+        self.dropout2d = nn.Dropout2d(p=0.4)
+        self.fc1 = nn.Linear(in_features=128, out_features=64)
+        self.fc2 = nn.Linear(in_features=64, out_features=32)
+        self.fc3 = nn.Linear(in_features=32, out_features=1)
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
         # create the projection of the 3D tensor on a 2D tensor
@@ -42,7 +43,9 @@ class CNN2DModel(nn.Module):
         x = torch.flatten(x, 1)
         x = self.act(self.fc1(x))
         x = self.dropout(x)
-        x = self.fc2(x)
+        x = self.act(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc3(x)
         return x
 
 
