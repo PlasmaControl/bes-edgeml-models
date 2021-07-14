@@ -180,21 +180,45 @@ def create_output_paths(
     if infer_mode:
         if args.signal_window_size == 8:
             base_path = os.path.join(args.output_dir, "signal_window_8")
-            clf_report_path = os.path.join(base_path, "classification_reports")
-            plot_path = os.path.join(base_path, "plots")
-            roc_path = os.path.join(base_path, "roc")
+            look_ahead_path = os.path.join(
+                base_path, f"label_look_ahead_{args.label_look_ahead}"
+            )
+            clf_report_path = os.path.join(
+                look_ahead_path, "classification_reports"
+            )
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
         elif args.signal_window_size == 16:
             base_path = os.path.join(args.output_dir, "signal_window_16")
-            clf_report_path = os.path.join(base_path, "classification_reports")
-            plot_path = os.path.join(base_path, "plots")
-            roc_path = os.path.join(base_path, "roc")
+            look_ahead_path = os.path.join(
+                base_path, f"label_look_ahead_{args.label_look_ahead}"
+            )
+            clf_report_path = os.path.join(
+                look_ahead_path, "classification_reports"
+            )
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
         else:
             base_path = os.path.join(
-                args.output_dir, f"signal_window_{args.signal_window_size}"
+                args.output_dir,
+                f"signal_window_{args.signal_window_size}",
             )
-            clf_report_path = os.path.join(base_path, "classification_reports")
-            plot_path = os.path.join(base_path, "plots")
-            roc_path = os.path.join(base_path, "roc")
+            look_ahead_path = os.path.join(
+                base_path, f"label_look_ahead_{args.label_look_ahead}"
+            )
+            clf_report_path = os.path.join(
+                look_ahead_path, "classification_reports"
+            )
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
             paths = [clf_report_path, plot_path, roc_path]
             for p in paths:
                 if not os.path.exists(p):
