@@ -18,7 +18,7 @@ from src import data, utils
 from options.test_arguments import TestArguments
 
 sns.set_style("white")
-sns.set_palette("deep")
+colors = ["#ef476f", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
 
 
 def get_test_dataset(
@@ -216,13 +216,14 @@ def plot(
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
         plt.subplot(args.num_rows, args.num_cols, i + 1)
-        plt.plot(elm_time, signals[:, 2, 6] / 10, label="BES ch. 22")
+        plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0])
         plt.plot(
             elm_time,
             labels + 0.02,
             label="Ground truth",
             ls="-.",
             lw=1.5,
+            c=colors[2],
         )
         plt.plot(
             elm_time - args.label_look_ahead,
@@ -230,11 +231,14 @@ def plot(
             label="Prediction",
             ls="-.",
             lw=1.5,
+            c=colors[-1],
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
         plt.ylim([None, 1.1])
         plt.legend(fontsize=9, frameon=False)
+        plt.gca().spines["right"].set_visible(False)
+        plt.gca().spines["top"].set_visible(False)
     plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
@@ -278,6 +282,15 @@ def show_metrics(
 
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_preds)
+
+        # calculate the log of the confusion matrix scaled by the
+        # total error (false positives + false negatives)
+        cm_log = np.log(cm)
+        x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
+        coords = tuple(zip(x, y))
+        total_error = np.sum(cm_log[coords])
+        cm_log /= total_error
+
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
         df = pd.DataFrame(cr).transpose()
         print(f"Classification report:\n{df}")
@@ -289,11 +302,33 @@ def show_metrics(
         roc_details["tpr"] = tpr
         roc_details["threshold"] = thresh
 
-        cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
-        cm_disp.plot()
-        fig = cm_disp.figure_
-        ax = cm_disp.ax_
-        ax.set_title("Micro predictions", fontsize=16)
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot()
+        sns.heatmap(
+            cm_log, annot=True, ax=ax, annot_kws={"size": 14}, fmt=".3f"
+        )
+        plt.setp(ax.get_yticklabels(), rotation=0)
+        ax.set_xlabel("Predicted Label", fontsize=14)
+        ax.set_ylabel("True Label", fontsize=14)
+        ax.text(
+            x=0.5,
+            y=1.05,
+            s="Micro predictions",
+            fontsize=18,
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+        )
+        ax.text(
+            x=0.5,
+            y=1.01,
+            s=f"Signal window: {args.signal_window_size}, Label look ahead: {args.label_look_ahead}",
+            fontsize=12,
+            alpha=0.75,
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+        )
         if not args.dry_run:
             df.to_csv(
                 os.path.join(
@@ -336,11 +371,31 @@ def show_metrics(
         roc_details["tpr"] = tpr
         roc_details["threshold"] = thresh
 
-        cm_disp = metrics.ConfusionMatrixDisplay(cm, display_labels=[0, 1])
-        cm_disp.plot()
-        fig = cm_disp.figure_
-        ax = cm_disp.ax_
-        ax.set_title("Macro predictions", fontsize=16)
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot()
+        sns.heatmap(cm, annot=True, ax=ax, annot_kws={"size": 14}, fmt="d")
+        plt.setp(ax.get_yticklabels(), rotation=0)
+        ax.set_xlabel("Predicted Label", fontsize=14)
+        ax.set_ylabel("True Label", fontsize=14)
+        ax.text(
+            x=0.5,
+            y=1.05,
+            s="Macro predictions",
+            fontsize=18,
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+        )
+        ax.text(
+            x=0.5,
+            y=1.01,
+            s=f"Signal window: {args.signal_window_size}, Label look ahead: {args.label_look_ahead}",
+            fontsize=12,
+            alpha=0.75,
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+        )
         if not args.dry_run:
             df.to_csv(
                 os.path.join(
