@@ -20,6 +20,7 @@ class Data:
         args: argparse.ArgumentParser,
         logger: logging.getLogger,
         datafile: str = None,
+        normalize: bool = False,
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -33,6 +34,7 @@ class Data:
         """
         self.args = args
         self.datafile = datafile
+        self.normalize = normalize
         if self.datafile is None:
             self.datafile = os.path.join("data", self.args.input_file)
         self.fraction_validate = self.args.fraction_valid
@@ -146,6 +148,11 @@ class Data:
             _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
+            if self.normalize:
+                _signals = _signals.reshape(-1, 64)
+                _signals[:, :33] = _signals[:, :33] / 10.0
+                _signals[:, 33:] = _signals[:, 33:] / 5.0
+                _signals = _signals.reshape(-1, 8, 8)
             _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
 
             # TODO: add label smoothening

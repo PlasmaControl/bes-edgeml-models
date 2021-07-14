@@ -84,7 +84,11 @@ def train_loop(
             )
 
     # create image transforms
-    if args.model_name in ["FeatureModel", "CNNModel"]:
+    if (
+        (args.model_name.startswith("feature"))
+        or (args.model_name.startswith("cnn"))
+        or (args.model_name.startswith("rnn"))
+    ):
         transforms = None
     else:
         transforms = data.get_transforms(args)
@@ -267,14 +271,13 @@ def train_loop(
                     {"model": model.state_dict(), "preds": preds},
                     model_save_path,
                 )
+                LOGGER.info(f"Model saved to: {model_save_path}")
 
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
-        if not args.dry_run:
-            LOGGER.info(f"Model saved to: {model_save_path}")
 
     # # # save the predictions in the valid dataframe
     # # valid_folds["preds"] = torch.load(
@@ -297,7 +300,7 @@ if __name__ == "__main__":
             f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
         ),
     )
-    data_obj = data.Data(args, LOGGER)
+    data_obj = data.Data(args, LOGGER, normalize=True)
     train_loop(
         args,
         data_obj,
