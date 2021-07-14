@@ -271,9 +271,9 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
 
 if __name__ == '__main__':
     model = Autoencoder(
-            300, 
-            [400], 
-            [400])
+            400, 
+            [600], 
+            [600])
     model = model.to(device)
 
     loss_fn = torch.nn.MSELoss(reduction = 'sum')

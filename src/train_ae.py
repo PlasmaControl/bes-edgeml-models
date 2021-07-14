@@ -240,9 +240,9 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_three_hidd
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [300, 200, 100, 50, 32, 16, 8, 4],
-        encoder_hidden_layers = [[400]],
-        decoder_hidden_layers = [[400]]
+        latent = [500, 400, 200, 100, 64, 32, 16, 8, 4],
+        encoder_hidden_layers = [[600]],
+        decoder_hidden_layers = [[600]]
         )
 
     # print(RunBuilder.get_runs(params))
