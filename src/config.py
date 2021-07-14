@@ -35,7 +35,7 @@ max_elms = 100 #-1
 transition_halfwidth = 3
 
 # number of time data points to be used for a whole signal
-signal_window_size = 8
+signal_window_size = 16
 
 # size of the input after stitching and resizing
 size = 12

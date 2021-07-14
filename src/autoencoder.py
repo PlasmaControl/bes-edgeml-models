@@ -22,9 +22,9 @@ class Autoencoder(torch.nn.Module):
         latent_dim: int, 
         encoder_hidden_layers: list,
         decoder_hidden_layers: list,
-        batch_size: int = 4,
+        batch_size: int = config.batch_size,
         num_channels: int = 1,
-        frames_per_window: int = 8,
+        frames_per_window: int = config.signal_window_size,
         relu_negative_slope: float = 0.1,
         learning_rate: float = .0001,
         l2_factor: float = 5e-3,
@@ -37,15 +37,15 @@ class Autoencoder(torch.nn.Module):
         self.encoder_hidden_layers = encoder_hidden_layers
         self.decoder_hidden_layers = decoder_hidden_layers
 
-        # (channels, signal window size, height, width) - (4,1,8,8,8)
-        self.signal_window_shape = (batch_size, num_channels, frames_per_window, 8, 8)
+        # (channels, signal window size, height, width)
+        self.input_shape = (batch_size, num_channels, frames_per_window, 8, 8)
         self.frames_per_window = frames_per_window # Initialized to 8 frames
 
         self.relu_negative_slope = relu_negative_slope
         self.dropout_rate = dropout_rate
 
         # batch x 1 x 8 x 8 x 8 = 512 input features per item in batch 
-        self.num_input_features = int(torch.numel(torch.randn(self.signal_window_shape)) / batch_size)
+        self.num_input_features = int(torch.numel(torch.randn(self.input_shape)) / batch_size)
 
         self.flatten = torch.nn.Flatten()
         self.layers = self.create_layers()
@@ -274,7 +274,6 @@ if __name__ == '__main__':
             300, 
             [400], 
             [400])
-    print(model.name)
     model = model.to(device)
 
     loss_fn = torch.nn.MSELoss(reduction = 'sum')
