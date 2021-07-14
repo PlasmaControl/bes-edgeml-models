@@ -37,14 +37,14 @@ PATH = './outputs/trained_models/normalized_three_hidden_batch_32_100_elms/Autoe
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
+
 print()
 print(model)
 
 loss_fn = torch.nn.MSELoss()
 
-def plot(index):
+def plot(index: int, n: int):
     actual_window = train_dataset[index][0].to(device)
-    pred_window = train_dataset[index][1]
     model_window = model(actual_window)
 
     loss = loss_fn(model_window, actual_window)
@@ -62,16 +62,16 @@ def plot(index):
     actual_max = 1
     for i in range(number_frames):
         cur_ax = ax[0][i]
-        cur_ax.imshow(actual[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-        cur_ax.set_title(f'A {2*i}')
+        cur_ax.imshow(actual[n*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.set_title(f'A {n*i}')
         cur_ax.axis('off')
 
     # Plot the prediction frames 0,2,4,6
     pred = model_window.cpu().detach().numpy()[0]
     for i in range(number_frames):
         cur_ax = ax[1][i]
-        cur_ax.imshow(pred[2*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
-        cur_ax.set_title(f'P {2*i}')
+        cur_ax.imshow(pred[n*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
+        cur_ax.set_title(f'P {n*i}')
         cur_ax.axis('off')
 
     fig.tight_layout()
@@ -87,7 +87,7 @@ def main():
 
     for i in range(20000, 31000, 1000):
         # print(i)
-        plot(i)
+        plot(i, n = 4)
 
 if __name__ == '__main__':
     main()
