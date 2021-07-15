@@ -38,7 +38,7 @@ model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
 
-print('Using model', model.name)
+print('Visualizing output of', model.name)
 
 loss_fn = torch.nn.MSELoss()
 
@@ -79,7 +79,7 @@ def plot(index: int, n: int):
 
 
 def main():
-    for i in range(20000, 31000, 1000):
+    for i in range(30000, 31000, 200):
         plot(i, n = 4)
 
 if __name__ == '__main__':
