@@ -248,7 +248,7 @@ class Data:
         """
         # get ELM indices from datafile
         elm_index, _ = self._read_file()
-        print(elm_index[0:config.max_elms])
+        print(f'Using total # of {len(elm_index[0:config.max_elms])} elms')
 
         # print(elm_index[0:10])
 
@@ -293,9 +293,9 @@ class Data:
         LOGGER.info(f"Number of validation ELM events: {validation_elms.size}")
         LOGGER.info(f"Number of test ELM events: {test_elms.size}")
 
-        print(f'training_elms: {training_elms}')
-        print(f'validation_elms: {validation_elms}')
-        print(f'test_elms: {test_elms}')
+        print(f'# of training elms: {len(training_elms)}')
+        print(f'# of validation elms: {len(validation_elms)}')
+        print(f'# of test elms: {len(test_elms)}\n')
 
 
         return training_elms, validation_elms, test_elms
