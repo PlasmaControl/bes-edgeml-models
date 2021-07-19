@@ -85,8 +85,9 @@ def main():
     # x = torch.unsqueeze(x,0)
     
     # print(x.shape)
+    n = config.signal_window_size // 4
     for i in range(10000, 15000, 500):
-        plot(i, n = 2)
+        plot(i, n)
 
 if __name__ == '__main__':
     main()

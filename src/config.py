@@ -29,13 +29,13 @@ batch_size = 32
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = 100 #-1
+max_elms = 10 #-1
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
 
 # number of time data points to be used for a whole signal
-signal_window_size = 16
+signal_window_size = 32
 
 # size of the input after stitching and resizing
 size = 12

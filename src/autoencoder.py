@@ -284,12 +284,13 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
     return avg_sample_loss
 
 if __name__ == '__main__':
-    model = Conv_AE(32)
-    # model = Autoencoder(
-    #         400, 
-    #         [600], 
-    #         [600])
-    # model = model.to(device)
+    # model = Conv_AE(32)
+
+    model = Autoencoder(
+            500, 
+            [1000], 
+            [1000])
+    model = model.to(device)
 
     loss_fn = torch.nn.MSELoss(reduction = 'sum')
 
