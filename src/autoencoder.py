@@ -26,9 +26,6 @@ class Autoencoder(torch.nn.Module):
         num_channels: int = 1,
         frames_per_window: int = config.signal_window_size,
         relu_negative_slope: float = 0.1,
-        learning_rate: float = .0001,
-        l2_factor: float = 5e-3,
-        dropout_rate: float = 0.3,
         name: str = None):
 
         super(Autoencoder, self).__init__()
@@ -42,7 +39,6 @@ class Autoencoder(torch.nn.Module):
         self.frames_per_window = frames_per_window # Initialized to 8 frames
 
         self.relu_negative_slope = relu_negative_slope
-        self.dropout_rate = dropout_rate
 
         # batch x 1 x 8 x 8 x 8 = 512 input features per item in batch 
         self.num_input_features = int(torch.numel(torch.randn(self.input_shape)) / batch_size)
@@ -132,35 +128,53 @@ class Autoencoder(torch.nn.Module):
 class Conv_AE(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
-        latent_dim: int, 
-        relu_negative_slope: float = 0.1,
-        signal_window_shape: Tuple = (1,8,8,8),
-        signal_window_size: int = 8,
-        learning_rate: float = .0001,
-        l2_factor: float = 5e-3,
-        dropout_rate: float = 0.3):
+        latent_dim: int,
+        num_channels: int = 1,
+        frames_per_window: int = 8,
+        batch_size = config.batch_size, 
+        relu_negative_slope: float = 0.1
+        ):
 
-        super(AE_simple, self).__init__()
+        super(Conv_AE, self).__init__()
 
         self.latent_dim = latent_dim
 
-        self.signal_window_shape = signal_window_shape # (channels, signal window size, height, width)
-        self.signal_window_size = signal_window_size # Initialized to 8 frames 
+        # (channels, signal window size, height, width)
+        self.input_shape = (batch_size, num_channels, frames_per_window, 8, 8) 
+        self.frames_per_window = frames_per_window # Initialized to 8 frames 
         self.relu_negative_slope = relu_negative_slope
-        self.dropout_rate = dropout_rate
-
         
-        self.conv1 = torch.nn.Conv3d(1, 16, kernel_size = (x,y,z))
+        self.conv1 = torch.nn.Conv3d(num_channels, 4, kernel_size = (frames_per_window, 2,2))
+        self.flatten = torch.nn.Flatten()
+
+        self.fc1 = torch.nn.Linear(196,self.latent_dim)
+        self.fc2 = torch.nn.Linear(self.latent_dim, 196)
+
+        self.t_conv1 = torch.nn.ConvTranspose3d(4, num_channels, kernel_size = (frames_per_window, 2,2)) 
 
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         input_shape = x.shape
+        # print(input_shape)
+        
+        x = F.leaky_relu(self.conv1(x), negative_slope = self.relu_negative_slope)
+        temp_shape = x.shape
+        # print(x.shape)
         x = self.flatten(x)
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        reconstructed = decoded.view(*input_shape)
-        # print(reconstructed.shape)
-        return reconstructed
+        # print(x.shape)
+
+        x = F.leaky_relu(self.fc1(x), negative_slope = self.relu_negative_slope)
+        # print(x.shape)
+
+        x = F.leaky_relu(self.fc2(x), negative_slope = self.relu_negative_slope)
+        # print(x.shape)
+
+        x = torch.reshape(x, temp_shape)
+        # print(x.shape)
+
+        x = self.t_conv1(x)
+        # print(x.shape)
+        return x 
 
 # This train function is just for quick debugging - actual train function is in train_ae.py
 def train(model, 
@@ -172,7 +186,7 @@ def train(model,
     epochs: int = config.epochs,
     print_output: bool = True):
 
-    tb = SummaryWriter(log_dir = f'outputs/tensorboard/normalized_practice')
+    tb = SummaryWriter(log_dir = f'outputs/tensorboard/conv')
     
     avg_training_losses = []
     avg_validation_losses = []
@@ -270,11 +284,12 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
     return avg_sample_loss
 
 if __name__ == '__main__':
-    model = Autoencoder(
-            400, 
-            [600], 
-            [600])
-    model = model.to(device)
+    model = Conv_AE(32)
+    # model = Autoencoder(
+    #         400, 
+    #         [600], 
+    #         [600])
+    # model = model.to(device)
 
     loss_fn = torch.nn.MSELoss(reduction = 'sum')
 
@@ -329,7 +344,7 @@ if __name__ == '__main__':
     plt.plot(train_avg_losses)
     plt.show()
 
-    torch.save(model, './outputs/trained_models/normalized_practice/normalized_input_autoencoder.pth')
+    torch.save(model, './outputs/trained_models/conv/test_ae.pth')
 
 
     
