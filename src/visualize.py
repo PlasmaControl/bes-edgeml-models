@@ -32,18 +32,20 @@ test_dataset = data.ELMDataset(
 # train_dataset.__getitem__(15500)[0]
 
 # Load model
-# PATH = './untrained_autoencoder.pth'
-PATH = './outputs/trained_models/normalized_three_hidden_batch_32_100_elms/Autoencoder_600_32_600.pth'
+# PATH = './outputs/trained_models/normalized_three_hidden_batch_32_100_elms/Autoencoder_400_4_400.pth'
+PATH = './outputs/trained_models/conv/test_ae.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
 
-print('Visualizing output of', model.name)
+# print('Visualizing output of', model.name)
 
 loss_fn = torch.nn.MSELoss()
 
 def plot(index: int, n: int):
     actual_window = train_dataset[index][0].to(device)
+    actual_window = torch.unsqueeze(actual_window, 0)
+
     model_window = model(actual_window)
 
     loss = loss_fn(model_window, actual_window)
@@ -54,7 +56,7 @@ def plot(index: int, n: int):
     fig, ax = plt.subplots(nrows = number_rows, ncols = number_frames)
 
     # Plot the actual frames 0,2,4,6
-    actual = actual_window.cpu().detach().numpy()[0] # (1,8,8,8)
+    actual = actual_window.squeeze().cpu().detach().numpy() # (8,8,8)
     # actual_min = np.amin(actual)
     # actual_max = np.amax(actual)
     actual_min = -1
@@ -66,7 +68,7 @@ def plot(index: int, n: int):
         cur_ax.axis('off')
 
     # Plot the prediction frames 0,2,4,6
-    pred = model_window.cpu().detach().numpy()[0]
+    pred = model_window.squeeze().cpu().detach().numpy()
     for i in range(number_frames):
         cur_ax = ax[1][i]
         cur_ax.imshow(pred[n*i], cmap = 'RdBu', vmin = actual_min, vmax = actual_max)
@@ -79,8 +81,12 @@ def plot(index: int, n: int):
 
 
 def main():
-    for i in range(30000, 31000, 200):
-        plot(i, n = 4)
+    # x = train_dataset[100][0].to(device)
+    # x = torch.unsqueeze(x,0)
+    
+    # print(x.shape)
+    for i in range(10000, 15000, 500):
+        plot(i, n = 2)
 
 if __name__ == '__main__':
     main()
