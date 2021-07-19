@@ -164,7 +164,7 @@ def save_model(model, run_category, folder = config.ae_trained_models_dir):
 
     torch.save(model, model_save_path)
 
-def run_training(params: OrderedDict, run_category: str = 'normalized_three_hidden_batch_32_100_elms', save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'normalized_32_frames_three_hidden_batch_32_100_elms', save: bool = True):
     # Get the runs
     runs = RunBuilder.get_runs(params)
 
@@ -240,9 +240,9 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_three_hidd
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [500, 400, 200, 100, 64, 32, 16, 8, 4],
-        encoder_hidden_layers = [[600]],
-        decoder_hidden_layers = [[600]]
+        latent = [500, 400, 200, 100, 64, 32, 16],
+        encoder_hidden_layers = [[1000]],
+        decoder_hidden_layers = [[1000]]
         )
 
     # print(RunBuilder.get_runs(params))
