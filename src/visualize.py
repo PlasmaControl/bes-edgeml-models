@@ -32,8 +32,8 @@ test_dataset = data.ELMDataset(
 # train_dataset.__getitem__(15500)[0]
 
 # Load model
-# PATH = './outputs/trained_models/normalized_three_hidden_batch_32_100_elms/Autoencoder_400_4_400.pth'
-PATH = './outputs/trained_models/conv/test_ae.pth'
+PATH = './outputs/trained_models/normalized_32_frames_three_hidden_batch_32_100_elms/Autoencoder_1000_100_1000.pth'
+# PATH = './outputs/trained_models/conv/test_ae.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()

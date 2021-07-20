@@ -240,7 +240,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_32_frames_
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [500, 400, 200, 100, 64, 32, 16],
+        latent = [200,32,16],
         encoder_hidden_layers = [[1000]],
         decoder_hidden_layers = [[1000]]
         )
