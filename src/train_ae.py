@@ -244,6 +244,5 @@ if __name__ == '__main__':
         encoder_hidden_layers = [[1000]],
         decoder_hidden_layers = [[1000]]
         )
-
-    # print(RunBuilder.get_runs(params))
+    
     run_training(params)
