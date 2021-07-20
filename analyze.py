@@ -18,7 +18,7 @@ from src import data, utils
 from options.test_arguments import TestArguments
 
 sns.set_style("white")
-colors = ["#ef476f", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
 
 
 def get_test_dataset(
@@ -312,6 +312,7 @@ def plot(
     for i, i_elm in enumerate(i_elms):
         signals = elm_predictions[i_elm]["signals"]
         labels = elm_predictions[i_elm]["labels"]
+        elm_start = np.where(labels > 0)[0][0]
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
@@ -323,7 +324,7 @@ def plot(
             label="Ground truth",
             ls="-.",
             lw=1.5,
-            c=colors[2],
+            c=colors[1],
         )
         plt.plot(
             elm_time - args.label_look_ahead,
@@ -331,14 +332,24 @@ def plot(
             label="Prediction",
             ls="-.",
             lw=1.5,
+            c=colors[-2],
+        )
+        plt.axvline(
+            elm_start - 75,
+            ymin=0,
+            ymax=0.9,
             c=colors[-1],
+            ls=":",
+            lw=2,
+            label="Buffer start",
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
         plt.ylim([None, 1.1])
-        plt.legend(fontsize=9, frameon=False)
+        plt.legend(fontsize=8, frameon=False)
         plt.gca().spines["right"].set_visible(False)
         plt.gca().spines["top"].set_visible(False)
+        plt.grid(axis="y")
     plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
