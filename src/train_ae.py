@@ -91,7 +91,11 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y) # Average loss for the given batch
-        total_loss += loss.item() 
+        total_loss += loss.item()
+
+        if(torch.isnan(pred).any()):
+            print(pred[:4])
+            print('NAN pred tensor') 
 
         if(torch.isnan(loss).any()):
             print('NAN loss tensor')
