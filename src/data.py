@@ -21,6 +21,7 @@ class Data:
         logger: logging.getLogger,
         datafile: str = None,
         normalize: bool = False,
+        truncate_inputs: bool = False,
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -35,6 +36,7 @@ class Data:
         self.args = args
         self.datafile = datafile
         self.normalize = normalize
+        self.truncate_inputs = truncate_inputs
         if self.datafile is None:
             self.datafile = os.path.join("data", self.args.input_file)
         self.fraction_validate = self.args.fraction_valid
@@ -154,6 +156,13 @@ class Data:
                 _signals[:, 33:] = _signals[:, 33:] / 5.0
                 _signals = _signals.reshape(-1, 8, 8)
             _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
+
+            if self.truncate_inputs:
+                active_elm_indices = np.where(_labels > 0)[0]
+                elm_start_index = active_elm_indices[0]
+                buffer = elm_start_index + 75
+                _signals = _signals[:buffer, ...]
+                _labels = _labels[:buffer]
 
             # TODO: add label smoothening
 
@@ -340,14 +349,14 @@ class Data:
             valid_t0 (np.ndarray, optional): Array containing all the allowed
                 vertices of the ELM events till (t-1)th time data point. Defaults
                 to None.
-            labels (tf.Tensor, optional): Tensor containing the labels of the ELM
+            labels (torch.Tensor, optional): Tensor containing the labels of the ELM
                 events till (t-1)th time data point. Defaults to None.
-            signals (tf.Tensor, optional): Tensor containing the input signals of
+            signals (torch.Tensor, optional): Tensor containing the input signals of
                 the ELM events till (t-1)th time data point. Defaults to None.
 
         Returns:
         --------
-            Tuple[ tf.Tensor, tf.Tensor, np.ndarray, np.ndarray, np.ndarray, np.ndarray ]: Tuple containing
+            Tuple[ torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, np.ndarray, np.ndarray ]: Tuple containing
                 signals, labels, valid_t0, start and stop indices appended with current
                 time data point.
         """
@@ -575,9 +584,14 @@ if __name__ == "__main__":
         stream_handler=True,
         # log_file=f"output_logs_{args.data_mode}.log",
     )
-    data = Data(args, logger)
+    data = Data(args, logger, truncate_inputs=True)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)
-    _, _, sample_indices, window_start = train_data
+    signals, labels, sample_indices, window_start = train_data
+    print(f"Signals shape: {signals.shape}")
+    print(f"Label shape: {labels.shape}")
+    print(np.max(sample_indices))
+    last_event_signal = signals[window_start[-1] :]
+    last_event_label = labels[window_start[-1] :]
 
     logger.info(f"Sample indices: {sample_indices[:10]}")
     values, counts = np.unique(sample_indices, return_counts=True)
@@ -585,7 +599,7 @@ if __name__ == "__main__":
     logger.info(f"Counts: {counts[counts > 1]}")
     logger.info(f"Number of non-unique values: {len(values[counts > 1])}")
     logger.info(
-        f"Window start indices - shape: {window_start.shape}, first 10: {window_start[:10]}"
+        f"Window start indices - shape: {window_start.shape}, first five: {window_start[:5]}, last five: {window_start[-5:]}"
     )
     transforms = get_transforms(args)
 
@@ -598,3 +612,6 @@ if __name__ == "__main__":
     sample = train_dataset.__getitem__(0)
     print(sample[1])
     print(sample[0].shape)
+
+    x = np.where(last_event_label > 0)
+    print(x)
