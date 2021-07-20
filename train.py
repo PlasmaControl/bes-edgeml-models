@@ -300,7 +300,7 @@ if __name__ == "__main__":
             f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
         ),
     )
-    data_obj = data.Data(args, LOGGER, normalize=True)
+    data_obj = data.Data(args, LOGGER, normalize=True, truncate_inputs=True)
     train_loop(
         args,
         data_obj,
