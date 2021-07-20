@@ -33,12 +33,11 @@ test_dataset = data.ELMDataset(
 
 # Load model
 PATH = './outputs/trained_models/normalized_32_frames_three_hidden_batch_32_100_elms/Autoencoder_1000_100_1000.pth'
-# PATH = './outputs/trained_models/conv/test_ae.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
 
-# print('Visualizing output of', model.name)
+print('Visualizing output of', model.name)
 
 loss_fn = torch.nn.MSELoss()
 
@@ -81,10 +80,6 @@ def plot(index: int, n: int):
 
 
 def main():
-    # x = train_dataset[100][0].to(device)
-    # x = torch.unsqueeze(x,0)
-    
-    # print(x.shape)
     n = config.signal_window_size // 4
     for i in range(10000, 15000, 500):
         plot(i, n)
