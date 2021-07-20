@@ -93,6 +93,9 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         loss = loss_fn(pred, y) # Average loss for the given batch
         total_loss += loss.item() 
 
+        if(torch.isnan(loss).any()):
+            print('NAN loss tensor')
+
         # if(len(X) < batch_size):
         #     print(batch, batch * batch_size, len(X))
 
