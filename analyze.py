@@ -199,6 +199,106 @@ def predict(
     return elm_predictions
 
 
+def predict_v2(
+    args: argparse.Namespace,
+    test_data: tuple,
+    model: object,
+    device: torch.device,
+) -> dict:
+    signals = test_data[0]
+    print(f"Signals shape: {signals.shape}")
+    labels = test_data[1]
+    _ = test_data[2]  # sample_indices
+    window_start = test_data[3]
+    num_elms = len(window_start)
+    elm_predictions = dict()
+    for i_elm in range(num_elms):
+        print(f"Processing elm event with start index: {window_start[i_elm]}")
+        i_start = window_start[i_elm]
+        if i_elm < num_elms - 1:
+            i_stop = window_start[i_elm + 1] - 1
+        else:
+            i_stop = labels.size
+        # gathering the indices for active elm events
+        elm_signals = signals[i_start:i_stop, ...]
+        elm_labels = labels[i_start:i_stop]
+        active_elm = np.where(elm_labels > 0.0)[0]
+        active_elm_start = active_elm[0]
+        active_elm_lower_buffer = active_elm_start - 75
+        active_elm_upper_buffer = active_elm_start + 75
+        predictions = np.zeros(
+            elm_labels.size
+            - args.signal_window_size
+            - args.label_look_ahead
+            + 1
+        )
+        for j in range(predictions.size):
+            input_signals = torch.as_tensor(
+                elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    [1, 1, args.signal_window_size, 8, 8]
+                ),
+                dtype=torch.float32,
+            )
+            input_signals = input_signals.to(device)
+            predictions[j] = model(input_signals)
+        elm_signals = elm_signals[
+            : (-args.signal_window_size - args.label_look_ahead + 1), ...
+        ]
+        elm_labels = elm_labels[
+            : (-args.signal_window_size - args.label_look_ahead + 1)
+        ]
+        # convert logits to probability
+        # calculate micro predictions for each time step
+        micro_predictions = (
+            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+            .cpu()
+            .numpy()
+        )
+        # filter labels and micro-predictions for active elm regions
+        elm_labels_active_elms = elm_labels[
+            active_elm_lower_buffer:active_elm_upper_buffer
+        ]
+        micro_predictions_active_elms = micro_predictions[
+            active_elm_lower_buffer:active_elm_upper_buffer
+        ]
+
+        # filter labels and micro-predictions for non-active elm regions
+        elm_labels_pre_active_elms = elm_labels[:active_elm_lower_buffer]
+        micro_predictions_pre_active_elms = micro_predictions[
+            :active_elm_lower_buffer
+        ]
+
+        # calculate macro predictions for each region
+        active_elm_prediction_count = np.sum(
+            micro_predictions_active_elms > 0.4
+        )
+        macro_predictions_active_elms = np.array(
+            [(active_elm_prediction_count >= 1).astype(int)]
+        )
+
+        pre_active_elm_prediction_count = np.sum(
+            micro_predictions_pre_active_elms > 0.4
+        )
+        macro_predictions_pre_active_elms = np.array(
+            [(pre_active_elm_prediction_count >= 1).astype(int)]
+        )
+
+        macro_labels = np.array([0, 1], dtype="int")
+        macro_predictions = np.concatenate(
+            [macro_predictions_pre_active_elms, macro_predictions_active_elms]
+        )
+        elm_time = np.arange(elm_labels.size)
+        elm_predictions[window_start[i_elm]] = {
+            "signals": elm_signals,
+            "labels": elm_labels,
+            "micro_predictions": micro_predictions,
+            "macro_labels": macro_labels,
+            "macro_predictions": macro_predictions,
+            "elm_time": elm_time,
+        }
+    return elm_predictions
+
+
 def plot(
     args: argparse.Namespace,
     elm_predictions: dict,
@@ -531,7 +631,7 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict(args, test_data, model, device)
+    pred_dict = predict_v2(args, test_data, model, device)
 
     if args.plot_data:
         plot(args, pred_dict, plot_dir)
