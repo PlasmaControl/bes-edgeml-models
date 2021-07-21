@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 import data, config
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('Using {} device'.format(device))
 
 # Flexible Autoencoder class
@@ -129,8 +129,8 @@ class Conv_AE(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
         latent_dim: int,
-        num_channels: int = 1,
-        frames_per_window: int = 8,
+        input_channels: int = 1,
+        frames_per_window: int = config.signal_window_size,
         batch_size = config.batch_size, 
         relu_negative_slope: float = 0.1
         ):
@@ -140,28 +140,34 @@ class Conv_AE(torch.nn.Module):
         self.latent_dim = latent_dim
 
         # (channels, signal window size, height, width)
-        self.input_shape = (batch_size, num_channels, frames_per_window, 8, 8) 
-        self.frames_per_window = frames_per_window # Initialized to 8 frames 
+        self.input_shape = (batch_size, input_channels, frames_per_window, 8, 8)
+        
+        self.frames_per_window = frames_per_window # Initialized to 8 frames
         self.relu_negative_slope = relu_negative_slope
         
-        self.conv1 = torch.nn.Conv3d(num_channels, 4, kernel_size = (frames_per_window, 2,2))
+        self.conv1 = torch.nn.Conv3d(input_channels, 4, kernel_size = (frames_per_window, 2,2))
         self.flatten = torch.nn.Flatten()
 
-        self.fc1 = torch.nn.Linear(196,self.latent_dim)
-        self.fc2 = torch.nn.Linear(self.latent_dim, 196)
+        # temp = torch.unsqueeze(torch.rand(*self.input_shape), dim = 0)
+        temp_in = torch.rand(*self.input_shape)
+        temp_out = self.flatten(self.conv1(temp_in))
+        self.linear_in = temp_out.shape[1]
+        print(self.linear_in)
+        self.fc1 = torch.nn.Linear(self.linear_in,self.latent_dim)
+        self.fc2 = torch.nn.Linear(self.latent_dim, self.linear_in)
 
-        self.t_conv1 = torch.nn.ConvTranspose3d(4, num_channels, kernel_size = (frames_per_window, 2,2)) 
+        self.t_conv1 = torch.nn.ConvTranspose3d(4, input_channels, kernel_size = (frames_per_window, 2,2)) 
 
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         input_shape = x.shape
-        # print(input_shape)
+        print(f'Input shape {input_shape}')
         
         x = F.leaky_relu(self.conv1(x), negative_slope = self.relu_negative_slope)
         temp_shape = x.shape
-        # print(x.shape)
+        print(x.shape)
         x = self.flatten(x)
-        # print(x.shape)
+        print(x.shape)
 
         x = F.leaky_relu(self.fc1(x), negative_slope = self.relu_negative_slope)
         # print(x.shape)
@@ -284,30 +290,30 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
     return avg_sample_loss
 
 if __name__ == '__main__':
-    # model = Conv_AE(32)
+    model = Conv_AE(32)
 
-    model = Autoencoder(
-            500, 
-            [1000], 
-            [1000])
-    model = model.to(device)
+    # model = Autoencoder(
+    #         500, 
+    #         [1000], 
+    #         [1000])
+    # model = model.to(device)
 
-    loss_fn = torch.nn.MSELoss(reduction = 'sum')
+    # loss_fn = torch.nn.MSELoss(reduction = 'sum')
 
-    optimizer = torch.optim.SGD(
-        model.parameters(), 
-        lr=config.learning_rate, 
-        momentum=0.9, 
-        weight_decay=config.l2_factor)
+    # optimizer = torch.optim.SGD(
+    #     model.parameters(), 
+    #     lr=config.learning_rate, 
+    #     momentum=0.9, 
+    #     weight_decay=config.l2_factor)
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            factor=0.5,
-            patience=2,
-            verbose=True,
-            eps=1e-6,
-        )    
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #         optimizer,
+    #         mode="min",
+    #         factor=0.5,
+    #         patience=2,
+    #         verbose=True,
+    #         eps=1e-6,
+    #     )    
 
     # Get datasets and form dataloaders
     data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize = True)
@@ -335,17 +341,22 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    train_avg_losses, validation_avg_losses = train(model, 
-        train_dataloader, 
-        valid_dataloader, 
-        optimizer, 
-        scheduler, 
-        loss_fn)
+    # sample = next(iter(train_dataloader))
+    # print(f'Sample shape {sample[0].shape}')
+    # pred = model(sample[0])
+    # print(f'pred shape {pred.shape}')
 
-    plt.plot(train_avg_losses)
-    plt.show()
+    # train_avg_losses, validation_avg_losses = train(model, 
+    #     train_dataloader, 
+    #     valid_dataloader, 
+    #     optimizer, 
+    #     scheduler, 
+    #     loss_fn)
 
-    torch.save(model, './outputs/trained_models/conv/test_ae.pth')
+    # plt.plot(train_avg_losses)
+    # plt.show()
+
+    # torch.save(model, './outputs/trained_models/conv/test_ae.pth')
 
 
     
