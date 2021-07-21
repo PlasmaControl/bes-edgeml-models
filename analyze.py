@@ -323,7 +323,7 @@ def plot(
             labels + 0.02,
             label="Ground truth",
             ls="-.",
-            lw=1.5,
+            lw=1.25,
             c=colors[1],
         )
         plt.plot(
@@ -331,7 +331,7 @@ def plot(
             predictions,
             label="Prediction",
             ls="-.",
-            lw=1.5,
+            lw=1.25,
             c=colors[-2],
         )
         plt.axvline(
@@ -340,8 +340,16 @@ def plot(
             ymax=0.9,
             c=colors[-1],
             ls=":",
-            lw=2,
-            label="Buffer start",
+            lw=1.5,
+            label="Buffer limits",
+        )
+        plt.axvline(
+            elm_start + 75,
+            ymin=0,
+            ymax=0.9,
+            c=colors[-1],
+            ls=":",
+            lw=1.5,
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
