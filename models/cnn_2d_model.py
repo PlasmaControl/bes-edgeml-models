@@ -53,7 +53,7 @@ if __name__ == "__main__":
     from torchinfo import summary
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--signal_window_size")
+    parser.add_argument("--signal_window_size", type=int)
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(
         ["--signal_window_size", "16"],  # ["--device", "cpu"]
