@@ -91,7 +91,7 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         y = y.to(device)
         pred = model(X)
         loss = loss_fn(pred, y) # Average loss for the given batch
-        total_loss += loss.item()
+        total_loss += loss.item() * batch_size
 
         if(torch.isnan(pred).any()):
             print(pred[:4])
@@ -134,7 +134,7 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, all_losses: bool = F
             y = y.to(device)
             pred = model(X)
             sum_batch_loss = loss_fn(pred, y).item()
-            total_validation_loss += sum_batch_loss 
+            total_validation_loss += sum_batch_loss * config.batch_size 
 
     avg_sample_loss = total_validation_loss / samples_in_dataset
 
@@ -184,7 +184,7 @@ def run_training(params: OrderedDict, run_category: str = 'debug', save: bool = 
             run.decoder_hidden_layers)
         model = model.to(device)
 
-        loss_fn = torch.nn.MSELoss(reduction = 'sum')
+        loss_fn = torch.nn.MSELoss(reduction = 'mean')
 
         optimizer = torch.optim.SGD(
             model.parameters(), 
@@ -247,7 +247,7 @@ def run_training(params: OrderedDict, run_category: str = 'debug', save: bool = 
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent = [16],
+        latent = [32, 16],
         encoder_hidden_layers = [[1000]],
         decoder_hidden_layers = [[1000]]
         )
