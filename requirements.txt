@@ -1,0 +1,17 @@
+albumentations @ git+https://github.com/albumentations-team/albumentations@d1082f32a64b2083ba84bcaee1274e42715050bb
+h5py @ file:///home/conda/feedstock_root/build_artifacts/h5py_1617647518676/work
+matplotlib @ file:///home/conda/feedstock_root/build_artifacts/matplotlib-base_1594091694890/work
+numpy @ file:///tmp/build/80754af9/numpy_and_numpy_base_1620830962040/work
+pandas==1.1.4
+Pillow @ file:///tmp/build/80754af9/pillow_1617383569452/work
+python==3.8.10
+scikit-image==0.18.1
+scikit-learn @ file:///home/conda/feedstock_root/build_artifacts/scikit-learn_1605985735074/work
+scipy @ file:///home/conda/feedstock_root/build_artifacts/scipy_1604304772019/work
+seaborn @ file:///home/conda/feedstock_root/build_artifacts/seaborn-split_1611834504644/work
+tensorboard==2.5.0
+torch==1.8.1
+torchaudio==0.8.0a0+e4e171a
+torchinfo==0.1.4
+torchvision==0.9.1
+tqdm==4.61.0
