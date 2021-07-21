@@ -93,7 +93,9 @@ class Data:
         self.logger.info("  Creating test dataset")
         self.logger.info("-" * 30)
         test_data = self._preprocess_data(
-            test_elms, shuffle_sample_indices=shuffle_sample_indices
+            test_elms,
+            shuffle_sample_indices=shuffle_sample_indices,
+            is_test_data=True,
         )
 
         self.hf.close()
@@ -115,6 +117,7 @@ class Data:
         self,
         elm_indices: np.ndarray = None,
         shuffle_sample_indices: bool = False,
+        is_test_data: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
@@ -160,9 +163,12 @@ class Data:
             if self.truncate_inputs:
                 active_elm_indices = np.where(_labels > 0)[0]
                 elm_start_index = active_elm_indices[0]
-                buffer = elm_start_index + 75
-                _signals = _signals[:buffer, ...]
-                _labels = _labels[:buffer]
+                if is_test_data:
+                    elm_end_index = active_elm_indices[-1]
+                else:
+                    elm_end_index = elm_start_index + 75
+                _signals = _signals[:elm_end_index, ...]
+                _labels = _labels[:elm_end_index]
 
             # TODO: add label smoothening
 
@@ -421,7 +427,7 @@ class Data:
                 active ELM events.
             elm_stop (np.ndarray): Array containing the indices for the end of
                 active ELM events.
-            index_buffer (int, optional): Number of buffer indices to use when
+            index_buffer (int, optional): Number of elm_end_index indices to use when
                 doing upsampling. Defaults to 20.
 
         Returns:
