@@ -25,7 +25,7 @@ fraction_validate = 0.2
 fraction_test = 0.1
 
 # batch size
-batch_size = 32 
+batch_size = 32
 num_workers = 4
 
 # maximum number of ELM events to analyze
@@ -35,7 +35,7 @@ max_elms = 100 #-1
 transition_halfwidth = 3
 
 # number of time data points to be used for a whole signal
-signal_window_size = 32
+signal_window_size = 8
 
 # size of the input after stitching and resizing
 size = 12
