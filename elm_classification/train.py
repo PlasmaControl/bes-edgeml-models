@@ -134,6 +134,7 @@ def train_loop(
     # model
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args)
+
     device = torch.device(
         args.device
     )  # "cuda" if torch.cuda.is_available() else "cpu")
@@ -173,9 +174,11 @@ def train_loop(
                     8,
                     8,
                 )
-        x = torch.rand(*input_size)
+        x = torch.randn(*input_size)
         x = x.to(device)
         utils.model_details(model, x, input_size)
+        # make torchviz visualisation of model.
+        utils.model_viz(model, x, show_autograd=False)
 
     # optimizer
     optimizer = optimizer = torch.optim.Adam(

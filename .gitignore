@@ -5,6 +5,7 @@ __pycache__/
 data/
 processed_data/
 jobs/
+viz/
 figures/
 model_checkpoints/
 wandb/
@@ -130,7 +131,7 @@ celerybeat.pid
 .env
 .venv
 env/
-venv/
+../venv/
 ENV/
 env.bak/
 venv.bak/

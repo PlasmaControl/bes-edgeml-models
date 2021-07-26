@@ -8,6 +8,7 @@ from typing import Union, Tuple
 
 import torch
 from torchinfo import summary
+from torchviz import make_dot
 
 
 class MetricMonitor:
@@ -235,3 +236,69 @@ def create_model(model_name: str):
             model = cls
 
     return model
+
+
+def model_viz(model: object, x: torch.Tensor, show_autograd: bool=False):
+    dot = make_dot(model(x), params=dict(model.named_parameters()), show_attrs=show_autograd, show_saved=show_autograd)
+    dot.render(f'viz/{model.args.model_name}{"_w_autograd" if show_autograd else ""}', format='png', view=True)
+
+def get_lr_scheduler(
+    args: argparse.Namespace,
+    optimizer: torch.optim.Optimizer,
+    dataloader: torch.utils.data.DataLoader,
+):
+    # learning rate scheduler
+    if args.scheduler == "ReduceLROnPlateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=args.lr_plateau_mode,
+            factor=args.decay_factor,
+            patience=args.patience,
+            verbose=True,
+        )
+    elif args.scheduler == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.T_max, eta_min=args.eta_min, verbose=False
+        )
+    elif args.scheduler == "CyclicLR":
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            base_lr=args.base_lr,
+            max_lr=args.max_lr,
+            mode=args.cyclic_mode,
+            cycle_momentum=args.cycle_momentum,
+            verbose=False,
+        )
+    elif args.scheduler == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            epochs=args.n_epochs,
+            steps_per_epoch=len(dataloader),
+            max_lr=args.max_lr,
+            pct_start=args.pct_start,
+            anneal_strategy=args.anneal_policy,
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=args.decay_factor, verbose=True
+        )
+
+    return scheduler
+
+
+def get_optimizer(
+    args: argparse.ArgumentParser, model: object
+) -> torch.optim.Optimizer:
+    if args.optimizer == "SGD":
+        optimizer = torch.optim.SGD(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    elif args.optimizer == "Adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    else:
+        optimizer = torch.optim.AdamW(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    return optimizer
