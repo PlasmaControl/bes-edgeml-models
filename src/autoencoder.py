@@ -15,18 +15,19 @@ import data, config
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('Using {} device'.format(device))
 
+
 # Flexible Autoencoder class
 class Autoencoder(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
-        latent_dim: int, 
-        encoder_hidden_layers: list,
-        decoder_hidden_layers: list,
-        batch_size: int = config.batch_size,
-        num_channels: int = 1,
-        frames_per_window: int = config.signal_window_size,
-        relu_negative_slope: float = 0.1,
-        name: str = None):
+                 latent_dim: int,
+                 encoder_hidden_layers: list,
+                 decoder_hidden_layers: list,
+                 batch_size: int = config.batch_size,
+                 num_channels: int = 1,
+                 frames_per_window: int = config.signal_window_size,
+                 relu_negative_slope: float = 0.1,
+                 name: str = None):
 
         super(Autoencoder, self).__init__()
 
@@ -36,7 +37,7 @@ class Autoencoder(torch.nn.Module):
 
         # (channels, signal window size, height, width)
         self.input_shape = (batch_size, num_channels, frames_per_window, 8, 8)
-        self.frames_per_window = frames_per_window # Initialized to 8 frames
+        self.frames_per_window = frames_per_window  # Initialized to 8 frames
 
         self.relu_negative_slope = relu_negative_slope
 
@@ -48,11 +49,11 @@ class Autoencoder(torch.nn.Module):
 
         self.model = torch.nn.Sequential(self.layers)
 
-        if(name is None):
+        if (name is None):
             self.name = self._get_name()
         else:
             self.name = name
-        
+
         return
 
     def create_layers(self):
@@ -62,14 +63,14 @@ class Autoencoder(torch.nn.Module):
         # ENCODER -----------------------------------------------------------------------------------------
         for i, layer_size in enumerate(self.encoder_hidden_layers):
             if i == 0:
-                d_layer = torch.nn.Linear(self.num_input_features , self.encoder_hidden_layers[i])    
+                d_layer = torch.nn.Linear(self.num_input_features, self.encoder_hidden_layers[i])
             else:
-                d_layer = torch.nn.Linear(self.encoder_hidden_layers[i-1], self.encoder_hidden_layers[i])
+                d_layer = torch.nn.Linear(self.encoder_hidden_layers[i - 1], self.encoder_hidden_layers[i])
 
             # Add fully connected, then dropout, then relu layers to encoder
-            layers[f'Encoder Linear Layer {i+1}'] = d_layer
+            layers[f'Encoder Linear Layer {i + 1}'] = d_layer
             # layers[f'Encoder Dropout Layer {i+1}'] = torch.nn.Dropout(p=self.dropout_rate))
-            layers[f'Encoder ReLU Layer {i+1}'] = torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope)
+            layers[f'Encoder ReLU Layer {i + 1}'] = torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope)
 
         # Add latent dim layer after encoder hidden layers
         latent = torch.nn.Linear(self.encoder_hidden_layers[-1], self.latent_dim)
@@ -79,14 +80,14 @@ class Autoencoder(torch.nn.Module):
         # DECODER -----------------------------------------------------------------------------------------
         for i, layer_size in enumerate(self.decoder_hidden_layers):
             if i == 0:
-                d_layer = torch.nn.Linear(self.latent_dim, self.decoder_hidden_layers[i])    
+                d_layer = torch.nn.Linear(self.latent_dim, self.decoder_hidden_layers[i])
             else:
-                d_layer = torch.nn.Linear(self.decoder_hidden_layers[i-1], self.decoder_hidden_layers[i])
+                d_layer = torch.nn.Linear(self.decoder_hidden_layers[i - 1], self.decoder_hidden_layers[i])
 
             # Add fully connected, then dropout, then relu layers to encoder
-            layers[f'Decoder Linear Layer {i+1}'] = d_layer
+            layers[f'Decoder Linear Layer {i + 1}'] = d_layer
             # layers[f'Encoder Dropout Layer {i+1}'] = torch.nn.Dropout(p=self.dropout_rate))
-            layers[f'Decoder ReLU Layer {i+1}'] = torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope)
+            layers[f'Decoder ReLU Layer {i + 1}'] = torch.nn.LeakyReLU(negative_slope=self.relu_negative_slope)
 
         # Add last layer after decoder hidden layers
         last = torch.nn.Linear(self.decoder_hidden_layers[-1], self.num_input_features)
@@ -112,9 +113,9 @@ class Autoencoder(torch.nn.Module):
         # n = type(self).__name__ + f'_{2 * len(self.encoder_hidden_layers) + 1}_hidden_{self.latent_dim}_latent'
         s = type(self).__name__ + '_'
         for i in self.encoder_hidden_layers:
-            s+= str(i) + '_'
+            s += str(i) + '_'
 
-        s+= str(self.latent_dim) + '_'
+        s += str(self.latent_dim) + '_'
 
         for i in range(len(self.decoder_hidden_layers)):
             if i == len(self.decoder_hidden_layers) - 1:
@@ -124,82 +125,95 @@ class Autoencoder(torch.nn.Module):
 
         return s
 
+
 # Simple/easy Autoencoder class
 class Conv_AE(torch.nn.Module):
     # Constructor - sets up encoder and decoder layers
     def __init__(self,
-        latent_dim: int,
-        input_channels: int = 1,
-        frames_per_window: int = config.signal_window_size,
-        batch_size = config.batch_size, 
-        relu_negative_slope: float = 0.1
-        ):
-
+                 latent_dim: int,
+                 input_channels: int = 1,
+                 frames_per_window: int = config.signal_window_size,
+                 batch_size=config.batch_size,
+                 relu_negative_slope: float = 0.1,
+                 name: str = None
+                 ):
         super(Conv_AE, self).__init__()
 
         self.latent_dim = latent_dim
 
         # (channels, signal window size, height, width)
         self.input_shape = (batch_size, input_channels, frames_per_window, 8, 8)
-        
-        self.frames_per_window = frames_per_window # Initialized to 8 frames
+
+        self.frames_per_window = frames_per_window  # Initialized to 8 frames
         self.relu_negative_slope = relu_negative_slope
-        
-        self.conv1 = torch.nn.Conv3d(input_channels, 4, kernel_size = (frames_per_window, 2,2))
+
+        self.conv1 = torch.nn.Conv3d(input_channels, 4, kernel_size=(frames_per_window, 2, 2))
         self.flatten = torch.nn.Flatten()
 
-        # temp = torch.unsqueeze(torch.rand(*self.input_shape), dim = 0)
+        # Calculate the input size for linear layer
         temp_in = torch.rand(*self.input_shape)
         temp_out = self.flatten(self.conv1(temp_in))
         self.linear_in = temp_out.shape[1]
-        print(self.linear_in)
-        self.fc1 = torch.nn.Linear(self.linear_in,self.latent_dim)
+
+        self.fc1 = torch.nn.Linear(self.linear_in, self.latent_dim)
         self.fc2 = torch.nn.Linear(self.latent_dim, self.linear_in)
 
-        self.t_conv1 = torch.nn.ConvTranspose3d(4, input_channels, kernel_size = (frames_per_window, 2,2)) 
+        self.t_conv1 = torch.nn.ConvTranspose3d(4, input_channels, kernel_size=(frames_per_window, 2, 2))
+
+        if name is None:
+            self.name = self._get_name()
+        else:
+            self.name = name
 
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         input_shape = x.shape
-        print(f'Input shape {input_shape}')
-        
-        x = F.leaky_relu(self.conv1(x), negative_slope = self.relu_negative_slope)
-        temp_shape = x.shape
-        print(x.shape)
-        x = self.flatten(x)
-        print(x.shape)
+        # print(f'Input shape {input_shape}')
 
-        x = F.leaky_relu(self.fc1(x), negative_slope = self.relu_negative_slope)
+        x = F.leaky_relu(self.conv1(x), negative_slope=self.relu_negative_slope)
+        temp_shape = x.shape
+        # print(x.shape)
+        x = self.flatten(x)
         # print(x.shape)
 
-        x = F.leaky_relu(self.fc2(x), negative_slope = self.relu_negative_slope)
+        x = F.leaky_relu(self.fc1(x), negative_slope=self.relu_negative_slope)
+        # print(x.shape)
+
+        x = F.leaky_relu(self.fc2(x), negative_slope=self.relu_negative_slope)
         # print(x.shape)
 
         x = torch.reshape(x, temp_shape)
         # print(x.shape)
 
         x = self.t_conv1(x)
-        # print(x.shape)
-        return x 
+        # print(f'Output shape {x.shape}')
+        return x
+
+    def _get_name(self):
+        # n = type(self).__name__ + f'_{2 * len(self.encoder_hidden_layers) + 1}_hidden_{self.latent_dim}_latent'
+        s = type(self).__name__ + '_'
+        s += f'latent_{self.latent_dim}'
+
+        return s
+
 
 # This train function is just for quick debugging - actual train function is in train_ae.py
-def train(model, 
-    train_dataloader: DataLoader, 
-    valid_dataloader: DataLoader, 
-    optimizer,
-    scheduler, 
-    loss_fn, 
-    epochs: int = config.epochs,
-    print_output: bool = True):
+def train(model,
+          train_dataloader: DataLoader,
+          valid_dataloader: DataLoader,
+          optimizer,
+          scheduler,
+          loss_fn,
+          epochs: int = config.epochs,
+          print_output: bool = True):
+    tb = SummaryWriter(log_dir=f'outputs/tensorboard/conv')
 
-    tb = SummaryWriter(log_dir = f'outputs/tensorboard/conv')
-    
     avg_training_losses = []
     avg_validation_losses = []
 
     for t in range(epochs):
-        if(print_output):
-            print(f"Epoch {t+1}\n-------------------------------")
+        if print_output:
+            print(f"Epoch {t + 1}\n-------------------------------")
 
         avg_train_loss = train_loop(model, train_dataloader, optimizer, loss_fn)
 
@@ -213,13 +227,14 @@ def train(model,
 
         # Change optimizer learning rate
         # scheduler.step(epoch_avg_loss)
-    
-    if(print_output):
+
+    if print_output:
         print("Done Training!")
 
     return avg_training_losses, avg_validation_losses
 
-# Train loop for quick debugging    
+
+# Train loop for quick debugging
 def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: bool = True):
     model.train()
     total_loss = 0
@@ -227,9 +242,9 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
     # Sample windows in dataloader = batch_size * len(dataloader)
     samples_in_dataset = len(dataloader.dataset)
     batches_in_dataloader = len(dataloader)
-    batch_size =  math.ceil(samples_in_dataset / batches_in_dataloader)
+    batch_size = math.ceil(samples_in_dataset / batches_in_dataloader)
 
-    if(print_output):
+    if print_output:
         print('Batch size:', batch_size)
         print('Number of samples in Train Dataset:', samples_in_dataset)
         print('Number of batches in Train Dataloader:', batches_in_dataloader)
@@ -239,8 +254,8 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         X = X.to(device)
         y = y.to(device)
         pred = model(X)
-        loss = loss_fn(pred, y) # Average loss for the given batch
-        total_loss += loss.item() 
+        loss = loss_fn(pred, y)  # Average loss for the given batch
+        total_loss += loss.item()
 
         # if(len(X) < batch_size):
         #     print(batch, batch * batch_size, len(X))
@@ -253,18 +268,19 @@ def train_loop(model, dataloader: DataLoader, optimizer, loss_fn, print_output: 
         # For every 1000th batch:
         if (batch + 1) % 1000 == 0:
             loss, current = loss.item(), (batch + 1) * batch_size
-            if(print_output):
+            if print_output:
                 print(f"loss: {loss:>7f}  [{current:>5d}/{samples_in_dataset:>5d}]")
 
     avg_sample_loss = total_loss / samples_in_dataset
 
-    if(print_output):
+    if print_output:
         print(f"Training Avg. Sample loss: {avg_sample_loss:>8f}")
-    
+
     # Return the average sample loss 
     return avg_sample_loss
 
-# Validation loop for quick debugging        
+
+# Validation loop for quick debugging
 def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool = True):
     batches_in_dataloader = len(dataloader)
     samples_in_dataset = len(dataloader.dataset)
@@ -272,52 +288,54 @@ def validation_loop(model, dataloader: DataLoader, loss_fn, print_output: bool =
     validation_loss = 0
 
     model.eval()
-    
+
     with torch.no_grad():
         for X, y in dataloader:
             X = X.to(device)
             y = y.to(device)
             pred = model(X)
             avg_batch_loss = loss_fn(pred, y).item()
-            validation_loss += avg_batch_loss 
+            validation_loss += avg_batch_loss
 
     avg_sample_loss = validation_loss / samples_in_dataset
 
-    if(print_output):
+    if print_output:
         print(f"Validation Avg. Sample loss: {avg_sample_loss:>8f} \n")
-    
+
     # Return the average sample loss 
     return avg_sample_loss
 
+
 if __name__ == '__main__':
-    model = Conv_AE(32)
+    model = Conv_AE(latent_dim=32)
 
     # model = Autoencoder(
     #         500, 
     #         [1000], 
     #         [1000])
-    # model = model.to(device)
 
-    # loss_fn = torch.nn.MSELoss(reduction = 'sum')
+    model = model.to(device)
 
-    # optimizer = torch.optim.SGD(
-    #     model.parameters(), 
-    #     lr=config.learning_rate, 
-    #     momentum=0.9, 
-    #     weight_decay=config.l2_factor)
+    loss_fn = torch.nn.MSELoss(reduction='mean')
 
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #         optimizer,
-    #         mode="min",
-    #         factor=0.5,
-    #         patience=2,
-    #         verbose=True,
-    #         eps=1e-6,
-    #     )    
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=config.learning_rate,
+        momentum=0.9,
+        weight_decay=config.l2_factor)
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=2,
+        verbose=True,
+        eps=1e-6,
+    )
 
     # Get datasets and form dataloaders
-    data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize = True)
-    train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True) 
+    data_ = data.Data(kfold=False, balance_classes=config.balance_classes, normalize=True)
+    train_data, valid_data, test_data = data_.get_data(shuffle_sample_indices=True)
 
     train_dataset = data.ELMDataset(
         *train_data,
@@ -325,7 +343,7 @@ if __name__ == '__main__':
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = True
+        for_autoencoder=True
     )
 
     valid_dataset = data.ELMDataset(
@@ -334,31 +352,21 @@ if __name__ == '__main__':
         config.label_look_ahead,
         stack_elm_events=False,
         transform=None,
-        for_autoencoder = True
+        for_autoencoder=True
     )
 
     batch_size = config.batch_size
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    # sample = next(iter(train_dataloader))
-    # print(f'Sample shape {sample[0].shape}')
-    # pred = model(sample[0])
-    # print(f'pred shape {pred.shape}')
+    train_avg_losses, validation_avg_losses = train(model,
+                                                    train_dataloader,
+                                                    valid_dataloader,
+                                                    optimizer,
+                                                    scheduler,
+                                                    loss_fn)
 
-    # train_avg_losses, validation_avg_losses = train(model, 
-    #     train_dataloader, 
-    #     valid_dataloader, 
-    #     optimizer, 
-    #     scheduler, 
-    #     loss_fn)
+    plt.plot(train_avg_losses)
+    plt.show()
 
-    # plt.plot(train_avg_losses)
-    # plt.show()
-
-    # torch.save(model, './outputs/trained_models/conv/test_ae.pth')
-
-
-    
-        
-
+    torch.save(model, './outputs/trained_models/conv/test_ae.pth')
