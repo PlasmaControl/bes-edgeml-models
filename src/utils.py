@@ -8,6 +8,7 @@ from typing import Union, Tuple
 
 import torch
 from torchinfo import summary
+from torchviz import make_dot
 
 
 class MetricMonitor:
@@ -256,6 +257,10 @@ def create_model(model_name: str):
 
     return model
 
+
+def model_viz(model: object, x: torch.Tensor, show_autograd: bool=False):
+    dot = make_dot(model(x), params=dict(model.named_parameters()), show_attrs=show_autograd, show_saved=show_autograd)
+    dot.render(f'viz/{model.args.model_name}{"_w_autograd" if show_autograd else ""}', format='png', view=True)
 
 def get_lr_scheduler(
     args: argparse.Namespace,
