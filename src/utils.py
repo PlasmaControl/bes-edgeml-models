@@ -157,6 +157,20 @@ def test_args_compat(
         print("All the parsed parameters are compatible with each other!")
 
 
+def create_data(data_name: str):
+    data_filename = data_name + "_data"
+    data_class_path = "data_preprocessing." + data_filename
+    print(data_class_path)
+    data_lib = importlib.import_module(data_class_path)
+    data_class = None
+    _data_name = data_name.replace("_", "") + "data"
+    for name, cls in data_lib.__dict__.items():
+        if name.lower() == _data_name.lower():
+            data_class = cls
+
+    return data_class
+
+
 def create_output_paths(
     args: argparse.Namespace, infer_mode: bool = False
 ) -> Tuple[str]:
