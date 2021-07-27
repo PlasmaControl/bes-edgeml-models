@@ -167,8 +167,6 @@ class Data:
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
 
-            # TODO: add label smoothening
-
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
                 _signals=_signals,
