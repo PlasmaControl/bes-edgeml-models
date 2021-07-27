@@ -292,7 +292,7 @@ class BaseArguments:
         print(message)
 
     def parse(self, verbose: bool = False):
-        """Parse our arguments."""
+        """Parse the arguments."""
         args, parser = self._gather_args()
         if verbose:
             self._print_args(args)

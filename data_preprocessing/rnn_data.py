@@ -5,7 +5,7 @@ from typing import Tuple
 
 import numpy as np
 
-from base_data import BaseData
+from .base_data import BaseData
 
 
 class RNNData(BaseData):
