@@ -76,6 +76,27 @@ class BaseArguments:
             help="if true, use recurrent neural network.",
         )
         parser.add_argument(
+            "--normalize_data",
+            action="store_true",
+            default=False,
+            help="if true, normalizes the data in spatial dimensions. Divides the "
+            "channels 1 to 32 by 10 and channels 33 to 64 by 5.",
+        )
+        parser.add_argument(
+            "--truncate_inputs",
+            action="store_true",
+            default=False,
+            help="if true, truncates the time dimension upto `truncate_buffer` "
+            "time frames beyond the first frame beyond active elm events",
+        )
+        parser.add_argument(
+            "--truncate_buffer",
+            type=int,
+            default=75,
+            help="number of frames beyond first active elm event to consider when "
+            "`truncate_inputs` is passed. ",
+        )
+        parser.add_argument(
             "--n_epochs",
             type=int,
             default=10,
