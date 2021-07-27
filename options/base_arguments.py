@@ -97,6 +97,13 @@ class BaseArguments:
             "`truncate_inputs` is passed. ",
         )
         parser.add_argument(
+            "--take_gradients",
+            action="store_true",
+            default=False,
+            help="if true, take first and second order derivatives of the signals "
+            "along radial, z and time dimensions.",
+        )
+        parser.add_argument(
             "--n_epochs",
             type=int,
             default=10,
