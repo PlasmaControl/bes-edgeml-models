@@ -108,7 +108,7 @@ def test_args_compat(
             "K-fold cross validation is set to True but `n_folds` argument is not passed."
         )
         compat = False
-    if args.interpolate and args.interpolate_size is None:
+    if args.data_preproc == "interpolate" and args.interpolate_size is None:
         parser.error(
             "Interpolation is set to True but interpolation size is not passed."
         )
@@ -121,10 +121,17 @@ def test_args_compat(
         )
         compat = False
     if args.model_name == "rnn" and (
-        (not args.use_rnn) or (args.hidden_size is None)
+        (not args.use_rnn)
+        or (args.hidden_size is None)
+        or (args.data_preproc != "rnn")
     ):
         parser.error(
             f"{args.model_name} requires arguments `hidden_size` and `use_rnn` set to True."
+        )
+        compat = False
+    if args.data_preproc == "gradient" and not args.use_gradients:
+        parser.error(
+            f"{args.data_preproc} requires argument `use_gradients` set to True."
         )
         compat = False
     if args.smoothen_transition and args.transition_halfwidth is None:

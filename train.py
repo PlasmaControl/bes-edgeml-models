@@ -145,7 +145,7 @@ def train_loop(
         elif args.model_name == "rnn":
             input_size = (args.batch_size, args.signal_window_size, 64)
         else:
-            if args.interpolate:
+            if args.data_preproc == "interpolate":
                 input_size = (
                     args.batch_size,
                     1,

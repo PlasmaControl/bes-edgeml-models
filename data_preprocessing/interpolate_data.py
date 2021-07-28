@@ -130,8 +130,7 @@ class InterpolateData(BaseData):
         for signal in signals:
             signal = cv2.resize(
                 signal,
-                # dsize=(self.args.size, self.args.size),
-                dsize=(12, 12),
+                dsize=(self.args.interpolate_size, self.args.interpolate_size),
                 interpolation=cv2.INTER_NEAREST,
             )
             signals_resized.append(signal)

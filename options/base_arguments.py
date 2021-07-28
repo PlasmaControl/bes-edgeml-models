@@ -40,7 +40,7 @@ class BaseArguments:
             help="name of the data manipulator to be used. Selecting any of the "
             "mentioned techniques will create data ready corresponding to that "
             "technique for training, "
-            "[unaltered | gradient | interpolate | balance | rnn]",
+            "[unaltered | gradient | interpolate | balance | rnn].",
         )
         parser.add_argument(
             "--data_dir",
@@ -179,16 +179,10 @@ class BaseArguments:
             "[0 | 4 | 8 | ...].",
         )
         parser.add_argument(
-            "--interpolate",
-            action="store_true",
-            default=False,
-            help="if true, interpolate the spatial dimensions to `interpolate_size` dimensions.",
-        )
-        parser.add_argument(
             "--interpolate_size",
             type=int,
             help="final size of the spatial dimensions of the input if interpolation is done. "
-            "Must be passed if `interpolate` is set to True.",
+            "Must be passed if `data_preproc` == `interpolate`.",
         )
         parser.add_argument(
             "--shuffle_sample_indices",

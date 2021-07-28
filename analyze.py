@@ -6,6 +6,7 @@ import argparse
 # import matplotlib
 
 # matplotlib.use("TkAgg")
+import cv2
 import torch
 import numpy as np
 import pandas as pd
@@ -84,26 +85,25 @@ def predict(
             + 1
         )
         for j in range(predictions.size):
-            if args.interpolate:
+            if args.data_preproc == "interpolate":
+                signals_resized = []
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :],
+                    dtype=np.float32,
+                )
+                for signal in input_signals:
+                    signal = cv2.resize(
+                        signal,
+                        dsize=(args.interpolate_size, args.interpolate_size),
+                        interpolation=cv2.INTER_NEAREST,
+                    )
+                    signals_resized.append(signal)
+                signals_resized = np.array(signals_resized)
                 input_signals = torch.as_tensor(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                        [
-                            1,
-                            1,
-                            args.signal_window_size,
-                            8,
-                            8,
-                        ]
+                    signals_resized.reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=torch.float32,
-                )
-                interp_size = (
-                    args.signal_window_size,
-                    args.interpolate_size,
-                    args.interpolate_size,
-                )
-                input_signals = torch.nn.functional.interpolate(
-                    input_signals, size=interp_size
                 )
             else:
                 input_signals = torch.as_tensor(
