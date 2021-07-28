@@ -17,6 +17,7 @@ class ELMDataset(torch.utils.data.Dataset):
         window_start: np.ndarray,
         logger: logging.getLogger,
         transform: Callable = None,
+        phase: str = "training",
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -46,9 +47,9 @@ class ELMDataset(torch.utils.data.Dataset):
         self.window_start = window_start
         self.transform = transform
         self.logger = logger
-        self.logger.info("-" * 15)
-        self.logger.info(" Dataset class")
-        self.logger.info("-" * 15)
+        self.logger.info("-" * 40)
+        self.logger.info(f" Creating pytorch dataset for {phase} ")
+        self.logger.info("-" * 40)
         self.logger.info(f"Signals shape: {signals.shape}")
         self.logger.info(f"Labels shape: {labels.shape}")
         self.logger.info(f"Sample indices shape: {sample_indices.shape}")
@@ -79,7 +80,7 @@ class ELMDataset(torch.utils.data.Dataset):
                 )
                 signal_window = np.concatenate(signal_window)
             else:
-                raise Exception(
+                raise ValueError(
                     f"Expected signal window size is 8 or 16 but got {self.args.signal_window_size}."
                 )
             if self.transform:
@@ -91,11 +92,11 @@ class ELMDataset(torch.utils.data.Dataset):
                 size=signal_window.shape,
             )
             signal_window += noise
-
         if self.args.use_gradients:
             signal_window = np.transpose(signal_window, axes=(3, 0, 1, 2))
+        else:
+            signal_window = signal_window[np.newaxis, ...]
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
-        signal_window.unsqueeze_(0)
         label = torch.as_tensor(label, dtype=torch.long)
 
         return signal_window, label

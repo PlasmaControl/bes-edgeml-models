@@ -121,12 +121,23 @@ def test_args_compat(
         )
         compat = False
     if args.model_name == "rnn" and (
-        (not args.use_rnn)
+        (args.data_preproc != "rnn")
+        or (not args.use_rnn)
         or (args.hidden_size is None)
-        or (args.data_preproc != "rnn")
     ):
         parser.error(
-            f"{args.model_name} requires arguments `hidden_size` and `use_rnn` set to True."
+            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
+            "and `use_rnn` set to True."
+        )
+        compat = False
+    if args.data_preproc == "rnn" and (
+        (args.model_name != "rnn")
+        or (not args.use_rnn)
+        or (args.hidden_size is None)
+    ):
+        parser.error(
+            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
+            "and `use_rnn` set to True."
         )
         compat = False
     if args.data_preproc == "gradient" and not args.use_gradients:
@@ -167,7 +178,6 @@ def test_args_compat(
 def create_data(data_name: str):
     data_filename = data_name + "_data"
     data_class_path = "data_preprocessing." + data_filename
-    print(data_class_path)
     data_lib = importlib.import_module(data_class_path)
     data_class = None
     _data_name = data_name.replace("_", "") + "data"

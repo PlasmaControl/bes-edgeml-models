@@ -81,7 +81,7 @@ class BaseData:
             is_test_data=False,
         )
         self.logger.info("-" * 30)
-        self.logger.info("  Creating test dataset")
+        self.logger.info("  Creating test data")
         self.logger.info("-" * 30)
         test_data = self._preprocess_data(
             test_elms,
