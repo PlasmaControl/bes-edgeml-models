@@ -176,25 +176,25 @@ class Conv_AE(torch.nn.Module):
     # Forward pass of the autoencoder - returns the reshaped output of net
     def forward(self, x):
         input_shape = x.shape
-        print(f'Input shape {input_shape}')
+        # print(f'Input shape {input_shape}')
 
         x = F.leaky_relu(self.conv1(x), negative_slope=self.relu_negative_slope)
         temp_shape = x.shape
-        print(x.shape)
+        # print(x.shape)
         x = self.flatten(x)
-        print(x.shape)
+        # print(x.shape)
 
         x = F.leaky_relu(self.fc1(x), negative_slope=self.relu_negative_slope)
-        print(x.shape)
+        # print(x.shape)
 
         x = F.leaky_relu(self.fc2(x), negative_slope=self.relu_negative_slope)
-        print(x.shape)
+        # print(x.shape)
 
         x = torch.reshape(x, temp_shape)
-        print(x.shape)
+        # print(x.shape)
 
         x = self.t_conv1(x)
-        print(f'Output shape {x.shape}')
+        # print(f'Output shape {x.shape}')
         return x
 
     def _get_name(self):
