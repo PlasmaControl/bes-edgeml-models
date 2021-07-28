@@ -152,6 +152,14 @@ def train_loop(
                     args.interpolate_size,
                     args.interpolate_size,
                 )
+            elif args.data_preproc == "gradient":
+                input_size = (
+                    args.batch_size,
+                    6,
+                    args.signal_window_size,
+                    8,
+                    8,
+                )
             else:
                 input_size = (
                     args.batch_size,
