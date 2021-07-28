@@ -34,6 +34,15 @@ class BaseArguments:
             help="path to the pretrained weights of the saved models.",
         )
         parser.add_argument(
+            "--data_preproc",
+            type=str,
+            default="unaltered",
+            help="name of the data manipulator to be used. Selecting any of the "
+            "mentioned techniques will create data ready corresponding to that "
+            "technique for training, "
+            "[unaltered | gradient | interpolate | balance | rnn]",
+        )
+        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
@@ -97,7 +106,7 @@ class BaseArguments:
             "`truncate_inputs` is passed. ",
         )
         parser.add_argument(
-            "--take_gradients",
+            "--use_gradients",
             action="store_true",
             default=False,
             help="if true, take first and second order derivatives of the signals "
