@@ -184,11 +184,7 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_8_frames_b
     # For each run, create, train, and save model and metrics
     for run in runs:
         print(run)
-        # model = Autoencoder(
-        #     run.latent,
-        #     run.encoder_hidden_layers,
-        #     run.decoder_hidden_layers)
-        model = Conv_AE(latent_dim=run.latent)
+        model = Conv_AE(latent_dim=run.latent, kernel_size=run.kernel, num_filters=run.num_filters)
         model = model.to(device)
 
         loss_fn = torch.nn.MSELoss(reduction='mean')
@@ -253,7 +249,9 @@ def run_training(params: OrderedDict, run_category: str = 'normalized_8_frames_b
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent=[100, 64, 32, 16, 8, 4]
+        latent=[100, 64, 32, 16],
+        kernel=[2,3,4],
+        num_filters=[20,15]
     )
 
     run_training(params)

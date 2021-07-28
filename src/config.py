@@ -29,7 +29,7 @@ batch_size = 32
 num_workers = 4
 
 # maximum number of ELM events to analyze
-max_elms = 100 #-1
+max_elms = 100 #-1 for all elms
 
 # transition halfwidth (used to smoothen the labels)
 transition_halfwidth = 3
@@ -50,7 +50,7 @@ label_look_ahead = 0
 folds = 5
 
 # number of training epochs
-epochs = 10
+epochs = 20
 
 # hidden units in fully connected layers
 dense_layers = (40, 20)
