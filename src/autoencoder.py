@@ -184,7 +184,7 @@ class Conv_AE(torch.nn.Module):
         x = self.flatten(x)
         # print(x.shape)
 
-        x = F.leaky_relu(self.fc1(x), negative_slope=self.relu_negative_slope)
+        x = self.fc1(x)
         # print(x.shape)
 
         x = F.leaky_relu(self.fc2(x), negative_slope=self.relu_negative_slope)
