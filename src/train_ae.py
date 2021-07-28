@@ -249,7 +249,7 @@ def run_training(params: OrderedDict, run_category: str = 'fixed_normalized_8_fr
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent=[100, 64, 32, 16],
+        latent=[100, 64, 32],
         kernel=[2,3,4],
         num_filters=[20,15]
     )
