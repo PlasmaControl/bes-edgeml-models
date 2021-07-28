@@ -10,13 +10,14 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
+from data_preprocessing import *
 from options.train_arguments import TrainArguments
-from src import data, utils, run
+from src import utils, run, dataset
 
 
 def train_loop(
     args: argparse.Namespace,
-    data_obj: data.Data,
+    data_obj: object,
     test_datafile_name: str,
     fold: Union[int, None] = None,
     desc: bool = True,
@@ -91,21 +92,19 @@ def train_loop(
     ):
         transforms = None
     else:
-        transforms = data.get_transforms(args)
+        transforms = dataset.get_transforms(args)
 
     # create datasets
-    train_dataset = data.ELMDataset(
-        args,
-        *train_data,
-        logger=LOGGER,
-        transform=transforms,
+    train_dataset = dataset.ELMDataset(
+        args, *train_data, logger=LOGGER, transform=transforms, phase="training"
     )
 
-    valid_dataset = data.ELMDataset(
+    valid_dataset = dataset.ELMDataset(
         args,
         *valid_data,
         logger=LOGGER,
         transform=transforms,
+        phase="validation",
     )
 
     # training and validation dataloaders
@@ -279,15 +278,15 @@ def train_loop(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
 
-    # # # save the predictions in the valid dataframe
-    # # valid_folds["preds"] = torch.load(
-    # #     os.path.join(
-    # #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
-    # #     ),
-    # #     map_location=torch.device("cpu"),
-    # # )["preds"]
+    # # save the predictions in the valid dataframe
+    # valid_folds["preds"] = torch.load(
+    #     os.path.join(
+    #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
+    #     ),
+    #     map_location=torch.device("cpu"),
+    # )["preds"]
 
-    # # return valid_folds
+    # return valid_folds
 
 
 if __name__ == "__main__":
@@ -300,7 +299,8 @@ if __name__ == "__main__":
             f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
         ),
     )
-    data_obj = data.Data(args, LOGGER, normalize=True, truncate_inputs=True)
+    data_cls = utils.create_data(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
     train_loop(
         args,
         data_obj,
