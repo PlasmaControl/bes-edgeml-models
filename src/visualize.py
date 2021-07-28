@@ -39,8 +39,8 @@ test_dataset = data.ELMDataset(
 )
 
 # Load model
-# PATH = './outputs/trained_models/normalized_8_frames_batch_32_conv/Conv_AE_latent_64.pth'
-PATH = './archived_ouputs/trained_models/normalized_32_frames_three_hidden_batch_32_100_elms/Autoencoder_1000_64_1000.pth'
+PATH = './outputs/trained_models/fixed_normalized_8_frames_batch_32_conv/Conv_AE_latent_64_filters_20_kernel_2.pth'
+# PATH = './archived_ouputs/trained_models/normalized_32_frames_three_hidden_batch_32_100_elms/Autoencoder_1000_64_1000.pth'
 model = torch.load(PATH, map_location=device)
 model = model.to(device)
 model.eval()
@@ -65,10 +65,13 @@ def plot(index: int, n: int):
 
     # Plot the actual frames
     actual = actual_window.squeeze().cpu().detach().numpy()  # (8,8,8)
-    # actual_min = np.amin(actual)
-    # actual_max = np.amax(actual)
-    actual_min = -1
-    actual_max = 1
+    print(actual.shape)
+    actual_min = np.amin(actual)
+    actual_max = np.amax(actual)
+    print(f'actual_min: {actual_min}')
+    print(f'actual_max: {actual_max}')
+    actual_min = -.5
+    actual_max = .5
     for i in range(number_frames):
         cur_ax = ax[0][i]
         cur_ax.imshow(actual[n * i], cmap='RdBu', vmin=actual_min, vmax=actual_max)
@@ -77,6 +80,8 @@ def plot(index: int, n: int):
 
     # Plot the prediction frames
     pred = model_window.squeeze().cpu().detach().numpy()
+    print(f'pred min: {np.amin(pred)}')
+    print(f'pred max: {np.amax(pred)}')
     for i in range(number_frames):
         cur_ax = ax[1][i]
         cur_ax.imshow(pred[n * i], cmap='RdBu', vmin=actual_min, vmax=actual_max)
@@ -90,13 +95,13 @@ def plot(index: int, n: int):
 
 def main():
     n = config.signal_window_size // 4
-    for i in range(35000, 38000, 500):
+    for i in range(42000, 44000, 300):
         plot(i, n)
 
 
 if __name__ == '__main__':
     main()
-    for i in range(len(train_dataset)):
-        if train_labeled_dataset[i][1] == 1:
-            print(i)
+    # for i in range(len(train_dataset)):
+        # if train_labeled_dataset[i][1] == 1:
+            # print(i)
     pass
