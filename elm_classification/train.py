@@ -178,7 +178,12 @@ def train_loop(
         x = x.to(device)
         utils.model_details(model, x, input_size)
         # make torchviz visualisation of model.
-        utils.model_viz(model, x, show_autograd=False)
+        if args.viz == "show_autograd":
+            utils.model_viz(model, x, show_autograd=True)
+        elif args.viz:
+            utils.model_viz(model, x, show_autograd=False)
+        if args.add_tensorboard:
+            writer.add_graph(model, x)
 
     # optimizer
     optimizer = optimizer = torch.optim.Adam(

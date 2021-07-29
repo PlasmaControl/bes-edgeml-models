@@ -66,6 +66,15 @@ class BaseArguments:
             help="if true, write loss summary to a tensorboard log file.",
         )
         parser.add_argument(
+            "--viz",
+            nargs='?',
+            const=True,
+            default=False,
+            choices=['show_autograd'],
+            help="Create a torchviz conceptual graph of a model. Specify "
+                 "`show_autograd` to view what pytorch saves for backward pass."
+        )
+        parser.add_argument(
             "--device",
             type=str,
             default="cpu",
