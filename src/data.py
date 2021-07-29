@@ -163,7 +163,7 @@ class Data:
                 if is_test_data:
                     elm_end_index = active_elm_indices[-1]
                 else:
-                    elm_end_index = elm_start_index + 75
+                    elm_end_index = elm_start_index + args.truncate_buffer
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
 

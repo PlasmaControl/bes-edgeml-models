@@ -226,8 +226,8 @@ def predict_v2(
         elm_labels = labels[i_start:i_stop]
         active_elm = np.where(elm_labels > 0.0)[0]
         active_elm_start = active_elm[0]
-        active_elm_lower_buffer = active_elm_start - 75
-        active_elm_upper_buffer = active_elm_start + 75
+        active_elm_lower_buffer = active_elm_start - args.truncate_buffer
+        active_elm_upper_buffer = active_elm_start + args.truncate_buffer
         predictions = np.zeros(
             elm_labels.size
             - args.signal_window_size
