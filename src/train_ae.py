@@ -177,7 +177,7 @@ def save_model(model, run_category, folder=config.ae_trained_models_dir):
     torch.save(model, model_save_path)
 
 
-def run_training(params: OrderedDict, run_category: str = 'fixed_normalized_8_frames_batch_32_conv', save: bool = True):
+def run_training(params: OrderedDict, run_category: str = 'normalized_8_frames_batch_32_100_epochs_conv', save: bool = True):
     # Get the runs
     runs = RunBuilder.get_runs(params)
 
@@ -249,9 +249,9 @@ def run_training(params: OrderedDict, run_category: str = 'fixed_normalized_8_fr
 
 if __name__ == '__main__':
     params = OrderedDict(
-        latent=[100, 64, 32],
-        kernel=[2,3,4],
-        num_filters=[20,15]
+        latent=[64],
+        kernel=[2],
+        num_filters=[20]
     )
 
     run_training(params)

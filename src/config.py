@@ -50,7 +50,7 @@ label_look_ahead = 0
 folds = 5
 
 # number of training epochs
-epochs = 20
+epochs = 100
 
 # hidden units in fully connected layers
 dense_layers = (40, 20)
