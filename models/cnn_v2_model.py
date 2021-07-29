@@ -19,7 +19,7 @@ class CNNV2Model(nn.Module):
         CNN layers followed by fully-connected layers.
 
         Args:
-        -----
+        -----from torchviz import make_dot
             fc_units (Union[int, Tuple[int, int]], optional): Number of hidden
                 units in each layer. Defaults to (40, 20).
             dropout_rate (float, optional): Fraction of total hidden units that will

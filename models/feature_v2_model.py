@@ -3,7 +3,6 @@ from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
-from torchviz import make_dot
 
 
 class FeatureV2Model(nn.Module):
