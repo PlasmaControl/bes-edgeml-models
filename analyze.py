@@ -15,11 +15,13 @@ import seaborn as sns
 from sklearn import metrics
 from tqdm import tqdm
 
-from src import data, utils
+from data_preprocessing import *
+from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
 sns.set_style("white")
-colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+colors = sns.color_palette("deep").as_hex()
+# colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
 
 
 def get_test_dataset(
@@ -33,7 +35,7 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = data.ELMDataset(
+    test_dataset = dataset.ELMDataset(
         args, *data_attrs, logger=logger, transform=transforms
     )
 
@@ -233,12 +235,24 @@ def predict_v2(
             + 1
         )
         for j in range(predictions.size):
-            input_signals = torch.as_tensor(
-                elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                    [1, 1, args.signal_window_size, 8, 8]
-                ),
-                dtype=torch.float32,
-            )
+            if args.use_gradients:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, args.signal_window_size, 8, 8, 6]
+                    ),
+                    dtype=np.float32,
+                )
+                input_signals = np.transpose(
+                    input_signals, axes=(0, 4, 1, 2, 3)
+                )
+            else:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
+                    ),
+                    dtype=np.float32,
+                )
+            input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
         elm_signals = elm_signals[
@@ -317,13 +331,23 @@ def plot(
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
         plt.subplot(args.num_rows, args.num_cols, i + 1)
-        plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0])
+        if args.use_gradients:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6, 0] / 10,
+                label="BES ch. 22",
+                c=colors[0],
+            )
+        else:
+            plt.plot(
+                elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0]
+            )
         plt.plot(
             elm_time,
             labels + 0.02,
             label="Ground truth",
             ls="-.",
-            lw=1.25,
+            lw=1.5,
             c=colors[1],
         )
         plt.plot(
@@ -331,25 +355,25 @@ def plot(
             predictions,
             label="Prediction",
             ls="-.",
-            lw=1.25,
-            c=colors[-2],
+            lw=1.5,
+            c=colors[2],
         )
         plt.axvline(
             elm_start - 75,
             ymin=0,
             ymax=0.9,
-            c=colors[-1],
+            c=colors[3],
             ls=":",
-            lw=1.5,
+            lw=2.0,
             label="Buffer limits",
         )
         plt.axvline(
             elm_start + 75,
             ymin=0,
             ymax=0.9,
-            c=colors[-1],
+            c=colors[3],
             ls=":",
-            lw=1.5,
+            lw=2.0,
         )
         plt.xlabel("Time (micro-s)")
         plt.ylabel("Signal | label")
