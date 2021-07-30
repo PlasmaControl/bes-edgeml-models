@@ -578,7 +578,7 @@ def plot(
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1+36} of 12 with {len(elm_time)} time points")
-        plt.subplot(args.num_rows, args.num_cols, i + 1)
+        plt.subplot(2, 3, i + 1)
         if args.use_gradients:
             plt.plot(
                 elm_time,
