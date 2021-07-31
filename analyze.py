@@ -1,6 +1,6 @@
 import os
 import pickle
-from typing import Tuple
+from typing import Tuple, List, Union
 import argparse
 
 # import matplotlib
@@ -21,10 +21,8 @@ from data_preprocessing import *
 from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
-sns.set_style("white")
-plt.style.use("seaborn-muted")
-colors = sns.color_palette("deep").as_hex()
-# colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# colors = sns.color_palette("deep").as_hex()
 
 
 def get_test_dataset(
@@ -286,18 +284,12 @@ def predict_v2(
         ]
 
         # calculate macro predictions for each region
-        active_elm_prediction_count = np.sum(
-            micro_predictions_active_elms > 0.4
-        )
         macro_predictions_active_elms = np.array(
-            [(active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_active_elms).astype(int)]
         )
 
-        pre_active_elm_prediction_count = np.sum(
-            micro_predictions_pre_active_elms > 0.4
-        )
         macro_predictions_pre_active_elms = np.array(
-            [(pre_active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_pre_active_elms > 0.4).astype(int)]
         )
 
         macro_labels = np.array([0, 1], dtype="int")
@@ -320,6 +312,104 @@ def plot(
     args: argparse.Namespace,
     elm_predictions: dict,
     plot_dir: str,
+    elms: List[int],
+    elm_range: str,
+    n_rows: Union[int, None] = None,
+    n_cols: Union[int, None] = None,
+    figsize: tuple = (14, 12),
+) -> None:
+    fig = plt.figure(figsize=figsize)
+    for i, i_elm in enumerate(elms):
+        signals = elm_predictions[i_elm]["signals"]
+        labels = elm_predictions[i_elm]["labels"]
+        elm_start = np.where(labels > 0)[0][0]
+        predictions = elm_predictions[i_elm]["micro_predictions"]
+        elm_time = elm_predictions[i_elm]["elm_time"]
+        print(f"ELM {i+1} of {len(elms)} with {len(elm_time)} time points")
+        if (n_rows is not None) and (n_cols is not None):
+            plt.subplot(n_rows, n_cols, i + 1)
+        else:
+            plt.subplot(args.num_rows, args.num_cols, i + 1)
+        if args.use_gradients:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6, 0] / 10,
+                label="BES ch. 22",
+                lw=1.75,
+                # c=colors[0],
+            )
+        else:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6],
+                label="BES ch. 22",  # c=colors[0]
+                lw=1.75,
+            )
+        plt.plot(
+            elm_time,
+            labels + 0.02,
+            label="Ground truth",
+            ls="-.",
+            lw=1.75,
+            # c=colors[1],
+        )
+        plt.plot(
+            elm_time - args.label_look_ahead,
+            predictions,
+            label="Prediction",
+            ls="-.",
+            lw=1.75,
+            # c=colors[2],
+        )
+        plt.axvline(
+            elm_start - args.truncate_buffer,
+            ymin=0,
+            ymax=0.9,
+            c="k",
+            ls="--",
+            alpha=0.65,
+            lw=2.0,
+            label="Buffer limits",
+        )
+        plt.axvline(
+            elm_start + args.truncate_buffer,
+            ymin=0,
+            ymax=0.9,
+            c="k",
+            ls="--",
+            alpha=0.65,
+            lw=2.0,
+        )
+        plt.xlabel("Time (micro-s)", fontsize=10)
+        plt.ylabel("Signal | label", fontsize=10)
+        plt.tick_params(axis="x", labelsize=8)
+        plt.tick_params(axis="y", labelsize=8)
+        plt.ylim([None, 1.1])
+        sns.despine(offset=10, trim=False)
+        plt.legend(fontsize=8)  # , frameon=False)
+        plt.gca().spines["left"].set_color("lightgrey")
+        plt.gca().spines["bottom"].set_color("lightgrey")
+        plt.grid(axis="y")
+    plt.suptitle(
+        f"Model output on {args.data_mode} classes, ELM index: {elm_range}",
+        fontsize=20,
+    )
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    if not args.dry_run:
+        fig.savefig(
+            os.path.join(
+                plot_dir,
+                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_{elm_range}.png",
+            ),
+            dpi=100,
+        )
+    plt.show()
+
+
+def plot_all(
+    args: argparse.Namespace,
+    elm_predictions: dict,
+    plot_dir: str,
 ) -> None:
     state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
@@ -330,324 +420,22 @@ def plot(
     i_elms_36_42 = elm_id[36:]
 
     # plot 1-12
-    fig = plt.figure(figsize=(14, 12))
-    for i, i_elm in enumerate(i_elms_1_12):
-        signals = elm_predictions[i_elm]["signals"]
-        labels = elm_predictions[i_elm]["labels"]
-        elm_start = np.where(labels > 0)[0][0]
-        predictions = elm_predictions[i_elm]["micro_predictions"]
-        elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1} of 42 with {len(elm_time)} time points")
-        plt.subplot(args.num_rows, args.num_cols, i + 1)
-        if args.use_gradients:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6, 0] / 10,
-                label="BES ch. 22",
-                # c=colors[0],
-            )
-        else:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6],
-                label="BES ch. 22",  # c=colors[0]
-            )
-        plt.plot(
-            elm_time,
-            labels + 0.02,
-            label="Ground truth",
-            ls="-.",
-            lw=1.5,
-            # c=colors[1],
-        )
-        plt.plot(
-            elm_time - args.label_look_ahead,
-            predictions,
-            label="Prediction",
-            ls="-.",
-            lw=1.5,
-            # c=colors[2],
-        )
-        plt.axvline(
-            elm_start - args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-            label="Buffer limits",
-        )
-        plt.axvline(
-            elm_start + args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-        )
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
-        plt.ylim([None, 1.1])
-        plt.legend(fontsize=8, frameon=False)
-        plt.gca().spines["right"].set_visible(False)
-        plt.gca().spines["top"].set_visible(False)
-        plt.grid(axis="y")
-    plt.suptitle(
-        f"Model output on {args.data_mode} classes, ELM index: 1-12",
-        fontsize=20,
-    )
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    if not args.dry_run:
-        fig.savefig(
-            os.path.join(
-                plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_1-12.png",
-            ),
-            dpi=100,
-        )
-    plt.show()
-
+    plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
     # plot 12-24
-    fig = plt.figure(figsize=(14, 12))
-    for i, i_elm in enumerate(i_elms_12_24):
-        signals = elm_predictions[i_elm]["signals"]
-        labels = elm_predictions[i_elm]["labels"]
-        elm_start = np.where(labels > 0)[0][0]
-        predictions = elm_predictions[i_elm]["micro_predictions"]
-        elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1+12} of 42 with {len(elm_time)} time points")
-        plt.subplot(args.num_rows, args.num_cols, i + 1)
-        if args.use_gradients:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6, 0] / 10,
-                label="BES ch. 22",
-                # c=colors[0],
-            )
-        else:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6],
-                label="BES ch. 22",  # c=colors[0]
-            )
-        plt.plot(
-            elm_time,
-            labels + 0.02,
-            label="Ground truth",
-            ls="-.",
-            lw=1.5,
-            # c=colors[1],
-        )
-        plt.plot(
-            elm_time - args.label_look_ahead,
-            predictions,
-            label="Prediction",
-            ls="-.",
-            lw=1.5,
-            # c=colors[2],
-        )
-        plt.axvline(
-            elm_start - args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-            label="Buffer limits",
-        )
-        plt.axvline(
-            elm_start + args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-        )
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
-        plt.ylim([None, 1.1])
-        plt.legend(fontsize=8, frameon=False)
-        plt.gca().spines["right"].set_visible(False)
-        plt.gca().spines["top"].set_visible(False)
-        plt.grid(axis="y")
-    plt.suptitle(
-        f"Model output on {args.data_mode} classes, ELM index: 13-24",
-        fontsize=20,
-    )
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    if not args.dry_run:
-        fig.savefig(
-            os.path.join(
-                plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_12-24.png",
-            ),
-            dpi=100,
-        )
-    plt.show()
-
+    plot(args, elm_predictions, plot_dir, i_elms_12_24, elm_range="12-24")
     # plot 24-36
-    fig = plt.figure(figsize=(14, 12))
-    for i, i_elm in enumerate(i_elms_24_36):
-        signals = elm_predictions[i_elm]["signals"]
-        labels = elm_predictions[i_elm]["labels"]
-        elm_start = np.where(labels > 0)[0][0]
-        predictions = elm_predictions[i_elm]["micro_predictions"]
-        elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1+24} of 42 with {len(elm_time)} time points")
-        plt.subplot(args.num_rows, args.num_cols, i + 1)
-        if args.use_gradients:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6, 0] / 10,
-                label="BES ch. 22",
-                # c=colors[0],
-            )
-        else:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6],
-                label="BES ch. 22",  # c=colors[0]
-            )
-        plt.plot(
-            elm_time,
-            labels + 0.02,
-            label="Ground truth",
-            ls="-.",
-            lw=1.5,
-            # c=colors[1],
-        )
-        plt.plot(
-            elm_time - args.label_look_ahead,
-            predictions,
-            label="Prediction",
-            ls="-.",
-            lw=1.5,
-            # c=colors[2],
-        )
-        plt.axvline(
-            elm_start - args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-            label="Buffer limits",
-        )
-        plt.axvline(
-            elm_start + args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-        )
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
-        plt.ylim([None, 1.1])
-        plt.legend(fontsize=8, frameon=False)
-        plt.gca().spines["right"].set_visible(False)
-        plt.gca().spines["top"].set_visible(False)
-        plt.grid(axis="y")
-    plt.suptitle(
-        f"Model output on {args.data_mode} classes, ELM index: 25-36",
-        fontsize=20,
-    )
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    if not args.dry_run:
-        fig.savefig(
-            os.path.join(
-                plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_24-36.png",
-            ),
-            dpi=100,
-        )
-    plt.show()
-
+    plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
     # plot 36-42
-    fig = plt.figure(figsize=(14, 6))
-    for i, i_elm in enumerate(i_elms_36_42):
-        signals = elm_predictions[i_elm]["signals"]
-        labels = elm_predictions[i_elm]["labels"]
-        elm_start = np.where(labels > 0)[0][0]
-        predictions = elm_predictions[i_elm]["micro_predictions"]
-        elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1+36} of 12 with {len(elm_time)} time points")
-        plt.subplot(2, 3, i + 1)
-        if args.use_gradients:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6, 0] / 10,
-                label="BES ch. 22",
-                # c=colors[0],
-            )
-        else:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6],
-                label="BES ch. 22",  # c=colors[0]
-            )
-        plt.plot(
-            elm_time,
-            labels + 0.02,
-            label="Ground truth",
-            ls="-.",
-            lw=1.5,
-            # c=colors[1],
-        )
-        plt.plot(
-            elm_time - args.label_look_ahead,
-            predictions,
-            label="Prediction",
-            ls="-.",
-            lw=1.5,
-            # c=colors[2],
-        )
-        plt.axvline(
-            elm_start - args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-            label="Buffer limits",
-        )
-        plt.axvline(
-            elm_start + args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=2.0,
-        )
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
-        plt.ylim([None, 1.1])
-        plt.legend(fontsize=8, frameon=False)
-        plt.gca().spines["right"].set_visible(False)
-        plt.gca().spines["top"].set_visible(False)
-        plt.grid(axis="y")
-    plt.suptitle(
-        f"Model output on {args.data_mode} classes, ELM index: 36-42",
-        fontsize=20,
+    plot(
+        args,
+        elm_predictions,
+        plot_dir,
+        i_elms_36_42,
+        elm_range="36-42",
+        n_rows=2,
+        n_cols=3,
+        figsize=(14, 6),
     )
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    if not args.dry_run:
-        fig.savefig(
-            os.path.join(
-                plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_36-42.png",
-            ),
-            dpi=100,
-        )
-    plt.show()
 
 
 def show_details(test_data: tuple) -> None:
@@ -937,7 +725,7 @@ def main(
     pred_dict = predict_v2(args, test_data, model, device)
 
     if args.plot_data:
-        plot(args, pred_dict, plot_dir)
+        plot_all(args, pred_dict, plot_dir)
 
     if args.show_metrics:
         # show metrics for micro predictions
