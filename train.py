@@ -22,6 +22,19 @@ def train_loop(
     fold: Union[int, None] = None,
     desc: bool = True,
 ):
+    """Actual function to put the model to training. Use command line arg 
+    `--dry_run` to not create any test file and model checkpoint.
+
+    Args:
+    -----
+        args (argparse.Namespace): Namespace object that stores all the command
+            line arguments.
+        data_obj (object): Data object that creates train, validation and test data.
+        test_datafile_name (str): Name of the pickle file that stores the test data.
+        fold (Union[int, None]): Integer index for the fold if using k-fold cross
+        validation. Defaults to None.
+        desc (bool): If true, prints the model architecture and details.
+    """
     # TODO: Implement K-fold cross-validation
     if (not args.kfold) and (fold is not None):
         LOGGER.info(
