@@ -3,13 +3,15 @@ __pycache__/
 .idea/
 .vscode/
 data/
-models/
 jobs/
 figures/
+model_checkpoints/
+# tensorboard/
 
 slurm*
 *.db
 *.log
+.DS_Store
 
 # standard python gitignore templates
 # Byte-compiled / optimized / DLL files
