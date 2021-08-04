@@ -21,7 +21,7 @@ def train_loop(
     test_datafile_name: str,
     fold: Union[int, None] = None,
     desc: bool = True,
-):
+)->None:
     """Actual function to put the model to training. Use command line arg 
     `--dry_run` to not create any test file and model checkpoint.
 
