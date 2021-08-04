@@ -22,7 +22,8 @@ from data_preprocessing import *
 from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
-plt.style.use("/home/lakshya/plt_custom.mplstyle")
+#plt.style.use("/home/lakshya/plt_custom.mplstyle")
+plt.style.use("/home/lm9679/plt_custom.mplstyle")
 # colors = sns.color_palette("deep").as_hex()
 
 
