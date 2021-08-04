@@ -108,7 +108,7 @@ def test_args_compat(
             "K-fold cross validation is set to True but `n_folds` argument is not passed."
         )
         compat = False
-    if args.interpolate and args.interpolate_size is None:
+    if args.data_preproc == "interpolate" and args.interpolate_size is None:
         parser.error(
             "Interpolation is set to True but interpolation size is not passed."
         )
@@ -121,10 +121,28 @@ def test_args_compat(
         )
         compat = False
     if args.model_name == "rnn" and (
-        (not args.use_rnn) or (args.hidden_size is None)
+        (args.data_preproc != "rnn")
+        or (not args.use_rnn)
+        or (args.hidden_size is None)
     ):
         parser.error(
-            f"{args.model_name} requires arguments `hidden_size` and `use_rnn` set to True."
+            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
+            "and `use_rnn` set to True."
+        )
+        compat = False
+    if args.data_preproc == "rnn" and (
+        (args.model_name != "rnn")
+        or (not args.use_rnn)
+        or (args.hidden_size is None)
+    ):
+        parser.error(
+            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
+            "and `use_rnn` set to True."
+        )
+        compat = False
+    if args.data_preproc == "gradient" and not args.use_gradients:
+        parser.error(
+            f"{args.data_preproc} requires argument `use_gradients` set to True."
         )
         compat = False
     if args.smoothen_transition and args.transition_halfwidth is None:
@@ -155,6 +173,19 @@ def test_args_compat(
             compat = False
     if compat:
         print("All the parsed parameters are compatible with each other!")
+
+
+def create_data(data_name: str):
+    data_filename = data_name + "_data"
+    data_class_path = "data_preprocessing." + data_filename
+    data_lib = importlib.import_module(data_class_path)
+    data_class = None
+    _data_name = data_name.replace("_", "") + "data"
+    for name, cls in data_lib.__dict__.items():
+        if name.lower() == _data_name.lower():
+            data_class = cls
+
+    return data_class
 
 
 def create_output_paths(

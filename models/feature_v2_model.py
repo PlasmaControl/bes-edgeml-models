@@ -14,7 +14,7 @@ class FeatureV2Model(nn.Module):
         negative_slope: float = 0.02,
         filter_size: tuple = (3, 3, 3),
         maxpool_size: int = 2,
-        num_filters: tuple = (8, 16),
+        num_filters: tuple = (16, 32),
     ):
         """
         8x8 + time feature blocks followed by fully-connected layers. This function
@@ -41,8 +41,11 @@ class FeatureV2Model(nn.Module):
         super(FeatureV2Model, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
+        in_channels = 6 if self.args.use_gradients else 1
         self.conv1 = nn.Conv3d(
-            in_channels=1, out_channels=num_filters[0], kernel_size=filter_size
+            in_channels=in_channels,
+            out_channels=num_filters[0],
+            kernel_size=filter_size,
         )
         self.conv2 = nn.Conv3d(
             in_channels=num_filters[0],
@@ -52,7 +55,7 @@ class FeatureV2Model(nn.Module):
         self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        input_features = 64 if self.args.signal_window_size == 8 else 192
+        input_features = 128 if self.args.signal_window_size == 8 else 384
         self.fc1 = nn.Linear(
             in_features=input_features, out_features=fc_units[0]
         )
@@ -72,3 +75,38 @@ class FeatureV2Model(nn.Module):
         x = self.fc3(x)
 
         return x
+
+
+if __name__ == "__main__":
+    from torchinfo import summary
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_gradients", action="store_true", default=False)
+    parser.add_argument("--signal_window_size", type=int)
+    parser.add_argument("--device", default="cpu")
+    args = parser.parse_args(
+        [
+            "--use_gradients",
+            "--signal_window_size",
+            "8",
+        ],  # ["--device", "cpu"]
+    )
+    shape = (16, 6, 8, 8, 8)
+    x = torch.ones(*shape)
+    device = torch.device(
+        "cpu"
+    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    x = x.to(device)
+    model = FeatureV2Model(args)
+    print(summary(model, input_size=shape, device="cpu"))
+
+    for param in list(model.named_parameters()):
+        print(
+            f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+        )
+    print(
+        f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
+    y = model(x)
+    # print(y)
+    print(y.shape)

@@ -39,13 +39,6 @@ class Data:
         self.truncate_inputs = truncate_inputs
         if self.datafile is None:
             self.datafile = os.path.join("data", self.args.input_file)
-        self.fraction_validate = self.args.fraction_valid
-        self.fraction_test = self.args.fraction_test
-        self.signal_dtype = self.args.signal_dtype
-        self.kfold = self.args.kfold
-        self.smoothen_transition = self.args.smoothen_transition
-        self.data_mode = self.args.data_mode
-        self.max_elms = self.args.max_elms
         self.logger = logger
 
         self.df = pd.DataFrame()
@@ -150,7 +143,9 @@ class Data:
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(elm_event["signals"], dtype=self.signal_dtype)
+            _signals = np.array(
+                elm_event["signals"], dtype=self.args.signal_dtype
+            )
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
             if self.normalize:
@@ -158,7 +153,9 @@ class Data:
                 _signals[:, :33] = _signals[:, :33] / 10.0
                 _signals[:, 33:] = _signals[:, 33:] / 5.0
                 _signals = _signals.reshape(-1, 8, 8)
-            _labels = np.array(elm_event["labels"], dtype=self.signal_dtype)
+            _labels = np.array(
+                elm_event["labels"], dtype=self.args.signal_dtype
+            )
 
             if self.truncate_inputs:
                 active_elm_indices = np.where(_labels > 0)[0]
@@ -166,11 +163,9 @@ class Data:
                 if is_test_data:
                     elm_end_index = active_elm_indices[-1]
                 else:
-                    elm_end_index = elm_start_index + 75
+                    elm_end_index = elm_start_index + args.truncate_buffer
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
-
-            # TODO: add label smoothening
 
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
@@ -256,18 +251,18 @@ class Data:
         # split the data into train, validation and test sets
         training_elms, test_elms = model_selection.train_test_split(
             self.elm_indices[:n_elms],
-            test_size=self.fraction_test,
+            test_size=self.args.fraction_test,
             shuffle=True,
             random_state=self.args.seed,
         )
 
         # kfold cross validation
-        if self.kfold and fold is None:
+        if self.args.kfold and fold is None:
             raise ValueError(
                 f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
             )
 
-        if self.kfold:
+        if self.args.kfold:
             self.logger.info("Using K-fold cross validation")
             self._kfold_cross_val(training_elms)
             training_elms = self.df[self.df["fold"] != fold]["elm_events"]
@@ -278,7 +273,7 @@ class Data:
             )
             training_elms, validation_elms = model_selection.train_test_split(
                 training_elms,
-                test_size=self.fraction_validate,
+                test_size=self.args.fraction_valid,
                 shuffle=True,
                 random_state=self.args.seed,
             )
@@ -445,7 +440,7 @@ class Data:
         self.logger.info(
             f"Active ELM oversampling for balanced data: {oversample_count}"
         )
-        if self.data_mode == "balanced":
+        if self.args.data_mode == "balanced":
             for i_start, i_stop in zip(elm_start, elm_stop):
                 assert np.all(_labels[i_start : i_stop + 1] >= 0.5)
                 active_elm_window = np.arange(

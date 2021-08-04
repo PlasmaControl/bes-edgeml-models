@@ -1,24 +1,28 @@
 import os
 import pickle
-from typing import Tuple
+from typing import Tuple, List, Union
 import argparse
 
 # import matplotlib
 
 # matplotlib.use("TkAgg")
+import cv2
 import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import seaborn as sns
 from sklearn import metrics
+from torch.functional import norm
 from tqdm import tqdm
 
-from src import data, utils
+from data_preprocessing import *
+from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
-sns.set_style("white")
-colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# colors = sns.color_palette("deep").as_hex()
 
 
 def get_test_dataset(
@@ -32,8 +36,8 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = data.ELMDataset(
-        args, *data_attrs, logger=logger, transform=transforms
+    test_dataset = dataset.ELMDataset(
+        args, *data_attrs, logger=logger, transform=transforms, phase="testing"
     )
 
     return data_attrs, test_dataset
@@ -84,26 +88,25 @@ def predict(
             + 1
         )
         for j in range(predictions.size):
-            if args.interpolate:
+            if args.data_preproc == "interpolate":
+                signals_resized = []
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :],
+                    dtype=np.float32,
+                )
+                for signal in input_signals:
+                    signal = cv2.resize(
+                        signal,
+                        dsize=(args.interpolate_size, args.interpolate_size),
+                        interpolation=cv2.INTER_NEAREST,
+                    )
+                    signals_resized.append(signal)
+                signals_resized = np.array(signals_resized)
                 input_signals = torch.as_tensor(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                        [
-                            1,
-                            1,
-                            args.signal_window_size,
-                            8,
-                            8,
-                        ]
+                    signals_resized.reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=torch.float32,
-                )
-                interp_size = (
-                    args.signal_window_size,
-                    args.interpolate_size,
-                    args.interpolate_size,
-                )
-                input_signals = torch.nn.functional.interpolate(
-                    input_signals, size=interp_size
                 )
             else:
                 input_signals = torch.as_tensor(
@@ -224,8 +227,8 @@ def predict_v2(
         elm_labels = labels[i_start:i_stop]
         active_elm = np.where(elm_labels > 0.0)[0]
         active_elm_start = active_elm[0]
-        active_elm_lower_buffer = active_elm_start - 75
-        active_elm_upper_buffer = active_elm_start + 75
+        active_elm_lower_buffer = active_elm_start - args.truncate_buffer
+        active_elm_upper_buffer = active_elm_start + args.truncate_buffer
         predictions = np.zeros(
             elm_labels.size
             - args.signal_window_size
@@ -233,12 +236,24 @@ def predict_v2(
             + 1
         )
         for j in range(predictions.size):
-            input_signals = torch.as_tensor(
-                elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                    [1, 1, args.signal_window_size, 8, 8]
-                ),
-                dtype=torch.float32,
-            )
+            if args.use_gradients:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, args.signal_window_size, 8, 8, 6]
+                    ),
+                    dtype=np.float32,
+                )
+                input_signals = np.transpose(
+                    input_signals, axes=(0, 4, 1, 2, 3)
+                )
+            else:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
+                    ),
+                    dtype=np.float32,
+                )
+            input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
         elm_signals = elm_signals[
@@ -269,18 +284,12 @@ def predict_v2(
         ]
 
         # calculate macro predictions for each region
-        active_elm_prediction_count = np.sum(
-            micro_predictions_active_elms > 0.4
-        )
         macro_predictions_active_elms = np.array(
-            [(active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_active_elms).astype(int)]
         )
 
-        pre_active_elm_prediction_count = np.sum(
-            micro_predictions_pre_active_elms > 0.4
-        )
         macro_predictions_pre_active_elms = np.array(
-            [(pre_active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_pre_active_elms > 0.4).astype(int)]
         )
 
         macro_labels = np.array([0, 1], dtype="int")
@@ -303,72 +312,130 @@ def plot(
     args: argparse.Namespace,
     elm_predictions: dict,
     plot_dir: str,
+    elms: List[int],
+    elm_range: str,
+    n_rows: Union[int, None] = None,
+    n_cols: Union[int, None] = None,
+    figsize: tuple = (14, 12),
 ) -> None:
-    state = np.random.RandomState(seed=args.seed)
-    elm_id = list(elm_predictions.keys())
-    i_elms = state.choice(elm_id, args.plot_num, replace=False)
-
-    fig = plt.figure(figsize=(14, 12))
-    for i, i_elm in enumerate(i_elms):
+    fig = plt.figure(figsize=figsize)
+    for i, i_elm in enumerate(elms):
         signals = elm_predictions[i_elm]["signals"]
         labels = elm_predictions[i_elm]["labels"]
         elm_start = np.where(labels > 0)[0][0]
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1} of 12 with {len(elm_time)} time points")
-        plt.subplot(args.num_rows, args.num_cols, i + 1)
-        plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0])
+        print(f"ELM {i+1} of {len(elms)} with {len(elm_time)} time points")
+        if (n_rows is not None) and (n_cols is not None):
+            plt.subplot(n_rows, n_cols, i + 1)
+        else:
+            plt.subplot(args.num_rows, args.num_cols, i + 1)
+        if args.use_gradients:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6, 0] / 10,
+                label="BES ch. 22",
+                lw=1.75,
+                # c=colors[0],
+            )
+        else:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6],
+                label="BES ch. 22",  # c=colors[0]
+                lw=1.75,
+            )
         plt.plot(
             elm_time,
             labels + 0.02,
             label="Ground truth",
             ls="-.",
-            lw=1.25,
-            c=colors[1],
+            lw=1.75,
+            # c=colors[1],
         )
         plt.plot(
             elm_time - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-.",
-            lw=1.25,
-            c=colors[-2],
+            lw=1.75,
+            # c=colors[2],
         )
         plt.axvline(
-            elm_start - 75,
+            elm_start - args.truncate_buffer,
             ymin=0,
             ymax=0.9,
-            c=colors[-1],
-            ls=":",
-            lw=1.5,
+            c="k",
+            ls="--",
+            alpha=0.65,
+            lw=2.0,
             label="Buffer limits",
         )
         plt.axvline(
-            elm_start + 75,
+            elm_start + args.truncate_buffer,
             ymin=0,
             ymax=0.9,
-            c=colors[-1],
-            ls=":",
-            lw=1.5,
+            c="k",
+            ls="--",
+            alpha=0.65,
+            lw=2.0,
         )
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
+        plt.xlabel("Time (micro-s)", fontsize=10)
+        plt.ylabel("Signal | label", fontsize=10)
+        plt.tick_params(axis="x", labelsize=8)
+        plt.tick_params(axis="y", labelsize=8)
         plt.ylim([None, 1.1])
-        plt.legend(fontsize=8, frameon=False)
-        plt.gca().spines["right"].set_visible(False)
-        plt.gca().spines["top"].set_visible(False)
+        sns.despine(offset=10, trim=False)
+        plt.legend(fontsize=8)  # , frameon=False)
+        plt.gca().spines["left"].set_color("lightgrey")
+        plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
-    plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
+    plt.suptitle(
+        f"Model output on {args.data_mode} classes, ELM index: {elm_range}",
+        fontsize=20,
+    )
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}.png",
+                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_{elm_range}.png",
             ),
             dpi=100,
         )
     plt.show()
+
+
+def plot_all(
+    args: argparse.Namespace,
+    elm_predictions: dict,
+    plot_dir: str,
+) -> None:
+    state = np.random.RandomState(seed=args.seed)
+    elm_id = list(elm_predictions.keys())
+    # i_elms = state.choice(elm_id, args.plot_num, replace=False)
+    i_elms_1_12 = elm_id[:12]
+    i_elms_12_24 = elm_id[12:24]
+    i_elms_24_36 = elm_id[24:36]
+    i_elms_36_42 = elm_id[36:]
+
+    # plot 1-12
+    plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
+    # plot 12-24
+    plot(args, elm_predictions, plot_dir, i_elms_12_24, elm_range="12-24")
+    # plot 24-36
+    plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
+    # plot 36-42
+    plot(
+        args,
+        elm_predictions,
+        plot_dir,
+        i_elms_36_42,
+        elm_range="36-42",
+        n_rows=2,
+        n_cols=3,
+        figsize=(14, 6),
+    )
 
 
 def show_details(test_data: tuple) -> None:
@@ -404,11 +471,11 @@ def show_metrics(
 
         # calculate the log of the confusion matrix scaled by the
         # total error (false positives + false negatives)
-        cm_log = np.log(cm)
+        # cm_log = np.log(cm)
         x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
         coords = tuple(zip(x, y))
-        total_error = np.sum(cm_log[coords])
-        cm_log /= total_error
+        total_error = np.sum(cm[coords])
+        cm = cm / total_error
 
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
         df = pd.DataFrame(cr).transpose()
@@ -424,7 +491,12 @@ def show_metrics(
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot()
         sns.heatmap(
-            cm_log, annot=True, ax=ax, annot_kws={"size": 14}, fmt=".3f"
+            cm,
+            annot=True,
+            ax=ax,
+            annot_kws={"size": 14},
+            fmt=".3f",
+            norm=LogNorm(),
         )
         plt.setp(ax.get_yticklabels(), rotation=0)
         ax.set_xlabel("Predicted Label", fontsize=14)
@@ -653,7 +725,7 @@ def main(
     pred_dict = predict_v2(args, test_data, model, device)
 
     if args.plot_data:
-        plot(args, pred_dict, plot_dir)
+        plot_all(args, pred_dict, plot_dir)
 
     if args.show_metrics:
         # show metrics for micro predictions
