@@ -44,6 +44,7 @@ def get_logger(
     log_file: Union[str, None] = None,
     stream_handler: bool = True,
 ) -> logging.getLogger:
+
     """Initiate the logger to log the progress into a file.
 
     Args:
@@ -62,7 +63,7 @@ def get_logger(
 
     if log_file is not None:
         # create handlers
-        f_handler = logging.FileHandler(os.path.join(log_file), mode="w")
+        f_handler = logging.FileHandler(os.path.join(log_file), mode="w+")
         # create formatters and add it to the handlers
         f_format = logging.Formatter(
             "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
@@ -260,7 +261,8 @@ def create_model(model_name: str):
 
 def model_viz(model: object, x: torch.Tensor, show_autograd: bool=False):
     dot = make_dot(model(x), params=dict(model.named_parameters()), show_attrs=show_autograd, show_saved=show_autograd)
-    dot.render(f'viz/{model.args.model_name}{"_w_autograd" if show_autograd else ""}', format='png', view=True)
+    dot.render(f'visualizations/torchviz_diagrams/{model.args.model_name}{"_w_autograd" if show_autograd else ""}',
+               format='png', view=True)
 
 def get_lr_scheduler(
     args: argparse.Namespace,
