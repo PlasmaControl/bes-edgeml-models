@@ -7,7 +7,7 @@ from typing import Tuple
 import cv2
 import numpy as np
 
-from .base_data import BaseData
+from base_data import BaseData
 
 
 class InterpolateData(BaseData):
