@@ -151,15 +151,3 @@ if __name__ == "__main__":
     first_elm_event = signals[start:stop]
     print(first_elm_event.shape)
     signal_length = first_elm_event.shape[0]
-    print(f"Max: {np.max(first_elm_event)}")
-    print(f"Min: {np.min(first_elm_event)}")
-    maxpool = nn.MaxPool3d(kernel_size=(signal_length, 5, 5), stride=(1, 1, 1))
-    avgpool = nn.AvgPool3d(kernel_size=(signal_length, 5, 5), stride=(1, 1, 1))
-    y_max = maxpool(
-        torch.tensor(first_elm_event).view(1, 1, signal_length, 8, 8)
-    )
-    y_avg = avgpool(
-        torch.tensor(first_elm_event).view(1, 1, signal_length, 8, 8)
-    )
-    print(f"Max pooling output:\n{y_max}")
-    print(f"Avg pooling output:\n{y_avg}")

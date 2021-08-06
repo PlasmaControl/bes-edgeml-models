@@ -36,11 +36,11 @@ class BaseArguments:
         parser.add_argument(
             "--data_preproc",
             type=str,
-            default="unaltered",
+            default="truncate",
             help="name of the data manipulator to be used. Selecting any of the "
             "mentioned techniques will create data ready corresponding to that "
             "technique for training, "
-            "[unaltered | gradient | interpolate | balance | rnn].",
+            "[truncate | unaltered | gradient | interpolate | balance | rnn].",
         )
         parser.add_argument(
             "--data_dir",
