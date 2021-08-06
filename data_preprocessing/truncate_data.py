@@ -6,7 +6,10 @@ from typing import Tuple
 
 import numpy as np
 
-from base_data import BaseData
+try:
+    from .base_data import BaseData
+except ImportError:
+    from base_data import BaseData
 
 
 class TruncateData(BaseData):
@@ -70,8 +73,6 @@ class TruncateData(BaseData):
             _signals = _signals[:elm_end_index, ...]
             _labels = _labels[:elm_end_index]
 
-            # TODO: add label smoothening
-
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
                 _signals=_signals,
@@ -126,6 +127,8 @@ class TruncateData(BaseData):
 if __name__ == "__main__":
     import os
     import sys
+    import torch
+    import torch.nn as nn
 
     sys.path.append(os.getcwd())
     from src import utils
@@ -141,4 +144,22 @@ if __name__ == "__main__":
     )
     data = TruncateData(args, logger)
     train_data, _, _ = data.get_data()
-    print(train_data)
+    signals, labels, sample_indices, window_start = train_data
+    start = window_start[0]
+    stop = window_start[1] - 1
+    print(f"start index: {start}, stop index: {stop}")
+    first_elm_event = signals[start:stop]
+    print(first_elm_event.shape)
+    signal_length = first_elm_event.shape[0]
+    print(f"Max: {np.max(first_elm_event)}")
+    print(f"Min: {np.min(first_elm_event)}")
+    maxpool = nn.MaxPool3d(kernel_size=(signal_length, 5, 5), stride=(1, 1, 1))
+    avgpool = nn.AvgPool3d(kernel_size=(signal_length, 5, 5), stride=(1, 1, 1))
+    y_max = maxpool(
+        torch.tensor(first_elm_event).view(1, 1, signal_length, 8, 8)
+    )
+    y_avg = avgpool(
+        torch.tensor(first_elm_event).view(1, 1, signal_length, 8, 8)
+    )
+    print(f"Max pooling output:\n{y_max}")
+    print(f"Avg pooling output:\n{y_avg}")

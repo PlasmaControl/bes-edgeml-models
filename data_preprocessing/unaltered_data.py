@@ -6,7 +6,10 @@ from typing import Tuple
 
 import numpy as np
 
-from base_data import BaseData
+try:
+    from .base_data import BaseData
+except ImportError:
+    from base_data import BaseData
 
 
 class UnalteredData(BaseData):
