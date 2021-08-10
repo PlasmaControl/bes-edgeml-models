@@ -22,29 +22,29 @@ from data_preprocessing import *
 from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
-#plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# plt.style.use("/home/lakshya/plt_custom.mplstyle")
 plt.style.use("/home/lm9679/plt_custom.mplstyle")
 # colors = sns.color_palette("deep").as_hex()
 
 
 def get_test_dataset(
-        args: argparse.Namespace, 
-        file_name: str, 
-        logger:logging.getLogger=None, 
-        transforms=None
+    args: argparse.Namespace,
+    file_name: str,
+    logger: logging.getLogger = None,
+    transforms=None,
 ) -> Tuple[tuple, data.ELMDataset]:
-    """Read the pickle file containing the test data and return PyTorch dataset 
-    and data attributes such as signals, labels, sample_indices, and 
+    """Read the pickle file containing the test data and return PyTorch dataset
+    and data attributes such as signals, labels, sample_indices, and
     window_start_indices.
 
     Args:
     -----
-        args (argparse.Namespace): Argparse namespace object containing all the 
+        args (argparse.Namespace): Argparse namespace object containing all the
             base and test arguments.
         file_name (str): Name of the test data file.
-        logger (logging.getLogger): Logger object that adds inference logs to 
+        logger (logging.getLogger): Logger object that adds inference logs to
             a file. Defaults to None.
-        transforms: Image transforms to perform data augmentation on the given 
+        transforms: Image transforms to perform data augmentation on the given
             input. Defaults to None.
     """
     with open(file_name, "rb") as f:
