@@ -1,8 +1,8 @@
 import os
 import argparse
 
-import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearnex import patch_sklearn
 
 patch_sklearn()
@@ -11,6 +11,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import metrics
+from xgboost import XGBClassifier
+
+plt.style.use("/Users/lakshyamalhotra/plt_custom.mplstyle")
 
 if __name__ == "__main__":
     path = "outputs/signal_window_16/label_look_ahead_0/roc"
@@ -29,6 +32,8 @@ if __name__ == "__main__":
     )
 
     # logistic regression
+    print()
+    print()
     lr = LogisticRegression(max_iter=1000, n_jobs=-1)
     lr.fit(X_train, y_train)
     y_train_lr = lr.predict_proba(X_train)
@@ -61,3 +66,41 @@ if __name__ == "__main__":
     )
     cr_rf_df = pd.DataFrame(cr_rf).transpose()
     print(f"Classification report on random forest:\n{cr_rf_df}")
+    importances_rf = rf.feature_importances_
+    feature_importances_rf = pd.Series(importances_rf, index=features)
+
+    # XGBoost
+    print()
+    print()
+    xgb = XGBClassifier(
+        objective="binary:logistic", use_label_encoder=False, n_jobs=-1
+    )
+    xgb.fit(X_train, y_train, eval_metric="logloss")
+    y_train_xgb = xgb.predict_proba(X_train)
+    y_pred_xgb = xgb.predict_proba(X_valid)
+    y_pred_xgb_bin = xgb.predict(X_valid)
+    roc_score_train_xgb = metrics.roc_auc_score(y_train, y_train_xgb[:, 1])
+    roc_score_xgb = metrics.roc_auc_score(y_valid, y_pred_xgb[:, 1])
+    print(f"ROC score on training, XGBoost: {roc_score_train_rf}")
+    print(f"ROC score on validation, XGBoost: {roc_score_rf}")
+    cr_xgb = metrics.classification_report(
+        y_valid, y_pred_xgb_bin, output_dict=True
+    )
+    cr_xgb_df = pd.DataFrame(cr_xgb).transpose()
+    print(f"Classification report on XGBoost:\n{cr_xgb_df}")
+    importances_xgb = xgb.feature_importances_
+    feature_importances_xgb = pd.Series(importances_xgb, index=features)
+
+    # plotting
+    fig, ax = plt.subplots()
+    feature_importances_rf.plot(kind="bar", figsize=(10, 8), ax=ax)
+    ax.set_title("Feature importances using MDI")
+    ax.set_ylabel("Mean decrease in impurity")
+    fig.tight_layout()
+    plt.show()
+
+    fig, ax = plt.subplots()
+    feature_importances_xgb.plot(kind="bar", figsize=(10, 8), ax=ax)
+    ax.set_title("Feature importances")
+    fig.tight_layout()
+    plt.show()
