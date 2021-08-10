@@ -17,7 +17,7 @@ class BaseArguments:
         parser.add_argument(
             "--input_file",
             type=str,
-            default="labeled-elm-events.hdf5",
+            default="labeled-elm-events-large.hdf5",
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
@@ -179,7 +179,7 @@ class BaseArguments:
         parser.add_argument(
             "--fraction_valid",
             type=float,
-            default=0.2,
+            default=0.15,
             help="size of the validation dataset.",
         )
         parser.add_argument(
