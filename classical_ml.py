@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import metrics
+from sklearn.inspection import permutation_importance
 from xgboost import XGBClassifier
 
 plt.style.use("/Users/lakshyamalhotra/plt_custom.mplstyle")
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     # logistic regression
     print()
     print()
-    lr = LogisticRegression(max_iter=1000, n_jobs=-1)
+    lr = LogisticRegression(max_iter=1000, n_jobs=-1, random_state=23)
     lr.fit(X_train, y_train)
     y_train_lr = lr.predict_proba(X_train)
     y_pred_lr = lr.predict_proba(X_valid)
@@ -52,7 +53,7 @@ if __name__ == "__main__":
     # random forest
     print()
     print()
-    rf = RandomForestClassifier(n_jobs=-1)
+    rf = RandomForestClassifier(n_jobs=-1, random_state=23)
     rf.fit(X_train, y_train)
     y_train_rf = rf.predict_proba(X_train)
     y_pred_rf = rf.predict_proba(X_valid)
@@ -69,11 +70,22 @@ if __name__ == "__main__":
     importances_rf = rf.feature_importances_
     feature_importances_rf = pd.Series(importances_rf, index=features)
 
+    # random forest feature importance using feature permutation
+    result = permutation_importance(
+        rf, X_valid, y_valid, n_repeats=6, random_state=23, n_jobs=-1
+    )
+    feature_importances_rf_fp = pd.Series(
+        result.importances_mean, index=features
+    )
+
     # XGBoost
     print()
     print()
     xgb = XGBClassifier(
-        objective="binary:logistic", use_label_encoder=False, n_jobs=-1
+        objective="binary:logistic",
+        use_label_encoder=False,
+        n_jobs=-1,
+        random_state=23,
     )
     xgb.fit(X_train, y_train, eval_metric="logloss")
     y_train_xgb = xgb.predict_proba(X_train)
@@ -81,8 +93,8 @@ if __name__ == "__main__":
     y_pred_xgb_bin = xgb.predict(X_valid)
     roc_score_train_xgb = metrics.roc_auc_score(y_train, y_train_xgb[:, 1])
     roc_score_xgb = metrics.roc_auc_score(y_valid, y_pred_xgb[:, 1])
-    print(f"ROC score on training, XGBoost: {roc_score_train_rf}")
-    print(f"ROC score on validation, XGBoost: {roc_score_rf}")
+    print(f"ROC score on training, XGBoost: {roc_score_train_xgb}")
+    print(f"ROC score on validation, XGBoost: {roc_score_xgb}")
     cr_xgb = metrics.classification_report(
         y_valid, y_pred_xgb_bin, output_dict=True
     )
@@ -96,6 +108,13 @@ if __name__ == "__main__":
     feature_importances_rf.plot(kind="bar", figsize=(10, 8), ax=ax)
     ax.set_title("Feature importances using MDI")
     ax.set_ylabel("Mean decrease in impurity")
+    fig.tight_layout()
+    plt.show()
+
+    fig, ax = plt.subplots()
+    feature_importances_rf_fp.plot(kind="bar", figsize=(10, 8), ax=ax)
+    ax.set_title("Feature importances using feature permutation")
+    ax.set_ylabel("Mean accuracy decrease")
     fig.tight_layout()
     plt.show()
 
