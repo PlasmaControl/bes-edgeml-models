@@ -44,6 +44,20 @@ if __name__ == "__main__":
     roc_score_lr = metrics.roc_auc_score(y_valid, y_pred_lr[:, 1])
     print(f"ROC score on training, logistic regression: {roc_score_train_lr}")
     print(f"ROC score on validation, logistic regression: {roc_score_lr}")
+    fpr, tpr, thresh = metrics.roc_curve(y_valid, y_pred_lr[:, 1])
+    roc_details_lr = pd.DataFrame()
+    roc_details_lr["fpr"] = fpr
+    roc_details_lr["tpr"] = tpr
+    roc_details_lr["threshold"] = thresh
+
+    roc_details_lr.to_csv(
+        os.path.join(
+            path,
+            f"roc_details_lr_lookahead_0.csv",
+        ),
+        index=False,
+    )
+
     cr_lr = metrics.classification_report(
         y_valid, y_pred_lr_bin, output_dict=True
     )
@@ -62,6 +76,21 @@ if __name__ == "__main__":
     roc_score_rf = metrics.roc_auc_score(y_valid, y_pred_rf[:, 1])
     print(f"ROC score on training, random forest: {roc_score_train_rf}")
     print(f"ROC score on validation, random forest: {roc_score_rf}")
+
+    fpr, tpr, thresh = metrics.roc_curve(y_valid, y_pred_rf[:, 1])
+    roc_details_rf = pd.DataFrame()
+    roc_details_rf["fpr"] = fpr
+    roc_details_rf["tpr"] = tpr
+    roc_details_rf["threshold"] = thresh
+
+    roc_details_rf.to_csv(
+        os.path.join(
+            path,
+            f"roc_details_rf_lookahead_0.csv",
+        ),
+        index=False,
+    )
+
     cr_rf = metrics.classification_report(
         y_valid, y_pred_rf_bin, output_dict=True
     )
@@ -71,12 +100,12 @@ if __name__ == "__main__":
     feature_importances_rf = pd.Series(importances_rf, index=features)
 
     # random forest feature importance using feature permutation
-    result = permutation_importance(
-        rf, X_valid, y_valid, n_repeats=6, random_state=23, n_jobs=-1
-    )
-    feature_importances_rf_fp = pd.Series(
-        result.importances_mean, index=features
-    )
+    # result = permutation_importance(
+    #     rf, X_valid, y_valid, n_repeats=6, random_state=23, n_jobs=-1
+    # )
+    # feature_importances_rf_fp = pd.Series(
+    #     result.importances_mean, index=features
+    # )
 
     # XGBoost
     print()
@@ -95,6 +124,21 @@ if __name__ == "__main__":
     roc_score_xgb = metrics.roc_auc_score(y_valid, y_pred_xgb[:, 1])
     print(f"ROC score on training, XGBoost: {roc_score_train_xgb}")
     print(f"ROC score on validation, XGBoost: {roc_score_xgb}")
+
+    fpr, tpr, thresh = metrics.roc_curve(y_valid, y_pred_xgb[:, 1])
+    roc_details_xgb = pd.DataFrame()
+    roc_details_xgb["fpr"] = fpr
+    roc_details_xgb["tpr"] = tpr
+    roc_details_xgb["threshold"] = thresh
+
+    roc_details_xgb.to_csv(
+        os.path.join(
+            path,
+            f"roc_details_xgb_lookahead_0.csv",
+        ),
+        index=False,
+    )
+
     cr_xgb = metrics.classification_report(
         y_valid, y_pred_xgb_bin, output_dict=True
     )
@@ -111,15 +155,109 @@ if __name__ == "__main__":
     fig.tight_layout()
     plt.show()
 
-    fig, ax = plt.subplots()
-    feature_importances_rf_fp.plot(kind="bar", figsize=(10, 8), ax=ax)
-    ax.set_title("Feature importances using feature permutation")
-    ax.set_ylabel("Mean accuracy decrease")
-    fig.tight_layout()
-    plt.show()
+    # fig, ax = plt.subplots()
+    # feature_importances_rf_fp.plot(kind="bar", figsize=(10, 8), ax=ax)
+    # ax.set_title("Feature importances using feature permutation")
+    # ax.set_ylabel("Mean accuracy decrease")
+    # fig.tight_layout()
+    # plt.show()
 
     fig, ax = plt.subplots()
     feature_importances_xgb.plot(kind="bar", figsize=(10, 8), ax=ax)
     ax.set_title("Feature importances")
     fig.tight_layout()
+    plt.show()
+
+    # fpr/tpr vs threshold for lr
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(
+        roc_details_lr["threshold"].loc[1:],
+        roc_details_lr["fpr"].loc[1:],
+        "--",
+        lw=2,
+        c="#636EFA",
+        label="fpr lr",
+    )
+    ax.plot(
+        roc_details_lr["threshold"].loc[1:],
+        roc_details_lr["tpr"].loc[1:],
+        "-",
+        lw=2,
+        c="#636EFA",
+        label="tpr lr",
+    )
+
+    # fpr/tpr vs threshold for rf
+    ax.plot(
+        roc_details_rf["threshold"].loc[1:],
+        roc_details_rf["fpr"].loc[1:],
+        "--",
+        lw=2,
+        c="#EF553B",
+        label="fpr rf",
+    )
+    ax.plot(
+        roc_details_rf["threshold"].loc[1:],
+        roc_details_rf["tpr"].loc[1:],
+        "-",
+        lw=2,
+        c="#EF553B",
+        label="tpr rf",
+    )
+
+    # fpr/tpr vs threshold for xgb
+    ax.plot(
+        roc_details_xgb["threshold"].loc[1:],
+        roc_details_xgb["fpr"].loc[1:],
+        "--",
+        lw=2,
+        c="#00CC96",
+        label="fpr xgb",
+    )
+    ax.plot(
+        roc_details_xgb["threshold"].loc[1:],
+        roc_details_xgb["tpr"].loc[1:],
+        "-",
+        lw=2,
+        c="#00CC96",
+        label="tpr xgb",
+    )
+    ax.legend(fontsize=8, frameon=False)
+    ax.set_title("TPR/FPR vs threshold", fontsize=16)
+    ax.set_xlabel("threshold", fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+    # roc curves for different models
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(
+        roc_details_lr["fpr"].loc[1:],
+        roc_details_lr["tpr"].loc[1:],
+        "-",
+        lw=2,
+        c="#636EFA",
+        label="lr",
+    )
+    ax.plot(
+        roc_details_rf["fpr"],
+        roc_details_rf["tpr"],
+        "-",
+        lw=2,
+        c="#EF553B",
+        label="rf",
+    )
+    ax.plot(
+        roc_details_xgb["fpr"],
+        roc_details_xgb["tpr"],
+        "-",
+        lw=2,
+        c="#00CC96",
+        label="xgb",
+    )
+    ax.plot([0, 1], [0, 1], c="gray", lw=2)
+    ax.legend(fontsize=8, frameon=False)
+    ax.set_title("ROC Curve", fontsize=16)
+    ax.set_xlabel("FPR", fontsize=12)
+    ax.set_ylabel("TPR", fontsize=12)
+    plt.tight_layout()
     plt.show()
