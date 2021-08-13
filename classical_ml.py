@@ -14,7 +14,7 @@ from sklearn import metrics
 from sklearn.inspection import permutation_importance
 from xgboost import XGBClassifier
 
-plt.style.use("/Users/lakshyamalhotra/plt_custom.mplstyle")
+plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
     path = "outputs/signal_window_16/label_look_ahead_0/roc"

@@ -7,7 +7,6 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from data_preprocessing import *
 from options.test_arguments import TestArguments
 from src import utils
 
@@ -25,7 +24,7 @@ def get_elm_df(
     df["sample_indices"] = sample_indices
     df["elm_event"] = None
 
-    # calculate adjusted differences to inccorporate `signal_window_size`
+    # calculate adjusted differences to incorporate `signal_window_size`
     # and `label_look_ahead`
     adjusted_diffs = (
         np.diff(window_start)

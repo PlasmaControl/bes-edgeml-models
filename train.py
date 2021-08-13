@@ -23,30 +23,30 @@ def train_loop(
     desc: bool = True,
 )->None:
     """Actual function to put the model to training. Use command line arg 
-    `--dry_run` to not create any test file and model checkpoint.
+    `--dry_run` to not create any tes
 
-    Args:
-    -----
-        args (argparse.Namespace): Namespace object that stores all the command
-            line arguments.
-        data_obj (object): Data object that creates train, validation and test data.
-        test_datafile_name (str): Name of the pickle file that stores the test data.
-        fold (Union[int, None]): Integer index for the fold if using k-fold cross
-        validation. Defaults to None.
-        desc (bool): If true, prints the model architecture and details.
-    """
-    # TODO: Implement K-fold cross-validation
-    if (not args.kfold) and (fold is not None):
-        LOGGER.info(
-            f"K-fold is set to {args.kfold} but fold index is passed!"
-            " Proceeding without using K-fold."
-        )
-        fold = None
-    # containers to hold train and validation losses
-    train_loss = []
-    valid_loss = []
-
-    # test data file path
+    # test data file path file and model checkpoint.
+    #
+    #     Args:
+    #     -----
+    #         args (argparse.Namespace): Namespace object that stores all the command
+    #             line arguments.
+    #         data_obj (object): Data object that creates train, validation and test data.
+    #         test_datafile_name (str): Name of the pickle file that stores the test data.
+    #         fold (Union[int, None]): Integer index for the fold if using k-fold cross
+    #         validation. Defaults to None.
+    #         desc (bool): If true, prints the model architecture and details.
+    #     """
+    #     # TODO: Implement K-fold cross-validation
+    #     if (not args.kfold) and (fold is not None):
+    #         LOGGER.info(
+    #             f"K-fold is set to {args.kfold} but fold index is passed!"
+    #             " Proceeding without using K-fold."
+    #         )
+    #         fold = None
+    #     # containers to hold train and validation losses
+    #     train_loss = []
+    #     valid_loss = []
     test_data_path, model_ckpt_path = utils.create_output_paths(
         args, infer_mode=False
     )
