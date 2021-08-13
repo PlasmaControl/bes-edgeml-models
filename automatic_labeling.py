@@ -8,7 +8,7 @@ from src import utils
 
 sns.set_palette("deep")
 
-# plt.style.use("/home/lakshya/plt_custom.mplstyle")
+plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
@@ -54,7 +54,6 @@ if __name__ == "__main__":
                 args.output_dir,
                 f"time_gradients_all_channels_hop_4_sws_128.png",
             ),
-            dpi=100,
         )
     plt.show()
 
@@ -79,6 +78,5 @@ if __name__ == "__main__":
             os.path.join(
                 args.output_dir, f"time_gradients_diff_hop_4_sws_128.png"
             ),
-            dpi=100,
         )
     plt.show()
