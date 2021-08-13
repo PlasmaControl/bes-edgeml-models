@@ -36,8 +36,13 @@ if __name__ == "__main__":
     y4_4 = np.gradient(first_signal[::4], 4, axis=0)
     y8_4 = np.gradient(first_signal[::4], 8, axis=0)
 
+    y1_8 = np.gradient(first_signal[::8], axis=0)
+    y2_8 = np.gradient(first_signal[::8], 2, axis=0)
+    y4_8 = np.gradient(first_signal[::8], 4, axis=0)
+    y8_8 = np.gradient(first_signal[::8], 8, axis=0)
+
     # plt.plot(first_signal[::8, 0, 0], label='x')
-    fig, ax = plt.subplots(nrows=3, ncols=2, figsize=(12, 14))
+    fig, ax = plt.subplots(nrows=4, ncols=2, figsize=(12, 16))
     ax = ax.flatten()
     ax[0].plot(y1_2[:, 0, 0], label="y1_00, hop=2")
     ax[0].plot(y2_2[:, 0, 0], label="y2_00, hop=2")
@@ -63,12 +68,24 @@ if __name__ == "__main__":
     ax[3].plot(y8_4[:, -1, -1], label="y8_77, hop=4")
     ax[3].legend()
 
-    ax[4].plot(first_signal[::2, 0, 0], label="signal_00, hop=2")
-    ax[4].plot(first_signal[::2, -1, -1], label="signal_77, hop=2")
+    ax[4].plot(y1_8[:, 0, 0], label="y1_00, hop=8")
+    ax[4].plot(y2_8[:, 0, 0], label="y2_00, hop=8")
+    ax[4].plot(y4_8[:, 0, 0], label="y4_00, hop=8")
+    ax[4].plot(y8_8[:, 0, 0], label="y8_00, hop=8")
     ax[4].legend()
 
-    ax[5].plot(first_signal[::4, 0, 0], label="signal_00, hop=4")
-    ax[5].plot(first_signal[::4, -1, -1], label="signal_77, hop=4")
+    ax[5].plot(y1_8[:, -1, -1], label="y1_77, hop=8")
+    ax[5].plot(y2_8[:, -1, -1], label="y2_77, hop=8")
+    ax[5].plot(y4_8[:, -1, -1], label="y4_77, hop=8")
+    ax[5].plot(y8_8[:, -1, -1], label="y8_77, hop=8")
     ax[5].legend()
+
+    ax[6].plot(first_signal[::2, 0, 0], label="signal_00, hop=2")
+    ax[6].plot(first_signal[::2, -1, -1], label="signal_77, hop=2")
+    ax[6].legend()
+
+    ax[7].plot(first_signal[::4, 0, 0], label="signal_00, hop=4")
+    ax[7].plot(first_signal[::4, -1, -1], label="signal_77, hop=4")
+    ax[7].legend()
     plt.tight_layout()
     plt.show()
