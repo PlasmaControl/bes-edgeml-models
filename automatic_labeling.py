@@ -41,7 +41,7 @@ if __name__ == "__main__":
         # print(f"Labels shape: {label.shape}")
         # print(signal[::8])
 
-        y1_4 = np.gradient(signal[::hop_length], axis=0)
+        y1_4 = np.gradient(signal[::hop_length], 2, axis=0)
         time_grad = y1_4.reshape(-1, 64)
         # print(f"Time gradient shape: {time_grad.shape}")
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
                 ax.legend(fontsize=7, frameon=False)
                 hop += 4
             plt.suptitle(
-                f"Time derivatives, hop-length: 4, signal window size: 128",
+                f"Time derivatives, hop-length: 4, signal window size: 128, step size: 2",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -73,7 +73,7 @@ if __name__ == "__main__":
                 plt.savefig(
                     os.path.join(
                         args.output_dir,
-                        f"time_gradients_all_channels_hop_4_sws_128.png",
+                        f"time_gradients_all_channels_hop_4_sws_128_step_2{args.filename_suffix}.png",
                     ),
                 )
             plt.show()
@@ -93,7 +93,7 @@ if __name__ == "__main__":
                 ax.legend(fontsize=7, frameon=False)
                 hop += 4
             plt.suptitle(
-                f"Time derivatives' differences, hop-length: 4, signal window size: 128",
+                f"Time derivatives' differences, hop-length: 4, signal window size: 128, step size: 2",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -101,7 +101,7 @@ if __name__ == "__main__":
                 plt.savefig(
                     os.path.join(
                         args.output_dir,
-                        f"time_gradients_diff_hop_4_sws_128.png",
+                        f"time_gradients_diff_hop_4_sws_128_step_2{args.filename_suffix}.png",
                     ),
                 )
             plt.show()
@@ -110,9 +110,7 @@ if __name__ == "__main__":
         df = pd.DataFrame()
         for i in range(time_grad_diffs.shape[1]):
             auto_label = np.zeros((time_grad_diffs.shape[0],), dtype="int")
-            positive_indicies = np.where(np.abs(time_grad_diffs[:, i]) > 0.35)[
-                0
-            ]
+            positive_indicies = np.where(np.abs(time_grad_diffs[:, i]) > 0.3)[0]
             auto_label[positive_indicies] = 1
             auto_label = np.repeat(auto_label, repeats=hop_length)
             auto_label = auto_label[: label.shape[0]]
@@ -129,18 +127,29 @@ if __name__ == "__main__":
         for col in dfs.columns
         if col not in ["elm_event_index", "manual_label"]
     ]
-    dfs["automatic_label"] = (np.sum(dfs[channels], axis=1) > 8).astype(int)
+    dfs["automatic_label"] = (np.sum(dfs[channels], axis=1) > 5).astype(int)
     print(dfs["automatic_label"].value_counts())
     print(dfs["manual_label"].value_counts())
 
     if args.plot_data:
-        first_elm = dfs[dfs["elm_event_index"] == 100]
-        fig, ax = plt.subplots()
-        first_elm["manual_label"].plot(
-            ax=ax, figsize=(6, 4), label="manual_label"
+        fig, axs = plt.subplots(nrows=4, ncols=3, figsize=(14, 16))
+        axs = axs.flatten()
+        for i, idx in enumerate(np.random.randint(1, num_elms + 1, size=12)):
+            ax = axs[i]
+            elm_evnt = dfs[dfs["elm_event_index"] == idx]
+            elm_evnt["manual_label"].plot(ax=ax, label="manual_label")
+            elm_evnt["automatic_label"].plot(ax=ax, label="automatic_label")
+            ax.legend(fontsize=10, frameon=False)
+        plt.suptitle(
+            f"Manual vs automatic labeling, hop-length: 4, signal window size: 128, step size: 2",
+            fontsize=18,
         )
-        first_elm["automatic_label"].plot(
-            ax=ax, figsize=(6, 4), label="automatic_label"
-        )
-        plt.legend(fontsize=10, frameon=False)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        if not args.dry_run:
+            plt.savefig(
+                os.path.join(
+                    args.output_dir,
+                    f"manual_automatic_labeling_hop_4_sws_128_step_2{args.filename_suffix}.png",
+                ),
+            )
         plt.show()
