@@ -12,15 +12,50 @@ sns.set_palette("deep")
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
+    output_dir = "automatic_labels"
     args, parser = TestArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_data, _, _ = data_obj.get_data()
-    signals, labels, valid_indices, window_start = train_data
+    train_data, valid_data, test_data = data_obj.get_data()
+    (
+        train_signals,
+        train_labels,
+        train_valid_indices,
+        train_window_start,
+    ) = train_data
+    (
+        valid_signals,
+        valid_labels,
+        valid_valid_indices,
+        valid_window_start,
+    ) = valid_data
+    (
+        test_signals,
+        test_labels,
+        test_valid_indices,
+        test_window_start,
+    ) = test_data
+
+    print(train_signals.shape)
+    print(valid_signals.shape)
+    print(test_signals.shape)
+    signals = np.concatenate(
+        [train_signals, valid_signals, test_signals], axis=0
+    )
+    labels = np.concatenate([train_labels, valid_labels, test_labels], axis=0)
+    valid_indices = np.concatenate(
+        [train_valid_indices, valid_valid_indices, test_valid_indices], axis=0
+    )
+    window_start = np.concatenate(
+        [train_window_start, valid_window_start, test_window_start], axis=0
+    )
+    print(signals.shape)
+    print(labels.shape)
     num_elms = len(window_start)
     dfs = []
+    signals_list = []
     hop_length = 4
     for i_elm in range(num_elms):
         print(f"Processing elm event with start index: {window_start[i_elm]}")
@@ -30,18 +65,13 @@ if __name__ == "__main__":
         else:
             stop = labels.size
         signal = signals[start:stop]
+        signals_list.append(signal)
         signal_max = np.max(signal)
         signal_min = np.min(signal)
-        # print(
-        #     f"Max, min values are respectively: {signal_max} and {signal_min}"
-        # )
-        # signal = (signal - signal_min) / (signal_max - signal_min)
         label = labels[start:stop]
-        # print(f"Signals shape: {signal.shape}")
-        # print(f"Labels shape: {label.shape}")
         # print(signal[::8])
 
-        y1_4 = np.gradient(signal[::hop_length], 2, axis=0)
+        y1_4 = np.gradient(signal[::hop_length], axis=0)
         time_grad = y1_4.reshape(-1, 64)
         # print(f"Time gradient shape: {time_grad.shape}")
 
@@ -54,27 +84,33 @@ if __name__ == "__main__":
             axs = axs.flatten()
             hop = 0
             for ax in axs:
-                for i in range(4):
-                    ax.plot(time_grad[:, i + hop], label=f"ch: {i+hop+1}")
+                for i, a in zip(range(4), [0.9, 0.8, 0.75, 0.7]):
+                    ax.plot(
+                        time_grad[:, i + hop], label=f"ch: {i+hop+1}", alpha=a
+                    )
                 ax.plot(
                     label[::4],
                     c="k",
                     linestyle="--",
                     label="ground truth",
+                    alpha=0.7,
                 )
                 ax.legend(fontsize=7, frameon=False)
+                ax.spines["left"].set_color("gray")
+                ax.spines["bottom"].set_color("gray")
                 hop += 4
             plt.suptitle(
-                f"Time derivatives, hop-length: 4, signal window size: 128, step size: 2",
+                f"Time derivatives, hop-length: 4, signal window size: 128",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             if not args.dry_run:
                 plt.savefig(
                     os.path.join(
-                        args.output_dir,
-                        f"time_gradients_all_channels_hop_4_sws_128_step_2{args.filename_suffix}.png",
+                        output_dir,
+                        f"all_channels_time_gradients_hop_4_sws_128{args.filename_suffix}.png",
                     ),
+                    dpi=150,
                 )
             plt.show()
 
@@ -82,74 +118,131 @@ if __name__ == "__main__":
             axs = axs.flatten()
             hop = 0
             for ax in axs:
-                for i in range(4):
-                    ax.plot(time_grad_diffs[:, i + hop], label=f"ch: {i+hop+1}")
+                for i, a in zip(range(4), [0.9, 0.8, 0.75, 0.7]):
+                    ax.plot(
+                        time_grad_diffs[:, i + hop],
+                        label=f"ch: {i+hop+1}",
+                        alpha=a,
+                    )
                 ax.plot(
                     label[::4],
                     c="k",
                     linestyle="--",
                     label="ground truth",
+                    alpha=0.7,
                 )
                 ax.legend(fontsize=7, frameon=False)
+                ax.spines["left"].set_color("gray")
+                ax.spines["bottom"].set_color("gray")
                 hop += 4
             plt.suptitle(
-                f"Time derivatives' differences, hop-length: 4, signal window size: 128, step size: 2",
+                f"Time derivatives' differences, hop-length: 4, signal window size: 128",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
             if not args.dry_run:
                 plt.savefig(
                     os.path.join(
-                        args.output_dir,
-                        f"time_gradients_diff_hop_4_sws_128_step_2{args.filename_suffix}.png",
+                        output_dir,
+                        f"all_channels_time_gradients_diff_hop_4_sws_128{args.filename_suffix}.png",
                     ),
+                    dpi=150,
                 )
             plt.show()
 
         # find labels channel by channel and store them in a pandas dataframe
         df = pd.DataFrame()
-        for i in range(time_grad_diffs.shape[1]):
-            auto_label = np.zeros((time_grad_diffs.shape[0],), dtype="int")
-            positive_indicies = np.where(np.abs(time_grad_diffs[:, i]) > 0.3)[0]
+        for i in range(time_grad.shape[1]):
+            auto_label = np.zeros((time_grad.shape[0],), dtype="int")
+            positive_indicies = np.where(np.abs(time_grad[:, i]) > 0.4)[0]
             auto_label[positive_indicies] = 1
             auto_label = np.repeat(auto_label, repeats=hop_length)
             auto_label = auto_label[: label.shape[0]]
             df[f"ch_{i+1}"] = auto_label
         df["elm_event_index"] = i_elm + 1
         df["manual_label"] = label.astype(int)
+        channels = [
+            col
+            for col in df.columns
+            if col not in ["elm_event_index", "manual_label"]
+        ]
+        df["automatic_label"] = (np.sum(df[channels], axis=1) > 12).astype(int)
+        auto_label = df["automatic_label"].values
+        manual_label = df["manual_label"].values
+        for i in range(len(manual_label)):
+            if (manual_label[i] or auto_label[i]) and (manual_label[i] == 0):
+                auto_label[i] = 0
+        x = np.where(auto_label == 1)[0]
+        auto_label[x[0] : x[-1]] = 1
+        df["automatic_label"] = auto_label
         dfs.append(df)
 
+        if i_elm == 11:
+            break
     dfs = pd.concat(dfs, axis=0)
-    print(dfs.head())
-    print(dfs.info())
-    channels = [
-        col
-        for col in dfs.columns
-        if col not in ["elm_event_index", "manual_label"]
-    ]
-    dfs["automatic_label"] = (np.sum(dfs[channels], axis=1) > 5).astype(int)
+    # print(dfs.head())
+    # print(dfs.info())
+
     print(dfs["automatic_label"].value_counts())
     print(dfs["manual_label"].value_counts())
 
     if args.plot_data:
-        fig, axs = plt.subplots(nrows=4, ncols=3, figsize=(14, 16))
-        axs = axs.flatten()
-        for i, idx in enumerate(np.random.randint(1, num_elms + 1, size=12)):
-            ax = axs[i]
-            elm_evnt = dfs[dfs["elm_event_index"] == idx]
-            elm_evnt["manual_label"].plot(ax=ax, label="manual_label")
-            elm_evnt["automatic_label"].plot(ax=ax, label="automatic_label")
-            ax.legend(fontsize=10, frameon=False)
-        plt.suptitle(
-            f"Manual vs automatic labeling, hop-length: 4, signal window size: 128, step size: 2",
-            fontsize=18,
-        )
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        if not args.dry_run:
-            plt.savefig(
-                os.path.join(
-                    args.output_dir,
-                    f"manual_automatic_labeling_hop_4_sws_128_step_2{args.filename_suffix}.png",
-                ),
-            )
-        plt.show()
+        elm_index_list = list(range(num_elms))
+        num_pages = int(len(elm_index_list) / 12) + 1
+        print(f"Total ELM events: {num_elms}")
+        print(f"Total pages: {num_pages}")
+        elm_event_list = [
+            elm_index_list[i * 12 : (i + 1) * 12] for i in range(num_pages)
+        ]
+        for page_num, page in enumerate(elm_event_list):
+            if len(page) == 12:
+                fig, axs = plt.subplots(nrows=4, ncols=3, figsize=(14, 16))
+            else:
+                remaining_elms = 12 * num_pages - num_elms
+                rows = 4
+                cols = remaining_elms // rows
+                fig, axs = plt.subplots(nrows=rows, ncols=1, figsize=(10, 12))
+            fig.subplots_adjust(hspace=1.5)
+            axs = axs.flatten()
+            for i in range(len(page)):
+                print(f"Plotting elm event {i+1} from page {page_num}")
+                ax = axs[i]
+                plt.setp(ax.get_xticklabels(), fontsize=9)
+                plt.setp(ax.get_yticklabels(), fontsize=9)
+                elm_evnt = dfs[dfs["elm_event_index"] == i + 1]
+                elm_evnt["manual_label"].plot(ax=ax, label="manual_label")
+                elm_evnt["automatic_label"].plot(ax=ax, label="automatic_label")
+                ax.plot(
+                    signals_list[i][:, 0, 0] / 10.0,
+                    lw=1.0,
+                    label="ch: 1",
+                    alpha=0.6,
+                )
+                ax.plot(
+                    signals_list[i][:, 7, 7] / 5.0,
+                    lw=1.0,
+                    label="ch: 64",
+                    alpha=0.6,
+                )
+                ax.set_title(f"ELM event: {i + 1 + (12*page_num)}", fontsize=12)
+                ax.legend(fontsize=10, frameon=False)
+                ax.spines["left"].set_color("gray")
+                ax.spines["bottom"].set_color("gray")
+            if page_num == 0:
+                plt.suptitle(
+                    f"Manual vs automatic labeling, hop-length: 4, signal window size: 128",
+                    fontsize=18,
+                )
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95], pad=1.5, h_pad=1.5)
+            if not args.dry_run:
+                fname = os.path.join(
+                    output_dir,
+                    f"page_{page_num+1}_elm_{page[0]+1}_{page[-1]+1}.png",
+                )
+                print(f"Creating file: {fname}")
+                plt.savefig(fname, dpi=150)
+            # if page_num in [0, 1]:
+            #     plt.show()
+            # else:
+            #     break
+            plt.close()
