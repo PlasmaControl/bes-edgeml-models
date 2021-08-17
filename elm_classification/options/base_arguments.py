@@ -75,6 +75,11 @@ class BaseArguments:
                  "`show_autograd` to view what pytorch saves for backward pass."
         )
         parser.add_argument(
+            "--save_pdf",
+            type=str,
+            help="Save figure to pdf. Specify file location."
+        )
+        parser.add_argument(
             "--device",
             type=str,
             default="cpu",
