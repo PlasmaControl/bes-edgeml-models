@@ -10,17 +10,31 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
+from data_preprocessing import *
 from options.train_arguments import TrainArguments
-from src import data, utils, run
+from src import utils, run, dataset
 
 
 def train_loop(
     args: argparse.Namespace,
-    data_obj: data.Data,
+    data_obj: object,
     test_datafile_name: str,
     fold: Union[int, None] = None,
     desc: bool = True,
-):
+)->None:
+    """Actual function to put the model to training. Use command line arg 
+    `--dry_run` to not create any test file and model checkpoint.
+
+    Args:
+    -----
+        args (argparse.Namespace): Namespace object that stores all the command
+            line arguments.
+        data_obj (object): Data object that creates train, validation and test data.
+        test_datafile_name (str): Name of the pickle file that stores the test data.
+        fold (Union[int, None]): Integer index for the fold if using k-fold cross
+        validation. Defaults to None.
+        desc (bool): If true, prints the model architecture and details.
+    """
     # TODO: Implement K-fold cross-validation
     if (not args.kfold) and (fold is not None):
         LOGGER.info(
@@ -91,21 +105,19 @@ def train_loop(
     ):
         transforms = None
     else:
-        transforms = data.get_transforms(args)
+        transforms = dataset.get_transforms(args)
 
     # create datasets
-    train_dataset = data.ELMDataset(
-        args,
-        *train_data,
-        logger=LOGGER,
-        transform=transforms,
+    train_dataset = dataset.ELMDataset(
+        args, *train_data, logger=LOGGER, transform=transforms, phase="training"
     )
 
-    valid_dataset = data.ELMDataset(
+    valid_dataset = dataset.ELMDataset(
         args,
         *valid_data,
         logger=LOGGER,
         transform=transforms,
+        phase="validation",
     )
 
     # training and validation dataloaders
@@ -146,13 +158,21 @@ def train_loop(
         elif args.model_name == "rnn":
             input_size = (args.batch_size, args.signal_window_size, 64)
         else:
-            if args.interpolate:
+            if args.data_preproc == "interpolate":
                 input_size = (
                     args.batch_size,
                     1,
                     args.signal_window_size,
                     args.interpolate_size,
                     args.interpolate_size,
+                )
+            elif args.data_preproc == "gradient":
+                input_size = (
+                    args.batch_size,
+                    6,
+                    args.signal_window_size,
+                    8,
+                    8,
                 )
             else:
                 input_size = (
@@ -287,15 +307,15 @@ def train_loop(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
 
-    # # # save the predictions in the valid dataframe
-    # # valid_folds["preds"] = torch.load(
-    # #     os.path.join(
-    # #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
-    # #     ),
-    # #     map_location=torch.device("cpu"),
-    # # )["preds"]
+    # # save the predictions in the valid dataframe
+    # valid_folds["preds"] = torch.load(
+    #     os.path.join(
+    #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
+    #     ),
+    #     map_location=torch.device("cpu"),
+    # )["preds"]
 
-    # # return valid_folds
+    # return valid_folds
 
 
 if __name__ == "__main__":
@@ -308,7 +328,8 @@ if __name__ == "__main__":
             f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
         ),
     )
-    data_obj = data.Data(args, LOGGER, normalize=True, truncate_inputs=True)
+    data_cls = utils.create_data(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
     train_loop(
         args,
         data_obj,

@@ -35,8 +35,11 @@ class CNNModel(nn.Module):
         super(CNNModel, self).__init__()
         self.args = args
         filter1 = (8, filter_size, filter_size)
+        in_channels = 6 if self.args.use_gradients else 1
         self.conv1 = nn.Conv3d(
-            in_channels=1, out_channels=num_channels[0], kernel_size=filter1
+            in_channels=in_channels,
+            out_channels=num_channels[0],
+            kernel_size=filter1,
         )
         filter2 = (1, filter_size, filter_size)
         self.conv2 = nn.Conv3d(
@@ -65,3 +68,38 @@ class CNNModel(nn.Module):
         x = self.fc3(x)
 
         return x
+
+
+if __name__ == "__main__":
+    from torchinfo import summary
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_gradients", action="store_true", default=False)
+    parser.add_argument("--signal_window_size", type=int)
+    parser.add_argument("--device", default="cpu")
+    args = parser.parse_args(
+        [
+            "--use_gradients",
+            "--signal_window_size",
+            "8",
+        ],  # ["--device", "cpu"]
+    )
+    shape = (16, 6, 8, 8, 8)
+    x = torch.ones(*shape)
+    device = torch.device(
+        "cpu"
+    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    x = x.to(device)
+    model = CNNModel(args)
+    print(summary(model, input_size=shape, device="cpu"))
+
+    for param in list(model.named_parameters()):
+        print(
+            f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+        )
+    print(
+        f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
+    y = model(x)
+    # print(y)
+    print(y.shape)
