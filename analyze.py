@@ -12,10 +12,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import metrics
+from sklearn.preprocessing import StandardScaler
+from sklearn import decomposition as comp
 from tqdm import tqdm
 
 from src import data, utils
 from options.test_arguments import TestArguments
+from matplotlib.backends.backend_pdf import PdfPages
 
 sns.set_style("white")
 colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
@@ -203,6 +206,7 @@ def predict_v2(
         args: argparse.Namespace,
         test_data: tuple,
         model: object,
+        layer: str,
         device: torch.device,
 ) -> dict:
     signals = test_data[0]
@@ -216,14 +220,17 @@ def predict_v2(
     ### ------------ Forward Hook ---------- ###
     activations = []
 
-    def get_activation(name):
+    def get_activation():
         def hook(model, input, output):
             o = output.detach()[0].numpy()
             activations.append(o)
 
         return hook
 
-    model.fc2.register_forward_hook(get_activation('fc2'))
+    # TODO: make for conv3
+
+    model.fc1.register_forward_hook(get_activation())
+    weights = model.fc2.weight.detach().numpy()[0]
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
@@ -259,7 +266,6 @@ def predict_v2(
 
         activations = np.array(activations)
         activations = np.transpose(activations)
-        weights = model.fc2.weight.detach().numpy()
 
         elm_signals = elm_signals[
                       : (-args.signal_window_size - args.label_look_ahead + 1), ...
@@ -321,6 +327,35 @@ def predict_v2(
     return elm_predictions
 
 
+def perform_PCA(elm_predictions: dict):
+    '''
+    Use scikit learn's pca analysis tools to reduce dimensionality of hidden layer
+    output.
+    Jeff Zimmerman
+    '''
+
+    elm_id = list(elm_predictions.keys())
+
+    activations = elm_predictions[elm_id[0]]['activations']
+    weights = elm_predictions[elm_id[0]]['weights']
+    weighted = []
+    for i, act in enumerate(activations):
+        weighted.append(weights[i] * act)
+
+    weighted_standard = StandardScaler().fit_transform(weighted)
+
+    pca = comp.PCA(n_components=3)
+    pca.fit(weighted_standard)
+    decomposed = pca.transform(weighted_standard)
+
+    print(pca.explained_variance_ratio_)
+    print(pca.components_.shape)
+
+    plt.plot(decomposed)
+    plt.show()
+    return
+
+
 def plot(
         args: argparse.Namespace,
         elm_predictions: dict,
@@ -329,66 +364,132 @@ def plot(
     state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
     i_elms = state.choice(elm_id, args.plot_num, replace=False)
-
-    for i_elm in i_elms:
+    if args.save_pdf:
+        pp = PdfPages(args.save_pdf)
+    for elm_no, i_elm in enumerate(i_elms[:48]):
+        fig, axs = plt.subplots(10, 4, figsize=(8, 8))
+        plt.subplots_adjust(hspace=0)
+        print(f"ELM {elm_no} of {len(i_elms)} with {len(elm_predictions[i_elm]['elm_time'])} time points")
         activations = elm_predictions[i_elm]["activations"]
-        print(elm_predictions[i_elm]["weights"].shape)
-        fig = plt.figure(figsize=(14, 12))
-        for i in range(32):
+        weights = elm_predictions[i_elm]["weights"]
+        for i in range(4):
             signals = elm_predictions[i_elm]["signals"]
             labels = elm_predictions[i_elm]["labels"]
             elm_start = np.where(labels > 0)[0][0]
             predictions = elm_predictions[i_elm]["micro_predictions"]
             elm_time = elm_predictions[i_elm]["elm_time"]
-            print(f"Node {i + 1} of 32 with {len(elm_time)} time points")
-            plt.subplot(args.num_rows, args.num_cols, i + 1)
-            plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0])
-            plt.plot(activations[i], label=f"Output node {i}")
-            plt.plot(
-                elm_time,
-                labels + 0.02,
-                label="Ground truth",
-                ls="-.",
-                lw=1.25,
-                c=colors[1],
-            )
-            plt.plot(
+            axs[9][i].plot(elm_time,
+                           signals[:, 2, 6],
+                           label="BES ch. 22" if i == 0 else '_nolegend_',
+                           c=colors[0])
+            axs[8][i].plot(
                 elm_time - args.label_look_ahead,
                 predictions,
-                label="Prediction",
+                label="Prediction" if i == 0 else '_nolegend_',
                 ls="-.",
                 lw=1.25,
                 c=colors[-2],
             )
-            plt.axvline(
-                elm_start - 75,
-                ymin=0,
-                ymax=0.9,
-                c=colors[-1],
-                ls=":",
-                lw=1.5,
-                label="Buffer limits",
-            )
-            plt.axvline(
-                elm_start + 75,
-                ymin=0,
-                ymax=0.9,
-                c=colors[-1],
-                ls=":",
-                lw=1.5,
-            )
-            plt.xlabel("Time (micro-s)")
-            plt.ylabel("Signal | label")
-            plt.ylim([None, None])
-            plt.legend(fontsize=8, frameon=False)
-            plt.gca().spines["right"].set_visible(False)
-            plt.gca().spines["top"].set_visible(False)
-            plt.grid(axis="y")
+            axs[9][i].set_xlabel("Time (micro-s)")
+            for j in [8, 9]:
+                axs[j][i].set_ylim([-1, 1])
+                axs[j][i].grid(axis="y")
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    label="Ground truth" if i + j == 8 else '_nolegend_',
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].text(.5, .9, "Prediction" if j == 8 else "Signal",
+                               horizontalalignment='center',
+                               verticalalignment='top',
+                               transform=axs[j][i].transAxes)
+            for j in range(8):
+                weighted = activations[i * 8 + j] * weights[0][i * 8 + j]
+                axs[j][i].plot(weighted, label="Node output (weighted)" if i + j == 0 else '_nolegend_', )
+                axs[j][i].set_xticks([])
+                axs[j][i].text(.5, .9, f'Node {i * 8 + j}: weight {weights[0][i * 8 + j]:.3f}',
+                               horizontalalignment='center',
+                               verticalalignment='top',
+                               fontsize=8,
+                               transform=axs[j][i].transAxes)
+                axs[j][i].set_ylim(-1, 1)
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                    label="Buffer limits" if i + j == 0 else '_nolegend_',
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].grid(axis="y")
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
 
-            plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-        plt.show()
+        fig.legend(fontsize=8, frameon=False)
+        plt.suptitle(f"Model output on elm {i_elm}", fontsize=20)
+        if args.save_pdf:
+            pp.savefig(fig)
+        else:
+            plt.show()
+    if args.save_pdf:
+        pp.close()
+    return
     plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
@@ -621,6 +722,13 @@ def get_dict_values(pred_dict: dict, mode: str):
         return np.concatenate(targets), np.concatenate(predictions)
 
 
+def get_layer(model: object, layer: str):
+    layer_dict = {
+        'conv1': model.conv1,
+        'conv2': model.conv2,
+    }
+
+
 def main(
         args: argparse.Namespace,
 ) -> None:
@@ -683,6 +791,8 @@ def main(
     # micro-/macro-predictions and elm_time
     pred_dict = predict_v2(args, test_data, model, device)
 
+    perform_PCA(pred_dict)
+    return
     if args.plot_data:
         plot(args, pred_dict, plot_dir)
 

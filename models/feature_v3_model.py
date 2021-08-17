@@ -57,6 +57,14 @@ class FeatureV3Model(nn.Module):
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
 
+        self.layers = {
+            'conv1': self.conv1,
+            'conv2': self.conv2,
+            'fc1': self.fc1,
+            'fc2': self.fc2,
+            'fc3': self.fc3
+        }
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.relu(self.conv1(x))
         x = self.dropout3d(x)

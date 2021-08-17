@@ -58,6 +58,15 @@ class CNNV2Model(nn.Module):
         self.fc2 = nn.Linear(in_features=fc_units[0], out_features=fc_units[1])
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
 
+        self.layers = {
+            'conv1': self.conv1,
+            'conv2': self.conv2,
+            'conv3': self.conv3,
+            'fc1': self.fc1,
+            'fc2': self.fc2,
+            'fc3': self.fc3
+        }
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
         x = self.relu(self.dropout3d(x))
