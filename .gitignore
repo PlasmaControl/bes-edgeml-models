@@ -157,3 +157,4 @@ cython_debug/
 /visualizations/node_outputs/
 /visualizations/PCA/
 /visualizations/torchviz_diagrams/
+/logs/
