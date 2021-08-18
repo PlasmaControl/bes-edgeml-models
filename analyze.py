@@ -12,6 +12,7 @@ import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.colors import LogNorm
 import seaborn as sns
 from sklearn import metrics
@@ -25,8 +26,9 @@ from src import data, utils, dataset
 from options.test_arguments import TestArguments
 from matplotlib.backends.backend_pdf import PdfPages
 
-#plt.style.use("/home/lakshya/plt_custom.mplstyle")
-plt.style.use("/home/lm9679/plt_custom.mplstyle")
+
+# plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# plt.style.use("/home/lm9679/plt_custom.mplstyle")
 # colors = sns.color_palette("deep").as_hex()
 
 
@@ -249,10 +251,10 @@ def predict_v2(
 
         return hook
 
-    # TODO: make for conv3
+    (act_layer, weight_layer) = get_layer(model, layer)
 
-    model.fc1.register_forward_hook(get_activation())
-    weights = model.fc2.weight.detach().numpy()[0]
+    act_layer.register_forward_hook(get_activation())
+    weights = weight_layer.weight.detach().numpy()[0]
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
@@ -364,22 +366,33 @@ def perform_PCA(elm_predictions: dict):
 
     elm_id = list(elm_predictions.keys())
 
-    activations = elm_predictions[elm_id[0]]['activations']
-    weights = elm_predictions[elm_id[0]]['weights']
-    weighted = []
-    for i, act in enumerate(activations):
-        weighted.append(weights[i] * act)
-
-    weighted_standard = StandardScaler().fit_transform(weighted)
+    activations = (elm_predictions[elm_id[0]]['activations']).T
+    weights = elm_predictions[elm_id[0]]['weights'].T
+    # weighted = []
+    # for i, act in enumerate(activations):
+    #     weighted.append(weights[i] * act)
+    print(activations.shape)
+    standard = StandardScaler().fit_transform(activations)
 
     pca = comp.PCA(n_components=3)
-    pca.fit(weighted_standard)
-    decomposed = pca.transform(weighted_standard)
+    pca.fit(standard)
+    decomposed = pca.transform(standard)
 
     print(pca.explained_variance_ratio_)
-    print(pca.components_.shape)
+    print(decomposed.shape)
+    # for x in range(len(weights)):
+    #     print(pca.components_[0][x], weights[x])
 
-    plt.plot(decomposed)
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
+    ax1.plot(decomposed[:, 0])
+    ax1.set_title('PCA')
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('PC_1')
+
+    ax2.plot(activations[:, 0])
+    ax2.set_title('Original')
+    ax2.set_ylabel('Amplitude (V)')
+    ax2.set_xlabel('Time')
     plt.show()
     return
 
@@ -793,11 +806,15 @@ def get_dict_values(pred_dict: dict, mode: str):
 
 
 def get_layer(model: object, layer: str):
-    layer_dict = {
-        'conv1': model.conv1,
-        'conv2': model.conv2,
-    }
+    layer_dict = model.layers
 
+    layer_idx = list(layer_dict.keys()).index(layer)
+    weight_idx = layer_idx + 1
+
+    act_layer = layer_dict[layer]
+    weight_layer = list(layer_dict.items())[weight_idx][1]
+
+    return (act_layer, weight_layer)
 
 def main(
         args: argparse.Namespace,
@@ -859,10 +876,11 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict_v2(args, test_data, model, device)
+    pred_dict = predict_v2(args=args, test_data=test_data, model=model, device=device, layer='fc1')
 
     perform_PCA(pred_dict)
     return
+
     if args.plot_data:
         plot_all(args, pred_dict, plot_dir)
 
