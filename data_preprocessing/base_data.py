@@ -46,7 +46,7 @@ class BaseData:
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
-    ) -> Tuple:
+    ) -> Tuple[np.ndarray]:
         """Method to create data for training, validation and testing.
 
         Args:
@@ -67,34 +67,53 @@ class BaseData:
         self.logger.info("-" * 30)
         self.logger.info("  Creating training data")
         self.logger.info("-" * 30)
-        train_data = self._preprocess_data(
-            training_elms,
-            shuffle_sample_indices=shuffle_sample_indices,
-            is_test_data=False,
-        )
-        self.logger.info("-" * 30)
-        self.logger.info("  Creating validation data")
-        self.logger.info("-" * 30)
-        validation_data = self._preprocess_data(
-            validation_elms,
-            shuffle_sample_indices=shuffle_sample_indices,
-            is_test_data=False,
-        )
-        self.logger.info("-" * 30)
-        self.logger.info("  Creating test data")
-        self.logger.info("-" * 30)
-        test_data = self._preprocess_data(
-            test_elms,
-            shuffle_sample_indices=shuffle_sample_indices,
-            is_test_data=True,
-        )
+        if self.args.use_all_data:
+            all_elms = np.concatenate(
+                [training_elms, validation_elms, test_elms]
+            )
+            all_data = self._preprocess_data(
+                all_elms,
+                shuffle_sample_indices=shuffle_sample_indices,
+                is_test_data=False,
+            )
+        else:
+            train_data = self._preprocess_data(
+                training_elms,
+                shuffle_sample_indices=shuffle_sample_indices,
+                is_test_data=False,
+            )
+            self.logger.info("-" * 30)
+            self.logger.info("  Creating validation data")
+            self.logger.info("-" * 30)
+            validation_data = self._preprocess_data(
+                validation_elms,
+                shuffle_sample_indices=shuffle_sample_indices,
+                is_test_data=False,
+            )
+            self.logger.info("-" * 30)
+            self.logger.info("  Creating test data")
+            self.logger.info("-" * 30)
+            test_data = self._preprocess_data(
+                test_elms,
+                shuffle_sample_indices=shuffle_sample_indices,
+                is_test_data=True,
+            )
 
         self.hf.close()
         if self.hf:
             self.logger.info("File is open.")
         else:
             self.logger.info("File is closed.")
-        return train_data, validation_data, test_data
+
+        return (
+            (all_elms, all_data)
+            if self.args.use_all_data
+            else (
+                train_data,
+                validation_data,
+                test_data,
+            )
+        )
 
     def _get_total_frames(self):
         count = 0

@@ -43,6 +43,13 @@ class BaseArguments:
             "[truncate | unaltered | gradient | interpolate | balance | rnn].",
         )
         parser.add_argument(
+            "--use_all_data",
+            action="store_true",
+            default=False,
+            help="if true, don't split the data into training, testing and validation "
+            "sets.",
+        )
+        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
