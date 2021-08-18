@@ -3,18 +3,12 @@ __pycache__/
 .idea/
 .vscode/
 data/
-processed_data/
 jobs/
 viz/
 figures/
 model_checkpoints/
-wandb/
-
 # tensorboard/
-train_features_df_*.csv
-valid_features_df_*.csv
 
-*.onnx
 slurm*
 *.db
 *.log
@@ -159,6 +153,11 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+/visualizations/feature_maps/
+/visualizations/node_outputs/
+/visualizations/PCA/
+/visualizations/torchviz_diagrams/
+
 outputs/signal_window_16/label_look_ahead_0/roc/cnn_feature_df_0.csv
 outputs/signal_window_16/label_look_ahead_0/roc/automatic_labels_df_0.csv
 outputs/signal_window_16/label_look_ahead_0/roc/cnn_features_automatic_labels_df_0.csv
