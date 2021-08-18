@@ -29,7 +29,7 @@ if __name__ == "__main__":
     first_img.save(
         pdf_fname,
         "PDF",
-        resolution=400.0,
+        resolution=1000.0,
         save_all=True,
         append_images=images,
     )

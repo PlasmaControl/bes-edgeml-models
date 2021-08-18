@@ -18,47 +18,53 @@ if __name__ == "__main__":
     LOGGER = utils.get_logger(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_data, valid_data, test_data = data_obj.get_data()
-    (
-        train_signals,
-        train_labels,
-        train_valid_indices,
-        train_window_start,
-    ) = train_data
-    (
-        valid_signals,
-        valid_labels,
-        valid_valid_indices,
-        valid_window_start,
-    ) = valid_data
-    (
-        test_signals,
-        test_labels,
-        test_valid_indices,
-        test_window_start,
-    ) = test_data
+    # train_data, valid_data, test_data = data_obj.get_data()
+    # (
+    #     train_signals,
+    #     train_labels,
+    #     train_valid_indices,
+    #     train_window_start,
+    # ) = train_data
+    # (
+    #     valid_signals,
+    #     valid_labels,
+    #     valid_valid_indices,
+    #     valid_window_start,
+    # ) = valid_data
+    # (
+    #     test_signals,
+    #     test_labels,
+    #     test_valid_indices,
+    #     test_window_start,
+    # ) = test_data
 
-    print(train_signals.shape)
-    print(valid_signals.shape)
-    print(test_signals.shape)
-    signals = np.concatenate(
-        [train_signals, valid_signals, test_signals], axis=0
-    )
-    labels = np.concatenate([train_labels, valid_labels, test_labels], axis=0)
-    valid_indices = np.concatenate(
-        [train_valid_indices, valid_valid_indices, test_valid_indices], axis=0
-    )
-    window_start = np.concatenate(
-        [train_window_start, valid_window_start, test_window_start], axis=0
-    )
+    # print(train_signals.shape)
+    # print(valid_signals.shape)
+    # print(test_signals.shape)
+    # signals = np.concatenate(
+    #     [train_signals, valid_signals, test_signals], axis=0
+    # )
+    # labels = np.concatenate([train_labels, valid_labels, test_labels], axis=0)
+    # valid_indices = np.concatenate(
+    #     [train_valid_indices, valid_valid_indices, test_valid_indices], axis=0
+    # )
+    # window_start = np.concatenate(
+    #     [train_window_start, valid_window_start, test_window_start], axis=0
+    # )
+    all_elms, all_data = data_obj.get_data()
+    signals, labels, valid_indices, window_start = all_data
     print(signals.shape)
     print(labels.shape)
     num_elms = len(window_start)
+    print(f"Total ELMS: {num_elms}")
+    print(f"Total ELMS from elm index: {len(all_elms)}")
     dfs = []
     signals_list = []
     hop_length = 4
     for i_elm in range(num_elms):
-        print(f"Processing elm event with start index: {window_start[i_elm]}")
+        print(
+            f"{i_elm}. Processing elm event with start index: {window_start[i_elm]}"
+        )
         start = window_start[i_elm]
         if i_elm < num_elms - 1:
             stop = window_start[i_elm + 1] - 1
@@ -172,13 +178,17 @@ if __name__ == "__main__":
         for i in range(len(manual_label)):
             if (manual_label[i] or auto_label[i]) and (manual_label[i] == 0):
                 auto_label[i] = 0
-        x = np.where(auto_label == 1)[0]
-        auto_label[x[0] : x[-1]] = 1
-        df["automatic_label"] = auto_label
+        x = list(np.where(auto_label == 1)[0])
+        if not x:
+            print(
+                f"Found no active elm with serial no: {i_elm} and start index: {window_start[i_elm]} "
+            )
+            df["automatic_label"] = 1
+        else:
+            auto_label[x[0] : x[-1]] = 1
+            df["automatic_label"] = auto_label
         dfs.append(df)
 
-        if i_elm == 11:
-            break
     dfs = pd.concat(dfs, axis=0)
     # print(dfs.head())
     # print(dfs.info())
@@ -209,22 +219,27 @@ if __name__ == "__main__":
                 ax = axs[i]
                 plt.setp(ax.get_xticklabels(), fontsize=9)
                 plt.setp(ax.get_yticklabels(), fontsize=9)
-                elm_evnt = dfs[dfs["elm_event_index"] == i + 1]
+                elm_evnt = dfs[
+                    dfs["elm_event_index"] == i + 1 + (12 * page_num)
+                ]
                 elm_evnt["manual_label"].plot(ax=ax, label="manual_label")
                 elm_evnt["automatic_label"].plot(ax=ax, label="automatic_label")
                 ax.plot(
-                    signals_list[i][:, 0, 0] / 10.0,
+                    signals_list[i + (12 * page_num)][:, 0, 0] / 10.0,
                     lw=1.0,
                     label="ch: 1",
                     alpha=0.6,
                 )
                 ax.plot(
-                    signals_list[i][:, 7, 7] / 5.0,
+                    signals_list[i + (12 * page_num)][:, 7, 7] / 5.0,
                     lw=1.0,
                     label="ch: 64",
                     alpha=0.6,
                 )
-                ax.set_title(f"ELM event: {i + 1 + (12*page_num)}", fontsize=12)
+                ax.set_title(
+                    f"ELM event: {all_elms[i + (12 * page_num)]}",
+                    fontsize=12,
+                )
                 ax.legend(fontsize=10, frameon=False)
                 ax.spines["left"].set_color("gray")
                 ax.spines["bottom"].set_color("gray")
