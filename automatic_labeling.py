@@ -150,7 +150,7 @@ if __name__ == "__main__":
                 plt.savefig(
                     os.path.join(
                         output_dir,
-                        f"all_channels_time_gradients_diff_hop_4_sws_128{args.filename_suffix}.png",
+                        f"all_channels_time_gradients_tdiff_hop_4_sws_128{args.filename_suffix}.png",
                     ),
                     dpi=150,
                 )
@@ -231,13 +231,19 @@ if __name__ == "__main__":
                     alpha=0.6,
                 )
                 ax.plot(
+                    signals_list[i + (12 * page_num)][:, 2, 6] / 10.0,
+                    lw=1.0,
+                    label="ch: 22",
+                    alpha=0.6,
+                )
+                ax.plot(
                     signals_list[i + (12 * page_num)][:, 7, 7] / 5.0,
                     lw=1.0,
                     label="ch: 64",
                     alpha=0.6,
                 )
                 ax.set_title(
-                    f"ELM event: {all_elms[i + (12 * page_num)]}",
+                    f"ELM index: {all_elms[i + (12 * page_num)]:05d}",
                     fontsize=12,
                 )
                 ax.legend(fontsize=10, frameon=False)
