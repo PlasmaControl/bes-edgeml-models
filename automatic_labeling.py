@@ -18,39 +18,6 @@ if __name__ == "__main__":
     LOGGER = utils.get_logger(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    # train_data, valid_data, test_data = data_obj.get_data()
-    # (
-    #     train_signals,
-    #     train_labels,
-    #     train_valid_indices,
-    #     train_window_start,
-    # ) = train_data
-    # (
-    #     valid_signals,
-    #     valid_labels,
-    #     valid_valid_indices,
-    #     valid_window_start,
-    # ) = valid_data
-    # (
-    #     test_signals,
-    #     test_labels,
-    #     test_valid_indices,
-    #     test_window_start,
-    # ) = test_data
-
-    # print(train_signals.shape)
-    # print(valid_signals.shape)
-    # print(test_signals.shape)
-    # signals = np.concatenate(
-    #     [train_signals, valid_signals, test_signals], axis=0
-    # )
-    # labels = np.concatenate([train_labels, valid_labels, test_labels], axis=0)
-    # valid_indices = np.concatenate(
-    #     [train_valid_indices, valid_valid_indices, test_valid_indices], axis=0
-    # )
-    # window_start = np.concatenate(
-    #     [train_window_start, valid_window_start, test_window_start], axis=0
-    # )
     all_elms, all_data = data_obj.get_data()
     signals, labels, valid_indices, window_start = all_data
     print(signals.shape)

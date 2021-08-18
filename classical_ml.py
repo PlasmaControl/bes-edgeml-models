@@ -17,8 +17,9 @@ from xgboost import XGBClassifier
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
-    path = "outputs/signal_window_16/label_look_ahead_0/roc"
-    df = pd.read_csv(os.path.join(path, "train_features_df_0.csv"))
+    lookahead = 100
+    path = f"outputs/signal_window_16/label_look_ahead_{lookahead}/roc"
+    df = pd.read_csv(os.path.join(path, f"train_features_df_{lookahead}.csv"))
     print(df.head())
     print(df["label"].value_counts())
 
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     roc_details_lr.to_csv(
         os.path.join(
             path,
-            f"roc_details_lr_lookahead_0.csv",
+            f"roc_details_lr_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     roc_details_rf.to_csv(
         os.path.join(
             path,
-            f"roc_details_rf_lookahead_0.csv",
+            f"roc_details_rf_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     roc_details_xgb.to_csv(
         os.path.join(
             path,
-            f"roc_details_xgb_lookahead_0.csv",
+            f"roc_details_xgb_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -226,6 +227,11 @@ if __name__ == "__main__":
     ax.set_title("TPR/FPR vs threshold", fontsize=16)
     ax.set_xlabel("threshold", fontsize=12)
     plt.tight_layout()
+    plt.savefig(
+        os.path.join(
+            "outputs", f"tpr_fpr_thresh_all_models_lookahead_{lookahead}.png"
+        )
+    )
     plt.show()
 
     # roc curves for different models
@@ -260,4 +266,9 @@ if __name__ == "__main__":
     ax.set_xlabel("FPR", fontsize=12)
     ax.set_ylabel("TPR", fontsize=12)
     plt.tight_layout()
+    plt.savefig(
+        os.path.join(
+            "outputs", f"roc_curve_all_models_lookahead_{lookahead}.png"
+        )
+    )
     plt.show()
