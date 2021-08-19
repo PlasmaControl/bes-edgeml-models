@@ -107,9 +107,6 @@ if __name__ == "__main__":
     valid_df, valid_signals, valid_labels = get_elm_df(args, valid_data)
     valid_df = pool_features(args, valid_df, valid_signals, valid_labels)
 
-    # test_df, test_signals, test_labels = get_elm_df(args, test_data)
-    # test_df = pool_features(args, test_df, test_signals, test_labels)
-
     _, _, _, _, roc_dir = utils.create_output_paths(args, infer_mode=True)
 
     if not args.dry_run:
@@ -125,12 +122,6 @@ if __name__ == "__main__":
             ),
             index=False,
         )
-        # test_df.to_csv(
-        #     os.path.join(
-        #         roc_dir, f"test_features_df_{args.label_look_ahead}.csv"
-        #     ),
-        #     index=False,
-        # )
     print("-" * 20)
     print(f"  Train dataframe")
     print("-" * 20)
@@ -144,10 +135,3 @@ if __name__ == "__main__":
     print(valid_df.head())
     print(valid_df.info())
     del valid_df
-
-    # print("-" * 20)
-    # print(f" Test dataframe:")
-    # print("-" * 20)
-    # print(test_df.head())
-    # print(test_df.info())
-    # del test_df
