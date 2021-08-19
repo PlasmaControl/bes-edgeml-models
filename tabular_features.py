@@ -3,6 +3,7 @@ import argparse
 from typing import Tuple
 
 import numpy as np
+from numpy.lib.function_base import append
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -21,34 +22,18 @@ def get_elm_df(
     print(f"Sample indices shape: {sample_indices.shape}")
     print(f"Window start: {window_start}")
     df = pd.DataFrame()
+    elm_event_id = [1]
+    count = 1
+    for i in range(1, len(sample_indices)):
+        i_prev = i - 1
+        if sample_indices[i] - sample_indices[i_prev] == 1:
+            elm_event_id.append(count)
+        else:
+            count += 1
+            elm_event_id.append(count)
+
+    df["elm_event"] = elm_event_id
     df["sample_indices"] = sample_indices
-    df["elm_event"] = None
-
-    # calculate adjusted differences to incorporate `signal_window_size`
-    # and `label_look_ahead`
-    adjusted_diffs = (
-        np.diff(window_start)
-        - args.signal_window_size
-        - args.label_look_ahead
-        + 1
-    )
-    print(f"Adjusted diffs: {adjusted_diffs}")
-
-    # label the corresponding row with the ELM event number
-    elm_serial_num = np.repeat(
-        np.arange(1, len(window_start)),
-        repeats=adjusted_diffs,
-    )
-    # print(elm_serial_num.shape)
-    # print(np.max(elm_serial_num))
-    # print(f"Window start shape: {window_start.shape}")
-
-    # fill the remaining dataframe with the last `window_start` index
-    remaining_rows_serial_num = np.repeat(
-        np.max(elm_serial_num) + 1, repeats=len(df) - len(elm_serial_num)
-    )
-    elm_serial_num = np.append(elm_serial_num, remaining_rows_serial_num)
-    df["elm_event"] = elm_serial_num
 
     return df, signals, labels
 
