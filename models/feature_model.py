@@ -12,9 +12,8 @@ class FeatureModel(nn.Module):
         fc_units: Union[int, Tuple[int, int]] = (40, 20),
         dropout_rate: float = 0.4,
         negative_slope: float = 0.02,
-        filter_size: tuple = (8, 4, 4),
-        maxpool_size: int = 2,
-        num_filters: int = 10,
+        filter_size: tuple = (16, 8, 8),
+        num_filters: int = 32,
     ):
         """
         8x8 + time feature blocks followed by fully-connected layers. This function
@@ -39,15 +38,13 @@ class FeatureModel(nn.Module):
                 Defaults to 10.
         """
         super(FeatureModel, self).__init__()
-        pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        input_features = 10 if self.args.signal_window_size == 8 else 90
+        input_features = 32 if self.args.signal_window_size == 8 else 32
         self.fc1 = nn.Linear(
             in_features=input_features, out_features=fc_units[0]
         )
@@ -56,7 +53,6 @@ class FeatureModel(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.maxpool(x)
         x = self.dropout3d(self.conv(x))
         x = self.relu(x)
         x = torch.flatten(x, 1)
@@ -65,3 +61,16 @@ class FeatureModel(nn.Module):
         x = self.fc3(x)
 
         return x
+
+
+if __name__ == "__main__":
+    signal_window_size = 16
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--signal_window_size", type=int)
+
+    args = parser.parse_args(["--signal_window_size", str(signal_window_size)])
+
+    model = FeatureModel(args)
+    x = torch.rand(4, 1, signal_window_size, 8, 8)
+    y = model(x)
+    print(y.shape)
