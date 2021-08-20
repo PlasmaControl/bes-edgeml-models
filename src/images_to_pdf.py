@@ -1,5 +1,8 @@
 import os
 import re
+import sys
+
+sys.path.append(os.getcwd())
 
 from PIL import Image
 

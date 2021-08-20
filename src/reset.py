@@ -5,6 +5,9 @@ print(__doc__)
 
 import os
 import glob
+import sys
+
+sys.path.append(os.getcwd())
 
 
 def remove_files(path: str, ext: str):

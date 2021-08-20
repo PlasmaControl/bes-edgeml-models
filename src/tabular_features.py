@@ -1,12 +1,15 @@
 import os
+import sys
+
 import argparse
 from typing import Tuple
 
 import numpy as np
-from numpy.lib.function_base import append
 import pandas as pd
 import torch
 import torch.nn as nn
+
+sys.path.append(os.getcwd())
 
 from options.test_arguments import TestArguments
 from src import utils

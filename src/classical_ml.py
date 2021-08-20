@@ -1,11 +1,13 @@
 import os
 import argparse
+import sys
 
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearnex import patch_sklearn
 
+sys.path.append(os.getcwd())
 patch_sklearn()
 
 from sklearn.model_selection import train_test_split

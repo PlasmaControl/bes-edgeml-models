@@ -1,11 +1,15 @@
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+sys.path.append(os.getcwd())
+
 from options.test_arguments import TestArguments
-from src import utils
+import utils
 
 sns.set_palette("deep")
 

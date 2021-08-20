@@ -1,8 +1,10 @@
 import os
+import sys
 
 import pandas as pd
 import matplotlib.pyplot as plt
 
+sys.path.append(os.getcwd())
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
