@@ -2,9 +2,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 sns.set_style("white")
-colors = ["#ef476f", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
 
-look_aheads = [0, 5, 10, 20, 40, 60, 80, 100, 120]
+look_aheads = [0, 20, 40, 60, 80, 100, 150, 200]
 cnn_2d = {
     "look_ahead_0": {
         "scaled_pos": 0.604,
@@ -249,7 +249,19 @@ def get_lists(d: dict):
     return scaled_pos, precision, recall, f1
 
 
+def get_roc_data(base_path: str, model_name: str, look_ahead: int = 0):
+    path = os.path.join(base_path, f"label_look_ahead_{look_ahead}", "roc")
+    csv_file_path = os.path.join(
+        path,
+        f"{model_name}_roc_details_micro_unbalanced_lookahead_{look_ahead}.csv",
+    )
+    df = pd.read_csv(csv_file_path)
+    df = df.loc[1:, :]
+    return df
+
+
 if __name__ == "__main__":
+    base_path = "outputs/signal_window_16"
     cnn_2d_scaled_pos, cnn_2d_precision, cnn_2d_recall, cnn_2d_f1 = get_lists(
         cnn_2d
     )

@@ -34,6 +34,15 @@ class BaseArguments:
             help="path to the pretrained weights of the saved models.",
         )
         parser.add_argument(
+            "--data_preproc",
+            type=str,
+            default="truncate",
+            help="name of the data manipulator to be used. Selecting any of the "
+            "mentioned techniques will create data ready corresponding to that "
+            "technique for training, "
+            "[truncate | unaltered | gradient | interpolate | balance | rnn].",
+        )
+        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
@@ -67,6 +76,11 @@ class BaseArguments:
                  "`show_autograd` to view what pytorch saves for backward pass."
         )
         parser.add_argument(
+            "--save_pdf",
+            type=str,
+            help="Save figure to pdf. Specify file location."
+        )
+        parser.add_argument(
             "--device",
             type=str,
             default="cpu",
@@ -83,6 +97,34 @@ class BaseArguments:
             action="store_true",
             default=False,
             help="if true, use recurrent neural network.",
+        )
+        parser.add_argument(
+            "--normalize_data",
+            action="store_true",
+            default=False,
+            help="if true, normalizes the data in spatial dimensions. Divides the "
+            "channels 1 to 32 by 10 and channels 33 to 64 by 5.",
+        )
+        parser.add_argument(
+            "--truncate_inputs",
+            action="store_true",
+            default=False,
+            help="if true, truncates the time dimension upto `truncate_buffer` "
+            "time frames beyond the first frame beyond active elm events",
+        )
+        parser.add_argument(
+            "--truncate_buffer",
+            type=int,
+            default=75,
+            help="number of frames beyond first active elm event to consider when "
+            "`truncate_inputs` is passed. ",
+        )
+        parser.add_argument(
+            "--use_gradients",
+            action="store_true",
+            default=False,
+            help="if true, take first and second order derivatives of the signals "
+            "along radial, z and time dimensions.",
         )
         parser.add_argument(
             "--n_epochs",
@@ -151,16 +193,10 @@ class BaseArguments:
             "[0 | 4 | 8 | ...].",
         )
         parser.add_argument(
-            "--interpolate",
-            action="store_true",
-            default=False,
-            help="if true, interpolate the spatial dimensions to `interpolate_size` dimensions.",
-        )
-        parser.add_argument(
             "--interpolate_size",
             type=int,
             help="final size of the spatial dimensions of the input if interpolation is done. "
-            "Must be passed if `interpolate` is set to True.",
+            "Must be passed if `data_preproc` == `interpolate`.",
         )
         parser.add_argument(
             "--shuffle_sample_indices",
@@ -273,7 +309,7 @@ class BaseArguments:
         print(message)
 
     def parse(self, verbose: bool = False):
-        """Parse our arguments."""
+        """Parse the arguments."""
         args, parser = self._gather_args()
         if verbose:
             self._print_args(args)

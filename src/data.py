@@ -38,14 +38,7 @@ class Data:
         self.normalize = normalize
         self.truncate_inputs = truncate_inputs
         if self.datafile is None:
-            self.datafile = os.path.join(self.args.data_dir, self.args.input_file)
-        self.fraction_validate = self.args.fraction_valid
-        self.fraction_test = self.args.fraction_test
-        self.signal_dtype = self.args.signal_dtype
-        self.kfold = self.args.kfold
-        self.smoothen_transition = self.args.smoothen_transition
-        self.data_mode = self.args.data_mode
-        self.max_elms = self.args.max_elms
+            self.datafile = os.path.join("data", self.args.input_file)
         self.logger = logger
 
         self.df = pd.DataFrame()

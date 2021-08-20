@@ -1,29 +1,57 @@
 import os
 import pickle
-from typing import Tuple
+from typing import Tuple, List, Union
 import argparse
+import logging
 
 # import matplotlib
 
 # matplotlib.use("TkAgg")
+import cv2
 import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.colors import LogNorm
 import seaborn as sns
 from sklearn import metrics
+from sklearn.preprocessing import StandardScaler
+from sklearn import decomposition as comp
+from torch.functional import norm
 from tqdm import tqdm
 
-from src import data, utils
+from data_preprocessing import *
+from src import data, utils, dataset
 from options.test_arguments import TestArguments
+from matplotlib.backends.backend_pdf import PdfPages
 
-sns.set_style("white")
-colors = ["#ef476f", "#e5989b", "#fcbf49", "#06d6a0", "#118ab2", "#073b4c"]
+
+# plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# plt.style.use("/home/lm9679/plt_custom.mplstyle")
+# colors = sns.color_palette("deep").as_hex()
 
 
 def get_test_dataset(
-        args: argparse.Namespace, file_name: str, logger=None, transforms=None
+        args: argparse.Namespace,
+        file_name: str,
+        logger:logging.getLogger=None,
+        transforms=None
 ) -> Tuple[tuple, data.ELMDataset]:
+    """Read the pickle file containing the test data and return PyTorch dataset
+    and data attributes such as signals, labels, sample_indices, and
+    window_start_indices.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the
+            base and test arguments.
+        file_name (str): Name of the test data file.
+        logger (logging.getLogger): Logger object that adds inference logs to
+            a file. Defaults to None.
+        transforms: Image transforms to perform data augmentation on the given
+            input. Defaults to None.
+    """
     with open(file_name, "rb") as f:
         test_data = pickle.load(f)
 
@@ -32,8 +60,8 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = data.ELMDataset(
-        args, *data_attrs, logger=logger, transform=transforms
+    test_dataset = dataset.ELMDataset(
+        args, *data_attrs, logger=logger, transform=transforms, phase="testing"
     )
 
     return data_attrs, test_dataset
@@ -84,26 +112,25 @@ def predict(
             + 1
         )
         for j in range(predictions.size):
-            if args.interpolate:
+            if args.data_preproc == "interpolate":
+                signals_resized = []
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :],
+                    dtype=np.float32,
+                )
+                for signal in input_signals:
+                    signal = cv2.resize(
+                        signal,
+                        dsize=(args.interpolate_size, args.interpolate_size),
+                        interpolation=cv2.INTER_NEAREST,
+                    )
+                    signals_resized.append(signal)
+                signals_resized = np.array(signals_resized)
                 input_signals = torch.as_tensor(
-                    elm_signals[j: j + args.signal_window_size, :, :].reshape(
-                        [
-                            1,
-                            1,
-                            args.signal_window_size,
-                            8,
-                            8,
-                        ]
+                    signals_resized.reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=torch.float32,
-                )
-                interp_size = (
-                    args.signal_window_size,
-                    args.interpolate_size,
-                    args.interpolate_size,
-                )
-                input_signals = torch.nn.functional.interpolate(
-                    input_signals, size=interp_size
                 )
             else:
                 input_signals = torch.as_tensor(
@@ -203,6 +230,7 @@ def predict_v2(
         args: argparse.Namespace,
         test_data: tuple,
         model: object,
+        layer: str,
         device: torch.device,
 ) -> dict:
     signals = test_data[0]
@@ -216,14 +244,17 @@ def predict_v2(
     ### ------------ Forward Hook ---------- ###
     activations = []
 
-    def get_activation(name):
+    def get_activation():
         def hook(model, input, output):
             o = output.detach()[0].numpy()
             activations.append(o)
 
         return hook
 
-    model.fc2.register_forward_hook(get_activation('fc2'))
+    (act_layer, weight_layer) = get_layer(model, layer)
+
+    act_layer.register_forward_hook(get_activation())
+    weights = weight_layer.weight.detach().numpy()[0]
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
@@ -238,8 +269,8 @@ def predict_v2(
         elm_labels = labels[i_start:i_stop]
         active_elm = np.where(elm_labels > 0.0)[0]
         active_elm_start = active_elm[0]
-        active_elm_lower_buffer = active_elm_start - 75
-        active_elm_upper_buffer = active_elm_start + 75
+        active_elm_lower_buffer = active_elm_start - args.truncate_buffer
+        active_elm_upper_buffer = active_elm_start + args.truncate_buffer
         predictions = np.zeros(
             elm_labels.size
             - args.signal_window_size
@@ -248,18 +279,29 @@ def predict_v2(
         )
         activations = []
         for j in range(predictions.size):
-            input_signals = torch.as_tensor(
-                elm_signals[j: j + args.signal_window_size, :, :].reshape(
-                    [1, 1, args.signal_window_size, 8, 8]
-                ),
-                dtype=torch.float32,
-            )
+            if args.use_gradients:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, args.signal_window_size, 8, 8, 6]
+                    ),
+                    dtype=np.float32,
+                )
+                input_signals = np.transpose(
+                    input_signals, axes=(0, 4, 1, 2, 3)
+                )
+            else:
+                input_signals = np.array(
+                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                        [1, 1, args.signal_window_size, 8, 8]
+                    ),
+                    dtype=np.float32,
+                )
+            input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
 
         activations = np.array(activations)
         activations = np.transpose(activations)
-        weights = model.fc2.weight.detach().numpy()
 
         elm_signals = elm_signals[
                       : (-args.signal_window_size - args.label_look_ahead + 1), ...
@@ -289,18 +331,12 @@ def predict_v2(
                                             ]
 
         # calculate macro predictions for each region
-        active_elm_prediction_count = np.sum(
-            micro_predictions_active_elms > 0.4
-        )
         macro_predictions_active_elms = np.array(
-            [(active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_active_elms).astype(int)]
         )
 
-        pre_active_elm_prediction_count = np.sum(
-            micro_predictions_pre_active_elms > 0.4
-        )
         macro_predictions_pre_active_elms = np.array(
-            [(pre_active_elm_prediction_count >= 1).astype(int)]
+            [np.any(micro_predictions_pre_active_elms > 0.4).astype(int)]
         )
 
         macro_labels = np.array([0, 1], dtype="int")
@@ -321,85 +357,228 @@ def predict_v2(
     return elm_predictions
 
 
+def perform_PCA(elm_predictions: dict):
+    '''
+    Use scikit learn's pca analysis tools to reduce dimensionality of hidden layer
+    output.
+    Jeff Zimmerman
+    '''
+
+    elm_id = list(elm_predictions.keys())
+
+    activations = (elm_predictions[elm_id[0]]['activations']).T
+    weights = elm_predictions[elm_id[0]]['weights'].T
+    # weighted = []
+    # for i, act in enumerate(activations):
+    #     weighted.append(weights[i] * act)
+    print(activations.shape)
+    standard = StandardScaler().fit_transform(activations)
+
+    pca = comp.PCA(n_components=3)
+    pca.fit(standard)
+    decomposed = pca.transform(standard)
+
+    print(pca.explained_variance_ratio_)
+    print(decomposed.shape)
+    # for x in range(len(weights)):
+    #     print(pca.components_[0][x], weights[x])
+
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
+    ax1.plot(decomposed[:, 0])
+    ax1.set_title('PCA')
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('PC_1')
+
+    ax2.plot(activations[:, 0])
+    ax2.set_title('Original')
+    ax2.set_ylabel('Amplitude (V)')
+    ax2.set_xlabel('Time')
+    plt.show()
+    return
+
+
 def plot(
-        args: argparse.Namespace,
-        elm_predictions: dict,
-        plot_dir: str,
+    args: argparse.Namespace,
+    elm_predictions: dict,
+    plot_dir: str,
+    elms: List[int],
+    elm_range: str,
+    n_rows: Union[int, None] = None,
+    n_cols: Union[int, None] = None,
+    figsize: tuple = (14, 12),
 ) -> None:
     state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
     i_elms = state.choice(elm_id, args.plot_num, replace=False)
-
-    for i_elm in i_elms:
+    if args.save_pdf:
+        pp = PdfPages(args.save_pdf)
+    for elm_no, i_elm in enumerate(i_elms[:48]):
+        fig, axs = plt.subplots(10, 4, figsize=(8, 8))
+        plt.subplots_adjust(hspace=0)
+        print(f"ELM {elm_no} of {len(i_elms)} with {len(elm_predictions[i_elm]['elm_time'])} time points")
         activations = elm_predictions[i_elm]["activations"]
-        print(elm_predictions[i_elm]["weights"].shape)
-        fig = plt.figure(figsize=(14, 12))
-        for i in range(32):
+        weights = elm_predictions[i_elm]["weights"]
+        for i in range(4):
             signals = elm_predictions[i_elm]["signals"]
             labels = elm_predictions[i_elm]["labels"]
             elm_start = np.where(labels > 0)[0][0]
             predictions = elm_predictions[i_elm]["micro_predictions"]
             elm_time = elm_predictions[i_elm]["elm_time"]
-            print(f"Node {i + 1} of 32 with {len(elm_time)} time points")
-            plt.subplot(args.num_rows, args.num_cols, i + 1)
-            plt.plot(elm_time, signals[:, 2, 6], label="BES ch. 22", c=colors[0])
-            plt.plot(activations[i], label=f"Output node {i}")
-            plt.plot(
-                elm_time,
-                labels + 0.02,
-                label="Ground truth",
-                ls="-.",
-                lw=1.25,
-                c=colors[1],
-            )
-            plt.plot(
+            axs[9][i].plot(elm_time,
+                           signals[:, 2, 6],
+                           label="BES ch. 22" if i == 0 else '_nolegend_',
+                           c=colors[0])
+            axs[8][i].plot(
                 elm_time - args.label_look_ahead,
                 predictions,
-                label="Prediction",
+                label="Prediction" if i == 0 else '_nolegend_',
                 ls="-.",
                 lw=1.25,
                 c=colors[-2],
             )
-            plt.axvline(
-                elm_start - 75,
-                ymin=0,
-                ymax=0.9,
-                c=colors[-1],
-                ls=":",
-                lw=1.5,
-                label="Buffer limits",
-            )
-            plt.axvline(
-                elm_start + 75,
-                ymin=0,
-                ymax=0.9,
-                c=colors[-1],
-                ls=":",
-                lw=1.5,
-            )
-            plt.xlabel("Time (micro-s)")
-            plt.ylabel("Signal | label")
-            plt.ylim([None, None])
-            plt.legend(fontsize=8, frameon=False)
-            plt.gca().spines["right"].set_visible(False)
-            plt.gca().spines["top"].set_visible(False)
-            plt.grid(axis="y")
+            axs[9][i].set_xlabel("Time (micro-s)")
+            for j in [8, 9]:
+                axs[j][i].set_ylim([-1, 1])
+                axs[j][i].grid(axis="y")
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    label="Ground truth" if i + j == 8 else '_nolegend_',
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].text(.5, .9, "Prediction" if j == 8 else "Signal",
+                               horizontalalignment='center',
+                               verticalalignment='top',
+                               transform=axs[j][i].transAxes)
+            for j in range(8):
+                weighted = activations[i * 8 + j] * weights[0][i * 8 + j]
+                axs[j][i].plot(weighted, label="Node output (weighted)" if i + j == 0 else '_nolegend_', )
+                axs[j][i].set_xticks([])
+                axs[j][i].text(.5, .9, f'Node {i * 8 + j}: weight {weights[0][i * 8 + j]:.3f}',
+                               horizontalalignment='center',
+                               verticalalignment='top',
+                               fontsize=8,
+                               transform=axs[j][i].transAxes)
+                axs[j][i].set_ylim(-1, 1)
+                axs[j][i].plot(
+                    elm_time,
+                    labels + 0.02,
+                    ls="-.",
+                    lw=1.25,
+                    c=colors[1],
+                )
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                    label="Buffer limits" if i + j == 0 else '_nolegend_',
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].grid(axis="y")
+                axs[j][i].axvline(
+                    elm_start - 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
+                axs[j][i].axvline(
+                    elm_start + 75,
+                    ymin=0,
+                    ymax=0.9,
+                    c=colors[-1],
+                    ls=":",
+                    lw=1.5,
+                )
 
-            plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-        plt.show()
+        fig.legend(fontsize=8, frameon=False)
+        plt.suptitle(f"Model output on elm {i_elm}", fontsize=20)
+        if args.save_pdf:
+            pp.savefig(fig)
+        else:
+            plt.show()
+    if args.save_pdf:
+        pp.close()
+    return
     plt.suptitle(f"Model output on {args.data_mode} classes", fontsize=20)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     if not args.dry_run:
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}.png",
+                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_{elm_range}.png",
             ),
             dpi=100,
         )
     plt.show()
+
+
+def plot_all(
+    args: argparse.Namespace,
+    elm_predictions: dict,
+    plot_dir: str,
+) -> None:
+    state = np.random.RandomState(seed=args.seed)
+    elm_id = list(elm_predictions.keys())
+    # i_elms = state.choice(elm_id, args.plot_num, replace=False)
+    i_elms_1_12 = elm_id[:12]
+    i_elms_12_24 = elm_id[12:24]
+    i_elms_24_36 = elm_id[24:36]
+    i_elms_36_42 = elm_id[36:]
+
+    # plot 1-12
+    plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
+    # plot 12-24
+    plot(args, elm_predictions, plot_dir, i_elms_12_24, elm_range="12-24")
+    # plot 24-36
+    plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
+    # plot 36-42
+    plot(
+        args,
+        elm_predictions,
+        plot_dir,
+        i_elms_36_42,
+        elm_range="36-42",
+        n_rows=2,
+        n_cols=3,
+        figsize=(14, 6),
+    )
 
 
 def show_details(test_data: tuple) -> None:
@@ -435,11 +614,11 @@ def show_metrics(
 
         # calculate the log of the confusion matrix scaled by the
         # total error (false positives + false negatives)
-        cm_log = np.log(cm)
+        # cm_log = np.log(cm)
         x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
         coords = tuple(zip(x, y))
-        total_error = np.sum(cm_log[coords])
-        cm_log /= total_error
+        total_error = np.sum(cm[coords])
+        cm = cm / total_error
 
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
         df = pd.DataFrame(cr).transpose()
@@ -455,7 +634,12 @@ def show_metrics(
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot()
         sns.heatmap(
-            cm_log, annot=True, ax=ax, annot_kws={"size": 14}, fmt=".3f"
+            cm,
+            annot=True,
+            ax=ax,
+            annot_kws={"size": 14},
+            fmt=".3f",
+            norm=LogNorm(),
         )
         plt.setp(ax.get_yticklabels(), rotation=0)
         ax.set_xlabel("Predicted Label", fontsize=14)
@@ -621,6 +805,17 @@ def get_dict_values(pred_dict: dict, mode: str):
         return np.concatenate(targets), np.concatenate(predictions)
 
 
+def get_layer(model: object, layer: str):
+    layer_dict = model.layers
+
+    layer_idx = list(layer_dict.keys()).index(layer)
+    weight_idx = layer_idx + 1
+
+    act_layer = layer_dict[layer]
+    weight_layer = list(layer_dict.items())[weight_idx][1]
+
+    return (act_layer, weight_layer)
+
 def main(
         args: argparse.Namespace,
 ) -> None:
@@ -681,10 +876,13 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict_v2(args, test_data, model, device)
+    pred_dict = predict_v2(args=args, test_data=test_data, model=model, device=device, layer='fc1')
+
+    perform_PCA(pred_dict)
+    return
 
     if args.plot_data:
-        plot(args, pred_dict, plot_dir)
+        plot_all(args, pred_dict, plot_dir)
 
     if args.show_metrics:
         # show metrics for micro predictions
