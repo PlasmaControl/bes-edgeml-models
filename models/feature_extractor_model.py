@@ -19,12 +19,6 @@ class FeatureExtractorModel(nn.Module):
         self.fc = nn.Linear(in_features=input_features, out_features=1)
         self.relu = nn.LeakyReLU(negative_slope=0.02)
 
-    # def forward_hook(self):
-    #     def hook(module, input, output):
-    #         self.activation[self.name] = output.detach()
-    #
-    #     return hook
-
     def forward(self, x):
         x = self.relu(self.conv(x))
         x = torch.flatten(x, 1)
