@@ -26,23 +26,36 @@ if __name__ == "__main__":
     lookahead = 0
     path = f"outputs/signal_window_16/label_look_ahead_{lookahead}/roc"
     plot_path = f"outputs/signal_window_16/label_look_ahead_{lookahead}/plots"
-    df = pd.read_csv(os.path.join(path, f"train_features_df_{lookahead}.csv"))
+    # df = pd.read_csv(os.path.join(path, f"train_features_df_{lookahead}.csv"))
+    df = pd.read_csv(
+        os.path.join(path, f"cnn_features_automatic_labels_df_{lookahead}.csv")
+    )
     print(df)
     print(df["label"].value_counts())
 
-    train_df = df[df.loc[:, "elm_event"] < 300]
-    valid_df = df[df.loc[:, "elm_event"] >= 300]
+    train_df = df[df.loc[:, "elm_id"] < 300]
+    valid_df = df[df.loc[:, "elm_id"] >= 300]
     print(train_df)
     print(valid_df)
     features = [
         col
         for col in df.columns
-        if col not in ["sample_indices", "elm_event", "label"]
+        if col
+        not in [
+            "elm_id",
+            "valid_indices",
+            "elm_event",
+            "label",
+            "automatic_label",
+        ]
     ]
-    X_train, y_train = train_df[features], train_df["label"]
-    X_valid, y_valid = valid_df[features], valid_df["label"]
-    max_pool_features = [f for f in features if f.startswith("max")][::2]
-    avg_pool_features = [f for f in features if f.startswith("avg")][::2]
+
+    label_type = "automatic"
+    label_dict = {"manual": "label", "automatic": "automatic_label"}
+    X_train, y_train = train_df[features], train_df[label_dict[label_type]]
+    X_valid, y_valid = valid_df[features], valid_df[label_dict[label_type]]
+    # max_pool_features = [f for f in features if f.startswith("max")][::2]
+    # avg_pool_features = [f for f in features if f.startswith("avg")][::2]
 
     # logistic regression
     print()
@@ -65,7 +78,7 @@ if __name__ == "__main__":
     roc_details_lr.to_csv(
         os.path.join(
             path,
-            f"roc_details_lr_lookahead_{lookahead}.csv",
+            f"roc_details_lr_{label_type}_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -98,7 +111,7 @@ if __name__ == "__main__":
     roc_details_rf.to_csv(
         os.path.join(
             path,
-            f"roc_details_rf_lookahead_{lookahead}.csv",
+            f"roc_details_rf_{label_type}_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -146,7 +159,7 @@ if __name__ == "__main__":
     roc_details_xgb.to_csv(
         os.path.join(
             path,
-            f"roc_details_xgb_lookahead_{lookahead}.csv",
+            f"roc_details_xgb_{label_type}_lookahead_{lookahead}.csv",
         ),
         index=False,
     )
@@ -165,13 +178,14 @@ if __name__ == "__main__":
 
     # plotting
     fig, ax = plt.subplots()
-    feature_importances_rf.plot(kind="bar", figsize=(10, 8), ax=ax)
+    feature_importances_rf.plot(kind="bar", figsize=(16, 8), ax=ax)
     ax.set_title(f"Feature importances using MDI, lookahead: {lookahead}")
     ax.set_ylabel("Mean decrease in impurity")
     fig.tight_layout()
     plt.savefig(
         os.path.join(
-            "outputs", f"rf_feature_importance_mdi_lookahead_{lookahead}.png"
+            "outputs",
+            f"rf_feature_importance_mdi_{label_type}_lookahead_{lookahead}.png",
         )
     )
     plt.show()
@@ -184,12 +198,13 @@ if __name__ == "__main__":
     # plt.show()
 
     fig, ax = plt.subplots()
-    feature_importances_xgb.plot(kind="bar", figsize=(10, 8), ax=ax)
+    feature_importances_xgb.plot(kind="bar", figsize=(16, 8), ax=ax)
     ax.set_title(f"Feature importances, lookahead: {lookahead}")
     fig.tight_layout()
     plt.savefig(
         os.path.join(
-            "outputs", f"xgb_feature_importance_lookahead_{lookahead}.png"
+            "outputs",
+            f"xgb_feature_importance_{label_type}_lookahead_{lookahead}.png",
         )
     )
     plt.show()
@@ -254,7 +269,8 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig(
         os.path.join(
-            "outputs", f"tpr_fpr_thresh_all_models_lookahead_{lookahead}.png"
+            "outputs",
+            f"tpr_fpr_thresh_all_models_{label_type}_lookahead_{lookahead}.png",
         )
     )
     plt.show()
@@ -293,91 +309,92 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig(
         os.path.join(
-            "outputs", f"roc_curve_all_models_lookahead_{lookahead}.png"
+            "outputs",
+            f"roc_curve_all_models_{label_type}_lookahead_{lookahead}.png",
         )
     )
     plt.show()
 
-    for elm_id in range(300, 315):
-        first_elm_max_pool = valid_df[valid_df["elm_event"] == elm_id].loc[
-            :, max_pool_features + ["label", "lr_pred", "rf_pred", "xgb_pred"]
-        ]
-        first_elm_avg_pool = valid_df[valid_df["elm_event"] == elm_id].loc[
-            :, avg_pool_features + ["label", "lr_pred", "rf_pred", "xgb_pred"]
-        ]
-        index = first_elm_max_pool.index.tolist()
-        fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(12, 16))
-        axs = axs.flatten()
+    # for elm_id in range(300, 315):
+    #     first_elm_max_pool = valid_df[valid_df["elm_event"] == elm_id].loc[
+    #         :, max_pool_features + ["label", "lr_pred", "rf_pred", "xgb_pred"]
+    #     ]
+    #     first_elm_avg_pool = valid_df[valid_df["elm_event"] == elm_id].loc[
+    #         :, avg_pool_features + ["label", "lr_pred", "rf_pred", "xgb_pred"]
+    #     ]
+    #     index = first_elm_max_pool.index.tolist()
+    #     fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(12, 16))
+    #     axs = axs.flatten()
 
-        for idx, ax in enumerate(axs):
-            if idx % 2 != 0:
-                if idx == 1:
-                    model_out_max_pool = first_elm_max_pool["lr_pred"]
-                    label = "lr"
-                elif idx == 3:
-                    model_out_max_pool = first_elm_max_pool["rf_pred"]
-                    label = "rf"
-                else:
-                    model_out_max_pool = first_elm_max_pool["xgb_pred"]
-                    label = "xgb"
+    #     for idx, ax in enumerate(axs):
+    #         if idx % 2 != 0:
+    #             if idx == 1:
+    #                 model_out_max_pool = first_elm_max_pool["lr_pred"]
+    #                 label = "lr"
+    #             elif idx == 3:
+    #                 model_out_max_pool = first_elm_max_pool["rf_pred"]
+    #                 label = "rf"
+    #             else:
+    #                 model_out_max_pool = first_elm_max_pool["xgb_pred"]
+    #                 label = "xgb"
 
-                for i in range(8):
-                    ax.plot(
-                        range(len(index)),
-                        first_elm_max_pool[max_pool_features[i]],
-                        c=blues[i],
-                        label=max_pool_features[i],
-                    )
-                ax.plot(
-                    range(len(index)),
-                    first_elm_max_pool["label"],
-                    c="crimson",
-                    label="ground truth",
-                )
-                ax.plot(
-                    range(len(index)),
-                    model_out_max_pool,
-                    c="forestgreen",
-                    label=label,
-                )
-            else:
-                if idx == 0:
-                    model_out_avg_pool = first_elm_avg_pool["lr_pred"]
-                    label = "lr"
-                elif idx == 2:
-                    model_out_avg_pool = first_elm_avg_pool["rf_pred"]
-                    label = "rf"
-                else:
-                    model_out_avg_pool = first_elm_avg_pool["xgb_pred"]
-                    label = "xgb"
-                for i in range(8):
-                    ax.plot(
-                        range(len(index)),
-                        first_elm_avg_pool[avg_pool_features[i]],
-                        c=yellows[i],
-                        label=avg_pool_features[i],
-                    )
-                ax.plot(
-                    range(len(index)),
-                    first_elm_avg_pool["label"],
-                    c="crimson",
-                    label="ground truth",
-                )
-                ax.plot(
-                    range(len(index)),
-                    model_out_avg_pool,
-                    c="forestgreen",
-                    label=label,
-                )
-            ax.legend(frameon=False, fontsize=9, ncol=2)
-        plt.suptitle(f"ELM id: {elm_id}, lookahead: {lookahead}", fontsize=16)
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95], pad=1.5, h_pad=1.5)
-        fname = os.path.join(
-            plot_path,
-            f"classical_ml_model_out_ts_elm_id_{elm_id}_lookahead_{lookahead}.png",
-        )
-        print(f"Creating file: {fname}")
-        plt.savefig(fname, dpi=150)
-        if elm_id == 300:
-            plt.show()
-        plt.close()
+    #             for i in range(8):
+    #                 ax.plot(
+    #                     range(len(index)),
+    #                     first_elm_max_pool[max_pool_features[i]],
+    #                     c=blues[i],
+    #                     label=max_pool_features[i],
+    #                 )
+    #             ax.plot(
+    #                 range(len(index)),
+    #                 first_elm_max_pool["label"],
+    #                 c="crimson",
+    #                 label="ground truth",
+    #             )
+    #             ax.plot(
+    #                 range(len(index)),
+    #                 model_out_max_pool,
+    #                 c="forestgreen",
+    #                 label=label,
+    #             )
+    #         else:
+    #             if idx == 0:
+    #                 model_out_avg_pool = first_elm_avg_pool["lr_pred"]
+    #                 label = "lr"
+    #             elif idx == 2:
+    #                 model_out_avg_pool = first_elm_avg_pool["rf_pred"]
+    #                 label = "rf"
+    #             else:
+    #                 model_out_avg_pool = first_elm_avg_pool["xgb_pred"]
+    #                 label = "xgb"
+    #             for i in range(8):
+    #                 ax.plot(
+    #                     range(len(index)),
+    #                     first_elm_avg_pool[avg_pool_features[i]],
+    #                     c=yellows[i],
+    #                     label=avg_pool_features[i],
+    #                 )
+    #             ax.plot(
+    #                 range(len(index)),
+    #                 first_elm_avg_pool["label"],
+    #                 c="crimson",
+    #                 label="ground truth",
+    #             )
+    #             ax.plot(
+    #                 range(len(index)),
+    #                 model_out_avg_pool,
+    #                 c="forestgreen",
+    #                 label=label,
+    #             )
+    #         ax.legend(frameon=False, fontsize=9, ncol=2)
+    #     plt.suptitle(f"ELM id: {elm_id}, label type: {label_type}, lookahead: {lookahead}", fontsize=16)
+    #     plt.tight_layout(rect=[0, 0.03, 1, 0.95], pad=1.5, h_pad=1.5)
+    #     fname = os.path.join(
+    #         plot_path,
+    #         f"classical_ml_model_out_ts_elm_id_{elm_id}_{label_type}_lookahead_{lookahead}.png",
+    #     )
+    #     print(f"Creating file: {fname}")
+    #     plt.savefig(fname, dpi=150)
+    #     if elm_id == 300:
+    #         plt.show()
+    #     plt.close()
