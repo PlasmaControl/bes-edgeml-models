@@ -50,7 +50,7 @@ if __name__ == "__main__":
         ]
     ]
 
-    label_type = "automatic"
+    label_type = "manual"
     label_dict = {"manual": "label", "automatic": "automatic_label"}
     X_train, y_train = train_df[features], train_df[label_dict[label_type]]
     X_valid, y_valid = valid_df[features], valid_df[label_dict[label_type]]
