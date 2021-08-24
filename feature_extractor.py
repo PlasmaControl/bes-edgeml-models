@@ -69,7 +69,7 @@ if __name__ == "__main__":
             map_location=device,
         )["model"]
     )
-    model.conv.register_forward_hook(get_activation("conv"))
+    model.pool.register_forward_hook(get_activation("pool"))
 
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         input_signals, input_labels = data.__getitem__(i)
         input_signals = input_signals.unsqueeze(0)
         model_out = model(input_signals)
-        feature_map = activation["conv"]
+        feature_map = activation["pool"]
         feature_map = torch.flatten(feature_map, start_dim=0)
         cnn_feature_map.append(feature_map.numpy().tolist())
         look_ahead_labels.append(input_labels.numpy().tolist())
@@ -101,9 +101,11 @@ if __name__ == "__main__":
     expanded_feature_df = pd.DataFrame(
         df["cnn_feature_map"].to_list(),
         columns=[f"f_{i+1}" for i in range(len(cnn_feature_map[0]))],
+        dtype=np.float32,
     )
-    df = pd.concat([df, expanded_feature_df], axis=1)
+    print(expanded_feature_df.info(memory_usage="deep"))
     df.drop(["cnn_feature_map"], axis=1, inplace=True)
+    df = pd.concat([df, expanded_feature_df], axis=1)
     print(df)
     df.to_csv(
         os.path.join(roc_dir, f"cnn_feature_df_{args.label_look_ahead}.csv"),
