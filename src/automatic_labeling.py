@@ -21,6 +21,8 @@ if __name__ == "__main__":
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
+    paths = utils.create_output_paths(args, infer_mode=True)
+    roc_dir = paths[-1]
     data_obj = data_cls(args, LOGGER)
     all_elms, all_data = data_obj.get_data()
     signals, labels, valid_indices, window_start = all_data
@@ -136,7 +138,7 @@ if __name__ == "__main__":
             auto_label = np.repeat(auto_label, repeats=hop_length)
             auto_label = auto_label[: label.shape[0]]
             df[f"ch_{i+1}"] = auto_label
-        df["elm_event_index"] = i_elm + 1
+        df["elm_id"] = i_elm + 1
         df["manual_label"] = label.astype(int)
         channels = [
             col
@@ -166,6 +168,15 @@ if __name__ == "__main__":
 
     print(dfs["automatic_label"].value_counts())
     print(dfs["manual_label"].value_counts())
+    elm_ids = dict(enumerate(all_elms, start=1))
+    dfs["elm_event"] = dfs["elm_id"].map(elm_ids).apply(lambda x: f"{x:05d}")
+    print(dfs)
+    dfs.loc[:, ["elm_id", "elm_event", "automatic_label"]].to_csv(
+        os.path.join(
+            roc_dir, f"automatic_labels_df_{args.label_look_ahead}.csv"
+        ),
+        index=False,
+    )
 
     if args.plot_data:
         elm_index_list = list(range(num_elms))
@@ -186,13 +197,11 @@ if __name__ == "__main__":
             fig.subplots_adjust(hspace=1.5)
             axs = axs.flatten()
             for i in range(len(page)):
-                print(f"Plotting elm event {i+1} from page {page_num}")
+                print(f"Plotting elm event {i+1:02d} from page {page_num}")
                 ax = axs[i]
                 plt.setp(ax.get_xticklabels(), fontsize=9)
                 plt.setp(ax.get_yticklabels(), fontsize=9)
-                elm_evnt = dfs[
-                    dfs["elm_event_index"] == i + 1 + (12 * page_num)
-                ]
+                elm_evnt = dfs[dfs["elm_id"] == i + 1 + (12 * page_num)]
                 elm_evnt["manual_label"].plot(ax=ax, label="manual_label")
                 elm_evnt["automatic_label"].plot(ax=ax, label="automatic_label")
                 ax.plot(
