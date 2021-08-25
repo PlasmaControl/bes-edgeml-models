@@ -34,6 +34,7 @@ if __name__ == "__main__":
     dfs = []
     signals_list = []
     hop_length = 4
+    total_length = 0
     for i_elm in range(num_elms):
         print(
             f"{i_elm}. Processing elm event with start index: {window_start[i_elm]}"
@@ -43,11 +44,13 @@ if __name__ == "__main__":
             stop = window_start[i_elm + 1] - 1
         else:
             stop = labels.size
-        signal = signals[start:stop]
+        signal = signals[start : stop + 1]
         signals_list.append(signal)
         signal_max = np.max(signal)
         signal_min = np.min(signal)
-        label = labels[start:stop]
+        label = labels[start : stop + 1]
+        print(f"Label length: {len(label)}")
+        total_length += len(label)
         # print(signal[::8])
 
         y1_4 = np.gradient(signal[::hop_length], axis=0)
@@ -198,7 +201,7 @@ if __name__ == "__main__":
             fig.subplots_adjust(hspace=1.5)
             axs = axs.flatten()
             for i in range(len(page)):
-                print(f"Plotting elm event {i+1:02d} from page {page_num}")
+                print(f"Plotting elm event {i+1:02d} on page {page_num+1}")
                 ax = axs[i]
                 plt.setp(ax.get_xticklabels(), fontsize=9)
                 plt.setp(ax.get_yticklabels(), fontsize=9)
@@ -248,3 +251,4 @@ if __name__ == "__main__":
             # else:
             #     break
             plt.close()
+    print(f"Total length: {total_length}")
