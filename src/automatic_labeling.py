@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 ax.spines["bottom"].set_color("gray")
                 hop += 4
             plt.suptitle(
-                f"Time derivatives, hop-length: 4, signal window size: 128",
+                f"Time derivatives, hop-length: 4, signal window size: {args.signal_window_size}",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -87,7 +87,7 @@ if __name__ == "__main__":
                 plt.savefig(
                     os.path.join(
                         output_dir,
-                        f"all_channels_time_gradients_hop_4_sws_128{args.filename_suffix}.png",
+                        f"all_channels_time_gradients_hop_4_sws_{args.signal_window_size}{args.filename_suffix}.png",
                     ),
                     dpi=150,
                 )
@@ -115,7 +115,7 @@ if __name__ == "__main__":
                 ax.spines["bottom"].set_color("gray")
                 hop += 4
             plt.suptitle(
-                f"Time derivatives' differences, hop-length: 4, signal window size: 128",
+                f"Time derivatives' differences, hop-length: 4, signal window size: {args.signal_window_size}",
                 fontsize=18,
             )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                 plt.savefig(
                     os.path.join(
                         output_dir,
-                        f"all_channels_time_gradients_tdiff_hop_4_sws_128{args.filename_suffix}.png",
+                        f"all_channels_time_gradients_tdiff_hop_4_sws_{args.signal_window_size}{args.filename_suffix}.png",
                     ),
                     dpi=150,
                 )
@@ -173,7 +173,8 @@ if __name__ == "__main__":
     print(dfs)
     dfs.loc[:, ["elm_id", "elm_event", "automatic_label"]].to_csv(
         os.path.join(
-            roc_dir, f"automatic_labels_df_{args.label_look_ahead}.csv"
+            roc_dir,
+            f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
         ),
         index=False,
     )
@@ -231,7 +232,7 @@ if __name__ == "__main__":
                 ax.spines["bottom"].set_color("gray")
             if page_num == 0:
                 plt.suptitle(
-                    f"Manual vs automatic labeling, hop-length: 4, signal window size: 128",
+                    f"Manual vs automatic labeling, hop-length: 4, signal window size: {args.signal_window_size}",
                     fontsize=18,
                 )
             plt.tight_layout(rect=[0, 0.03, 1, 0.95], pad=1.5, h_pad=1.5)
