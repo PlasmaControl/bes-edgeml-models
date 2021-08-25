@@ -40,6 +40,18 @@ class BaseData:
         self.logger.info(
             f"Total frames in the whole data: {self._get_total_frames()}"
         )
+        if self.args.data_preproc == "automatic_labels":
+            csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
+            self.labels_df = pd.read_csv(
+                os.path.join(
+                    csv_path,
+                    f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
+                )
+            )
+            self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
+                lambda x: f"{x:05d}"
+            )
+            print(self.labels_df.info())
         # self.transition = np.linspace(
         #     0, 1, 2 * self.args.transition_halfwidth + 3
         # )

@@ -40,7 +40,8 @@ class BaseArguments:
             help="name of the data manipulator to be used. Selecting any of the "
             "mentioned techniques will create data ready corresponding to that "
             "technique for training, "
-            "[truncate | unaltered | gradient | interpolate | balance | rnn].",
+            "[truncate | automatic_labels | unaltered | gradient | interpolate | "
+            "balance | rnn].",
         )
         parser.add_argument(
             "--use_all_data",
