@@ -27,14 +27,12 @@ if __name__ == "__main__":
     path = f"outputs/signal_window_16/label_look_ahead_{lookahead}/roc"
     plot_path = f"outputs/signal_window_16/label_look_ahead_{lookahead}/plots"
     # df = pd.read_csv(os.path.join(path, f"train_features_df_{lookahead}.csv"))
-    df = pd.read_csv(
-        os.path.join(path, f"cnn_features_automatic_labels_df_{lookahead}.csv")
-    )
+    df = pd.read_csv(os.path.join(path, f"cnn_feature_df_{lookahead}.csv"))
     print(df)
     print(df["label"].value_counts())
 
-    train_df = df[df.loc[:, "elm_id"] < 300]
-    valid_df = df[df.loc[:, "elm_id"] >= 300]
+    train_df = df[df.loc[:, "elm_id"] < 380]
+    valid_df = df[df.loc[:, "elm_id"] >= 380]
     print(train_df)
     print(valid_df)
     features = [

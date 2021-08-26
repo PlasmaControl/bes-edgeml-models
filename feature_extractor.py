@@ -54,7 +54,7 @@ if __name__ == "__main__":
     LOGGER = utils.get_logger(script_name=__name__)
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     model = model.to(device)
     print(model)
 
