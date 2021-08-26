@@ -299,7 +299,7 @@ if __name__ == "__main__":
     plt.grid(axis="y")
     plt.tight_layout()
     plt.savefig(
-        os.path.join("outputs", "cnn_model_diff_lookaheads.png"), dpi=100
+        os.path.join("outputs", "cnn_model_diff_lookaheads.pdf"), dpi=100
     )
     plt.show()
 #
