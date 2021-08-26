@@ -181,6 +181,7 @@ def plot(
     fig = plt.figure(figsize=figsize)
     for i, i_elm in enumerate(elms):
         signals = elm_predictions[i_elm]["signals"]
+        signal_max = np.max(signals)
         labels = elm_predictions[i_elm]["labels"]
         elm_start = np.where(labels > 0)[0][0]
         predictions = elm_predictions[i_elm]["micro_predictions"]
@@ -201,7 +202,7 @@ def plot(
         else:
             plt.plot(
                 elm_time,
-                signals[:, 2, 6],
+                signals[:, 2, 6] / signal_max,
                 label="BES ch. 22",  # c=colors[0]
                 lw=1.75,
             )
@@ -261,7 +262,7 @@ def plot(
                 plot_dir,
                 f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_{elm_range}.png",
             ),
-            dpi=100,
+            dpi=200,
         )
     plt.show()
 
