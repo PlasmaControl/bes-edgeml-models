@@ -289,10 +289,10 @@ if __name__ == "__main__":
     #     label="lookahead: 120",
     # )
     ax.plot([0, 1], [0, 1], c="gray", lw=2)
-    ax.legend(fontsize=10, frameon=False)
+    ax.legend(fontsize=12, frameon=False)
     sns.despine(offset=10, trim=False)
-    ax.set_xlabel("FPR", fontsize=12)
-    ax.set_ylabel("TPR", fontsize=12)
+    ax.set_xlabel("FPR", fontsize=14)
+    ax.set_ylabel("TPR", fontsize=14)
     # ax.set_title("XGBoost", fontsize=16)
     plt.gca().spines["left"].set_color("lightgrey")
     plt.gca().spines["bottom"].set_color("lightgrey")
