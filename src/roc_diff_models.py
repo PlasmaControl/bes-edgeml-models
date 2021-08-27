@@ -247,7 +247,7 @@ if __name__ == "__main__":
     # plt.show()
     #
     # plotting cnn
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(
         df_cnn_0["fpr"],
         df_cnn_0["tpr"],
@@ -289,17 +289,17 @@ if __name__ == "__main__":
     #     label="lookahead: 120",
     # )
     ax.plot([0, 1], [0, 1], c="gray", lw=2)
-    ax.legend(fontsize=12, frameon=False)
+    ax.legend(fontsize=10, frameon=False)
     sns.despine(offset=10, trim=False)
-    ax.set_xlabel("FPR", fontsize=14)
-    ax.set_ylabel("TPR", fontsize=14)
+    ax.set_xlabel("FPR", fontsize=12)
+    ax.set_ylabel("TPR", fontsize=12)
     # ax.set_title("XGBoost", fontsize=16)
     plt.gca().spines["left"].set_color("lightgrey")
     plt.gca().spines["bottom"].set_color("lightgrey")
     plt.grid(axis="y")
     plt.tight_layout()
     plt.savefig(
-        os.path.join("outputs", "cnn_model_diff_lookaheads.pdf"), dpi=100
+        os.path.join("outputs", "cnn_model_diff_lookaheads.png"), dpi=100
     )
     plt.show()
 #
