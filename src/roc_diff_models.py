@@ -247,7 +247,7 @@ if __name__ == "__main__":
     # plt.show()
     #
     # plotting cnn
-    fig, ax = plt.subplots(figsize=(5, 4))
+    fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(
         df_cnn_0["fpr"],
         df_cnn_0["tpr"],
