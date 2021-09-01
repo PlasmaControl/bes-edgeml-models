@@ -8,13 +8,15 @@ import logging
 
 # matplotlib.use("TkAgg")
 import cv2
+import matplotlib
 import torch
 import numpy as np
+from math import ceil
 import pandas as pd
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.colors import LogNorm
 import seaborn as sns
+import plotly.express as px
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 from sklearn import decomposition as comp
@@ -26,16 +28,16 @@ from src import data, utils, dataset
 from options.test_arguments import TestArguments
 from matplotlib.backends.backend_pdf import PdfPages
 
-
 # plt.style.use("/home/lakshya/plt_custom.mplstyle")
 # plt.style.use("/home/lm9679/plt_custom.mplstyle")
-# colors = sns.color_palette("deep").as_hex()
+colors = sns.color_palette("deep").as_hex()
+sns.set_theme()
 
 
 def get_test_dataset(
         args: argparse.Namespace,
         file_name: str,
-        logger:logging.getLogger=None,
+        logger: logging.getLogger = None,
         transforms=None
 ) -> Tuple[tuple, data.ELMDataset]:
     """Read the pickle file containing the test data and return PyTorch dataset
@@ -115,7 +117,7 @@ def predict(
             if args.data_preproc == "interpolate":
                 signals_resized = []
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :],
+                    elm_signals[j: j + args.signal_window_size, :, :],
                     dtype=np.float32,
                 )
                 for signal in input_signals:
@@ -230,7 +232,7 @@ def predict_v2(
         args: argparse.Namespace,
         test_data: tuple,
         model: object,
-        layer: str,
+        hook_layer: str,
         device: torch.device,
 ) -> dict:
     signals = test_data[0]
@@ -251,13 +253,15 @@ def predict_v2(
 
         return hook
 
-    (act_layer, weight_layer) = get_layer(model, layer)
+    (act_layer, weight_layer) = get_layer(model, hook_layer)
 
     act_layer.register_forward_hook(get_activation())
     weights = weight_layer.weight.detach().numpy()[0]
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
+        # ^^^ FOR JEFF'S TESTING PURPOSES ^^^ #
+        # for i_elm in range(1):
         print(f"Processing elm event with start index: {window_start[i_elm]}")
         i_start = window_start[i_elm]
         if i_elm < num_elms - 1:
@@ -281,7 +285,7 @@ def predict_v2(
         for j in range(predictions.size):
             if args.use_gradients:
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    elm_signals[j: j + args.signal_window_size, :, :].reshape(
                         [1, args.signal_window_size, 8, 8, 6]
                     ),
                     dtype=np.float32,
@@ -291,7 +295,7 @@ def predict_v2(
                 )
             else:
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    elm_signals[j: j + args.signal_window_size, :, :].reshape(
                         [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=np.float32,
@@ -357,55 +361,147 @@ def predict_v2(
     return elm_predictions
 
 
-def perform_PCA(elm_predictions: dict):
+def make_arrays(dic: dict, key: str):
+    '''
+    Helper function to return value from predict_v2 elm_prediction dict key
+    as numpy array along with start and stop indices of ELM.
+    ----------------------------------------------------
+    Returns dict:   {
+                    'key': np.array,        (dimensions: N-nodes x len_ELM)
+                    'elm_start': np.array,  (dimensions: 1 x len_ELM)
+                    'elm_end': np.array     (dimensions: 1 x len_ELM)
+                    }
+    Jeff Zimmerman
+    '''
+    l, l_label = 0, 0
+    for k in dic.keys():
+        l += dic[k][key].squeeze().shape[1]
+        l_label += dic[k]['labels'].squeeze().shape[0]
+    arr = np.empty((dic[k][key].squeeze().shape[0], l))
+    label_arr = np.empty(l)
+
+    start_idx = 0
+    starts = []
+    ends = []
+
+    for k in dic.keys():
+        end_idx = start_idx + dic[k][key].squeeze().shape[-1]
+        arr[:, start_idx:end_idx] = dic[k][key].squeeze()
+        label_arr[start_idx:end_idx] = dic[k]['labels'].squeeze()
+
+        starts.append(start_idx)
+        ends.append(end_idx)
+
+        start_idx = end_idx
+
+    return {key: arr.T, 'labels': label_arr, 'elm_start': starts, 'elm_end': ends}
+
+
+def plot_boxes(elm_predictions: dict,
+               layer: str = None):
+    elm_ids = list(elm_predictions.keys())
+    elm_id = elm_ids[0]
+    activations = elm_predictions[elm_id]['activations'].squeeze()
+
+    ncols = 4
+    nrows = ceil(activations.shape[0] / (4 * ncols))
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols)
+    for i, ax in enumerate(axs.flat):
+        vals = activations[4 * i: 4 * i + 4]
+        labels = np.chararray(vals.shape, itemsize=7, unicode=True)
+        for j in range(4):
+            labels[j, :] = f'Node {4 * i + j}'
+        activations_df = pd.DataFrame(data=list(zip(labels.flat, vals.flat)),
+                                      columns=['Node', 'Activation']
+                                      )
+        sns.violinplot(x='Node', y='Activation', data=activations_df, ax=ax)
+
+    fig.suptitle(f'Violin Plots of Node Activations in Layer {layer}')
+    # plt.tight_layout()
+    plt.show()
+
+
+def perform_PCA(elm_predictions: dict,
+                layer=None):
     '''
     Use scikit learn's pca analysis tools to reduce dimensionality of hidden layer
     output.
     Jeff Zimmerman
     '''
 
-    elm_id = list(elm_predictions.keys())
+    elm_arrays = make_arrays(elm_predictions, 'activations')
+    activations = elm_arrays['activations']
+    elm_start = elm_arrays['elm_start']
+    elm_end = elm_arrays['elm_end']
+    elm_labels = elm_arrays['labels']
+    # weights = make_array(elm_predictions, 'weights')
+    t_dim = np.arange(activations.shape[0])
 
-    activations = (elm_predictions[elm_id[0]]['activations']).T
-    weights = elm_predictions[elm_id[0]]['weights'].T
     # weighted = []
     # for i, act in enumerate(activations):
     #     weighted.append(weights[i] * act)
-    print(activations.shape)
-    standard = StandardScaler().fit_transform(activations)
 
-    pca = comp.PCA(n_components=3)
+    standard = StandardScaler().fit_transform(activations)
+    # standard_t = np.append([t_dim], standard.T, axis=0).T
+
+    n_components = 5
+    pca = comp.PCA(n_components=n_components)
     pca.fit(standard)
     decomposed = pca.transform(standard)
+    decomposed_t = np.append([t_dim], decomposed.T, axis=0).T
+    print(pca.explained_variance_ratio_[:n_components])
 
-    print(pca.explained_variance_ratio_)
-    print(decomposed.shape)
-    # for x in range(len(weights)):
-    #     print(pca.components_[0][x], weights[x])
+    for component in range(3):
+        print(f'Component {component}:\n{pca.components_[component]}')
 
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
-    ax1.plot(decomposed[:, 0])
-    ax1.set_title('PCA')
-    ax1.set_xlabel('Time')
-    ax1.set_ylabel('PC_1')
+    # fig = plt.figure()
+    # ax = plt.axes(projection='3d')
+    for start, end in list(zip(elm_start, elm_end))[:1]:
+        labels = elm_labels[start:end]
+        fig = px.scatter_3d(x=decomposed_t[:, 0][start:end],
+                            y=decomposed_t[:, 1][start:end],
+                            z=decomposed_t[:, 2][start:end],
+                            color=labels)
 
-    ax2.plot(activations[:, 0])
-    ax2.set_title('Original')
-    ax2.set_ylabel('Amplitude (V)')
-    ax2.set_xlabel('Time')
+    # px.set_xlabel('Time $(\mu s)$')
+    # px.set_ylabel('PC 1')
+    # px.set_zlabel('PC 2')
+    fig.show()
+    return
+
+    fig, axs = plt.subplots(nrows=n_components, ncols=n_components, figsize=(16, 9))
+    for ax in axs.flat:
+        ax.set_axis_off()
+    for pc_col in range(0, n_components):
+        for pc_row in range(0, pc_col + 1):
+            ax = axs[pc_row][pc_col]
+            ax.set_axis_on()
+            pc_x = decomposed_t[:, pc_col - pc_row]
+            pc_y = decomposed_t[:, pc_col + 1]
+            for start, end in list(zip(elm_start, elm_end))[:1]:
+                ax.scatter(x=pc_x[start:end],
+                           y=pc_y[start:end],
+                           edgecolor='none',
+                           c=matplotlib.cm.gist_rainbow(np.linspace(0, 1, end - start)),
+                           s=4)
+            ax.set_ylabel(f'PC_{pc_col + 1}')
+            ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_row + 1}')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    fig.suptitle(f'PCA of Layer {layer} in feature model')
     plt.show()
     return
 
 
 def plot(
-    args: argparse.Namespace,
-    elm_predictions: dict,
-    plot_dir: str,
-    elms: List[int],
-    elm_range: str,
-    n_rows: Union[int, None] = None,
-    n_cols: Union[int, None] = None,
-    figsize: tuple = (14, 12),
+        args: argparse.Namespace,
+        elm_predictions: dict,
+        plot_dir: str,
+        elms: List[int],
+        elm_range: str,
+        n_rows: Union[int, None] = None,
+        n_cols: Union[int, None] = None,
+        figsize: tuple = (14, 12),
 ) -> None:
     state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
@@ -550,9 +646,9 @@ def plot(
 
 
 def plot_all(
-    args: argparse.Namespace,
-    elm_predictions: dict,
-    plot_dir: str,
+        args: argparse.Namespace,
+        elm_predictions: dict,
+        plot_dir: str,
 ) -> None:
     state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
@@ -816,6 +912,7 @@ def get_layer(model: object, layer: str):
 
     return (act_layer, weight_layer)
 
+
 def main(
         args: argparse.Namespace,
 ) -> None:
@@ -876,9 +973,10 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict_v2(args=args, test_data=test_data, model=model, device=device, layer='fc1')
-
-    perform_PCA(pred_dict)
+    pca_layer = 'fc2'
+    pred_dict = predict_v2(args=args, test_data=test_data, model=model, device=device, hook_layer=pca_layer)
+    # plot_boxes(pred_dict, layer=pca_layer)
+    perform_PCA(pred_dict, layer=pca_layer)
     return
 
     if args.plot_data:

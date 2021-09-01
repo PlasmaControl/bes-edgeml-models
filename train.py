@@ -86,7 +86,7 @@ def train_loop(
 
     # dump test data into to a file
     if not args.dry_run:
-        with open(test_data_file, "wb") as f:
+        with open(test_data_file, "w+b") as f:
             pickle.dump(
                 {
                     "signals": test_data[0],

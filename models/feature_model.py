@@ -1,5 +1,6 @@
 import argparse
 from typing import Tuple, Union
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -39,6 +40,7 @@ class FeatureModel(nn.Module):
         """
         super(FeatureModel, self).__init__()
         self.args = args
+        filter_size = (int(self.args.signal_window_size), filter_size[1], filter_size[2])
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )
@@ -51,6 +53,13 @@ class FeatureModel(nn.Module):
         self.fc2 = nn.Linear(in_features=fc_units[0], out_features=fc_units[1])
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
+
+        self.layers = OrderedDict([
+            ('conv', self.conv),
+            ('fc1', self.fc1),
+            ('fc2', self.fc2),
+            ('fc3', self.fc3)
+        ])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.dropout3d(self.conv(x))

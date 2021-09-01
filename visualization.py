@@ -9,6 +9,7 @@ import torch
 
 from options.base_arguments import BaseArguments
 from src.utils import get_logger
+from analyze import predict_v2
 
 from visualizations.utils.utils import get_dataloader, get_model
 
@@ -62,8 +63,15 @@ class Visualizations:
         batch = next(iter(self.train_set))
         signal_windows, labels = batch
 
-        background = signal_windows[:30]
-        to_explain = signal_windows[30:]
+        pred_dict = predict_v2(args=self.args,
+                               model=self.model,
+                               test_data=(signal_windows, labels),
+                               hook_layer='conv')
+
+        activations = torch.tensor(pred_dict['activations'])
+
+        background = activations[:30]
+        to_explain = activations[30:]
 
         e = shap.DeepExplainer(self.model, background)
         shap_values = e.shap_values(to_explain)
@@ -254,4 +262,3 @@ if __name__ == "__main__":
 
     viz = Visualizations(args=args, logger=LOGGER)
     viz.feature_map('conv1')
-    # viz.plot_weights('conv3')

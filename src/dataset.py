@@ -81,7 +81,7 @@ class ELMDataset(torch.utils.data.Dataset):
                 signal_window = np.concatenate(signal_window)
             else:
                 raise ValueError(
-                    f"Expected signal window size is 8 or 16 but got {self.args.signal_window_size}."
+                    f"Expected signal window size as 8 or 16 but got {self.args.signal_window_size}."
                 )
             if self.transform:
                 signal_window = self.transform(image=signal_window)["image"]
