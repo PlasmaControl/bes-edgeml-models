@@ -16,6 +16,7 @@ class ELMDataset(torch.utils.data.Dataset):
         sample_indices: np.ndarray,
         window_start: np.ndarray,
         logger: logging.getLogger,
+        transform: Callable = None,
         phase: str = "training",
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
@@ -41,6 +42,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
+        self.transform = transform
         self.logger = logger
         self.logger.info("-" * 40)
         self.logger.info(f" Creating pytorch dataset for {phase} ")
