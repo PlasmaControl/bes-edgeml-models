@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -15,31 +16,8 @@ import utils
 # sns.set_palette("Dark2")
 colors = list(sns.color_palette("Dark2").as_hex())
 
-args, parser = TestArguments().parse(verbose=True)
-utils.test_args_compat(args, parser)
-LOGGER = utils.get_logger(script_name=__name__)
-data_cls = utils.create_data(args.data_preproc)
-data_obj = data_cls(args, LOGGER)
-train_data, _, _ = data_obj.get_data()
-signals, labels, valid_indices, window_start = train_data
-print(f"Signals shape: {signals.shape}")
-print(f"Labels shape: {labels.shape}")
-print(f"Valid indices shape: {valid_indices.shape}")
-print(f"Window start shape: {window_start.shape}")
 
-
-start = window_start[0]
-end = window_start[1] - 1
-signal = signals[start : end + 1, ...]
-signal = signal.reshape(-1, 64)
-
-signal_df = pd.DataFrame(
-    signal.tolist(), columns=[f"ch:{i}" for i in range(1, 65)]
-)
-print(signal_df)
-
-
-def plot_autocorr(column: str):
+def plot_autocorr(args: argparse.Namespace, column: str):
     fig = plt.figure(figsize=(8, 9), constrained_layout=True)
     gs = fig.add_gridspec(3, 2)
 
@@ -80,14 +58,38 @@ def plot_autocorr(column: str):
 
     plt.suptitle(f"BES {column}", fontsize=18)
     plt.tight_layout()  # rect=[0, 0.03, 1, 0.95], pad=1.5, h_pad=1.5)
-    plt.savefig(
-        os.path.join(args.output_dir, f"auto_correlation_plots_{column}.png"),
-        dpi=150,
-    )
+    if not args.dry_run:
+        plt.savefig(
+            os.path.join(
+                args.output_dir, f"auto_correlation_plots_{column}.png"
+            ),
+            dpi=150,
+        )
     plt.show()
 
 
 if __name__ == "__main__":
-    plot_autocorr(column="ch:1")
-    plot_autocorr(column="ch:22")
-    plot_autocorr(column="ch:64")
+    args, parser = TestArguments().parse(verbose=True)
+    utils.test_args_compat(args, parser)
+    LOGGER = utils.get_logger(script_name=__name__)
+    data_cls = utils.create_data(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+    train_data, _, _ = data_obj.get_data()
+    signals, labels, valid_indices, window_start = train_data
+    print(f"Signals shape: {signals.shape}")
+    print(f"Labels shape: {labels.shape}")
+    print(f"Valid indices shape: {valid_indices.shape}")
+    print(f"Window start shape: {window_start.shape}")
+
+    start = window_start[0]
+    end = window_start[1] - 1
+    signal = signals[start : end + 1, ...]
+    signal = signal.reshape(-1, 64)
+
+    signal_df = pd.DataFrame(
+        signal.tolist(), columns=[f"ch:{i}" for i in range(1, 65)]
+    )
+    print(signal_df)
+    plot_autocorr(args, column="ch:1")
+    plot_autocorr(args, column="ch:22")
+    plot_autocorr(args, column="ch:64")
