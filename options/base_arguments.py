@@ -167,7 +167,7 @@ class BaseArguments:
         parser.add_argument(
             "--signal_window_size",
             type=int,
-            default=8,
+            default=16,
             help="number of time data points to use for the input. "
             "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
             "[8 | 16].",
