@@ -108,6 +108,10 @@ if __name__ == "__main__":
     end = window_start[46] - 1
     signal = signals[start : end + 1, ...]
     signal = signal.reshape(-1, 64)
+    label = labels[start : end + 1]
+    with open("single_elm_event.npy", "wb") as f:
+        np.save(f, signal)
+        np.save(f, label)
 
     signal_df = pd.DataFrame(
         signal.tolist(), columns=[f"ch:{i}" for i in range(1, 65)]
