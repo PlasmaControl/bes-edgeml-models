@@ -291,6 +291,7 @@ if __name__ == "__main__":
     ax.plot([0, 1], [0, 1], c="gray", lw=2)
     ax.legend(fontsize=14, frameon=False)
     sns.despine(offset=10, trim=False)
+    ax.set_title("ROC curve", fontsize=18)
     ax.set_xlabel("FPR", fontsize=16)
     ax.set_ylabel("TPR", fontsize=16)
     # ax.set_title("XGBoost", fontsize=16)
