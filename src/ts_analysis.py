@@ -71,7 +71,7 @@ def plot_autocorr(args: argparse.Namespace, column: str, df: pd.DataFrame):
 
 
 def decompose_signal(
-    args: argparse.Namespace, signal_channel: str, df: pd.DataFrame
+        args: argparse.Namespace, signal_channel: str, df: pd.DataFrame
 ):
     signal = df[signal_channel].values
     norm_signal = (signal - np.mean(signal)) / np.std(signal)
@@ -106,9 +106,9 @@ if __name__ == "__main__":
 
     start = window_start[45]
     end = window_start[46] - 1
-    signal = signals[start : end + 1, ...]
+    signal = signals[start: end + 1, ...]
     signal = signal.reshape(-1, 64)
-    label = labels[start : end + 1]
+    label = labels[start: end + 1]
     with open("single_elm_event.npy", "wb") as f:
         np.save(f, signal)
         np.save(f, label)
