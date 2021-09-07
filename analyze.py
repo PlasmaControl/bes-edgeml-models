@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import seaborn as sns
 from sklearn import metrics
-from torch.functional import norm
 from tqdm import tqdm
 
 from data_preprocessing import *
@@ -23,9 +22,7 @@ from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
-# plt.style.use("/home/lm9679/plt_custom.mplstyle")
-# colors = sns.color_palette("deep").as_hex()
-
+sns.set_style("darkgrid")
 
 def get_test_dataset(
     args: argparse.Namespace,
@@ -178,12 +175,17 @@ def plot(
     n_cols: Union[int, None] = None,
     figsize: tuple = (14, 12),
 ) -> None:
+    flag = False
     fig = plt.figure(figsize=figsize)
     for i, i_elm in enumerate(elms):
         signals = elm_predictions[i_elm]["signals"]
         signal_max = np.max(signals)
         labels = elm_predictions[i_elm]["labels"]
-        elm_start = np.where(labels > 0)[0][0]
+        try:
+            elm_start = np.where(labels > 0)[0][0]
+        except IndexError:
+            elm_start = len(labels) - 80
+            flag = True
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
         print(f"ELM {i+1} of {len(elms)} with {len(elm_time)} time points")
@@ -222,25 +224,46 @@ def plot(
             lw=1.25,
             # c=colors[2],
         )
-        plt.axvline(
-            elm_start - args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=1.5,
-            label="Buffer limits",
-        )
-        plt.axvline(
-            elm_start + args.truncate_buffer,
-            ymin=0,
-            ymax=0.9,
-            c="k",
-            ls="--",
-            alpha=0.65,
-            lw=1.5,
-        )
+        if flag:
+            plt.axvline(
+                elm_start - args.truncate_buffer,
+                ymin=0,
+                ymax=0.9,
+                c="r",
+                ls="--",
+                alpha=0.65,
+                lw=1.5,
+                label="Buffer limits",
+            )
+            plt.axvline(
+                elm_start + args.truncate_buffer,
+                ymin=0,
+                ymax=0.9,
+                c="r",
+                ls="--",
+                alpha=0.65,
+                lw=1.5,
+            )
+        else:
+            plt.axvline(
+                elm_start - args.truncate_buffer,
+                ymin=0,
+                ymax=0.9,
+                c="k",
+                ls="--",
+                alpha=0.65,
+                lw=1.5,
+                label="Buffer limits",
+            )
+            plt.axvline(
+                elm_start + args.truncate_buffer,
+                ymin=0,
+                ymax=0.9,
+                c="k",
+                ls="--",
+                alpha=0.65,
+                lw=1.5,
+            )
         plt.xlabel("Time (micro-s)", fontsize=10)
         plt.ylabel("Signal | label", fontsize=10)
         plt.tick_params(axis="x", labelsize=8)
@@ -251,6 +274,7 @@ def plot(
         plt.gca().spines["left"].set_color("lightgrey")
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
+        flag = False
     plt.suptitle(
         f"Model output on {args.data_mode} classes, ELM index: {elm_range}",
         fontsize=20,
@@ -260,7 +284,7 @@ def plot(
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_time_series{args.filename_suffix}_{elm_range}.png",
+                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series{args.filename_suffix}_{elm_range}.png",
             ),
             dpi=200,
         )
@@ -385,21 +409,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_micro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_micro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_micro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )
@@ -452,21 +476,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_macro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_macro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_macro_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )

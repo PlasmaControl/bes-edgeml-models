@@ -4,11 +4,12 @@ Data class to package BES data for training using PyTorch
 import os
 import logging
 import argparse
-from typing import Tuple
+from typing import Tuple, Union
 
 import h5py
 import numpy as np
 import pandas as pd
+from numpy import ndarray
 from sklearn import model_selection
 
 
@@ -58,7 +59,9 @@ class BaseData:
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
-    ) -> Tuple[np.ndarray]:
+    ) -> Union[Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]], Tuple[
+        Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[
+            ndarray, ndarray, ndarray, ndarray]]]:
         """Method to create data for training, validation and testing.
 
         Args:
@@ -72,6 +75,7 @@ class BaseData:
         --------
             Tuple: Tuple containing data for training, validation and test sets.
         """
+        global train_data, validation_data, test_data, all_elms, all_data
         training_elms, validation_elms, test_elms = self._partition_elms(
             max_elms=self.args.max_elms, fold=fold
         )
@@ -137,7 +141,7 @@ class BaseData:
 
     def _partition_elms(
         self, max_elms: int = None, fold: int = None
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[ndarray, ndarray, ndarray]:
         """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
         validation set being `fraction_validate` of the training set or by K-fold
@@ -204,12 +208,12 @@ class BaseData:
 
         return training_elms, validation_elms, test_elms
 
-    def _read_file(self) -> Tuple[np.ndarray, h5py.File]:
+    def _read_file(self) -> Tuple[ndarray, h5py.File]:
         """Helper function to read a HDF5 file.
 
         Returns:
         --------
-            Tuple[np.ndarray, h5py.File]: Tuple containing ELM indices and file object.
+            Tuple[ndarray, h5py.File]: Tuple containing ELM indices and file object.
         """
         assert os.path.exists(self.datafile)
         self.logger.info(f"Found datafile: {self.datafile}")

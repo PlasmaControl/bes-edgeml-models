@@ -67,12 +67,12 @@ class WaveletData(BaseData):
             else:
                 elm_end_index = elm_start_index + self.args.truncate_buffer
             _signals = _signals[:elm_end_index, ...]
-            coeffs = pywt.wavedec(_signals, wavelet="db4", mode="symmetric")
+            coeffs = pywt.wavedec(_signals, wavelet="db2", mode="symmetric")
             uthresh = 1
             coeffs[1:] = (
                 pywt.threshold(i, value=uthresh, mode="hard") for i in coeffs[1:]
             )
-            _signals = pywt.waverec(coeffs, wavelet="db4", mode="symmetric")
+            _signals = pywt.waverec(coeffs, wavelet="db2", mode="symmetric")
             _labels = _labels[:elm_end_index]
 
             # get all the allowed indices till current time step
