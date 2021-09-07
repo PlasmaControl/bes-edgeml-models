@@ -196,7 +196,7 @@ def plot(
                 elm_time,
                 signals[:, 2, 6, 0] / 10,
                 label="BES ch. 22",
-                lw=1.75,
+                lw=1.25,
                 # c=colors[0],
             )
         else:
@@ -204,22 +204,22 @@ def plot(
                 elm_time,
                 signals[:, 2, 6] / signal_max,
                 label="BES ch. 22",  # c=colors[0]
-                lw=1.75,
+                lw=1.25,
             )
         plt.plot(
             elm_time,
             labels + 0.02,
             label="Ground truth",
-            ls="-.",
-            lw=1.75,
+            ls="-",
+            lw=1.25,
             # c=colors[1],
         )
         plt.plot(
             elm_time - args.label_look_ahead,
             predictions,
             label="Prediction",
-            ls="-.",
-            lw=1.75,
+            ls="-",
+            lw=1.25,
             # c=colors[2],
         )
         plt.axvline(
@@ -229,7 +229,7 @@ def plot(
             c="k",
             ls="--",
             alpha=0.65,
-            lw=2.0,
+            lw=1.5,
             label="Buffer limits",
         )
         plt.axvline(
@@ -239,7 +239,7 @@ def plot(
             c="k",
             ls="--",
             alpha=0.65,
-            lw=2.0,
+            lw=1.5,
         )
         plt.xlabel("Time (micro-s)", fontsize=10)
         plt.ylabel("Signal | label", fontsize=10)
@@ -547,7 +547,7 @@ def main(
     ) = output_paths
     model_ckpt_path = os.path.join(
         model_ckpt_dir,
-        f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
+        f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
@@ -560,7 +560,7 @@ def main(
     # get the test data and dataloader
     test_fname = os.path.join(
         test_data_dir,
-        f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pkl",
+        f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
 
     print(f"Using test data file: {test_fname}")
