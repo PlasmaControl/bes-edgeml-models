@@ -22,7 +22,7 @@ from src import data, utils, dataset
 from options.test_arguments import TestArguments
 
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
-sns.set_style("darkgrid")
+# sns.set_style("white")
 
 def get_test_dataset(
     args: argparse.Namespace,
@@ -217,7 +217,7 @@ def plot(
             # c=colors[1],
         )
         plt.plot(
-            elm_time - args.label_look_ahead,
+            elm_time, # - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-",
