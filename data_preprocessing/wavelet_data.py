@@ -1,10 +1,10 @@
 """
-Data class to package BES data for training after truncating the input tensors using
-to given time frames after the leading edge of the active ELMs.
+Data class to package BES data for training using wavelet transforms.
 """
 from typing import Tuple
 
 import numpy as np
+import pywt
 
 try:
     from .base_data import BaseData
@@ -12,7 +12,7 @@ except ImportError:
     from base_data import BaseData
 
 
-class TruncateData(BaseData):
+class WaveletData(BaseData):
     def _preprocess_data(
         self,
         elm_indices: np.ndarray = None,
@@ -50,14 +50,10 @@ class TruncateData(BaseData):
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(
-                elm_event["signals"], dtype=self.args.signal_dtype
-            )
+            _signals = np.array(elm_event["signals"], dtype=self.args.signal_dtype)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            _labels = np.array(
-                elm_event["labels"], dtype=self.args.signal_dtype
-            )
+            _labels = np.array(elm_event["labels"], dtype=self.args.signal_dtype)
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :33] = _signals[:, :33] / 10.0
@@ -71,6 +67,12 @@ class TruncateData(BaseData):
             else:
                 elm_end_index = elm_start_index + self.args.truncate_buffer
             _signals = _signals[:elm_end_index, ...]
+            coeffs = pywt.wavedec(_signals, wavelet="db4", mode="symmetric")
+            uthresh = 1
+            coeffs[1:] = (
+                pywt.threshold(i, value=uthresh, mode="hard") for i in coeffs[1:]
+            )
+            _signals = pywt.waverec(coeffs, wavelet="db4", mode="symmetric")
             _labels = _labels[:elm_end_index]
 
             # get all the allowed indices till current time step
@@ -122,32 +124,3 @@ class TruncateData(BaseData):
                 tmp += f" device {tensor.device[-5:]}"
             self.logger.info(tmp)
         return signals, labels, sample_indices, window_start
-
-
-if __name__ == "__main__":
-    import os
-    import sys
-    import torch
-    import torch.nn as nn
-
-    sys.path.append(os.getcwd())
-    from src import utils
-    from options.base_arguments import BaseArguments
-
-    args, _ = BaseArguments().parse()
-
-    # create the logger object
-    logger = utils.get_logger(
-        script_name=__name__,
-        stream_handler=True,
-        # log_file=f"output_logs_{args.data_mode}.log",
-    )
-    data = TruncateData(args, logger)
-    train_data, _, _ = data.get_data()
-    signals, labels, sample_indices, window_start = train_data
-    start = window_start[0]
-    stop = window_start[1] - 1
-    print(f"start index: {start}, stop index: {stop}")
-    first_elm_event = signals[start:stop]
-    print(first_elm_event.shape)
-    signal_length = first_elm_event.shape[0]
