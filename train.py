@@ -283,7 +283,7 @@ def train_loop(
                 # save the model if best ROC is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
-                    f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
+                    f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
                 )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
@@ -323,5 +323,5 @@ if __name__ == "__main__":
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pkl",
+        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
