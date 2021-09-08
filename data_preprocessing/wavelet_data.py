@@ -50,10 +50,14 @@ class WaveletData(BaseData):
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(elm_event["signals"], dtype=self.args.signal_dtype)
+            _signals = np.array(
+                elm_event["signals"], dtype=self.args.signal_dtype
+            )
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            _labels = np.array(elm_event["labels"], dtype=self.args.signal_dtype)
+            _labels = np.array(
+                elm_event["labels"], dtype=self.args.signal_dtype
+            )
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :33] = _signals[:, :33] / 10.0
@@ -61,16 +65,17 @@ class WaveletData(BaseData):
                 _signals = _signals.reshape(-1, 8, 8)
 
             active_elm_indices = np.where(_labels > 0)[0]
-            elm_start_index = active_elm_indices[0]
+            # elm_start_index = active_elm_indices[0]
             if is_test_data:
-                elm_end_index = active_elm_indices[-1]
+                elm_end_index = active_elm_indices[-1] + 75
             else:
-                elm_end_index = elm_start_index + self.args.truncate_buffer
+                elm_end_index = active_elm_indices[-1] + 75
             _signals = _signals[:elm_end_index, ...]
             coeffs = pywt.wavedec(_signals, wavelet="db2", mode="symmetric")
             uthresh = 1
             coeffs[1:] = (
-                pywt.threshold(i, value=uthresh, mode="hard") for i in coeffs[1:]
+                pywt.threshold(i, value=uthresh, mode="hard")
+                for i in coeffs[1:]
             )
             _signals = pywt.waverec(coeffs, wavelet="db2", mode="symmetric")
             _labels = _labels[:elm_end_index]
