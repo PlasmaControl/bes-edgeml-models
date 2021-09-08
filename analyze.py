@@ -24,6 +24,7 @@ from options.test_arguments import TestArguments
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
 # sns.set_style("white")
 
+
 def get_test_dataset(
     args: argparse.Namespace,
     file_name: str,
@@ -183,8 +184,10 @@ def plot(
         labels = elm_predictions[i_elm]["labels"]
         try:
             elm_start = np.where(labels > 0)[0][0]
+            elm_end = np.where(labels > 0)[0][-1]
         except IndexError:
             elm_start = len(labels) - 80
+            elm_end = len(labels)
             flag = True
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
@@ -217,7 +220,7 @@ def plot(
             # c=colors[1],
         )
         plt.plot(
-            elm_time, # - args.label_look_ahead,
+            elm_time,  # - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-",
@@ -256,7 +259,7 @@ def plot(
                 label="Buffer limits",
             )
             plt.axvline(
-                elm_start + args.truncate_buffer,
+                elm_end,
                 ymin=0,
                 ymax=0.9,
                 c="k",
