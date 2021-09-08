@@ -3,42 +3,64 @@ import pywt
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# plt.style.use("/home/lakshya/plt_custom.mplstyle")
-sns.set_style("darkgrid")
-sns.set_palette("deep")
+plt.style.use("/home/lakshya/plt_custom.mplstyle")
+# sns.set_style("darkgrid")
+# sns.set_palette("deep")
 
 if __name__ == "__main__":
     signal = np.load("single_elm_event.npy")
-    signal = signal / np.max(signal)
+    # signal = signal / np.max(signal)
+    print(signal.shape)
 
     channels = [0, 31, 63]
-    wavelets = ["db2", "db8", "sym4", "coif2"]
-    lengths = [4, 16, 8, 12]
-    fig, axs = plt.subplots(4, 3, figsize=(15, 18), constrained_layout=True)
+    wavelet_fam = {
+        "db": ["db2", "db4", "db10", "db20"],
+        "sym": ["sym2", "sym9", "sym14", "sym18"],
+        "bior": ["bior2.8", "bior3.1", "bior3.9", "bior5.5"],
+        "coif": ["coif1", "coif4", "coif10", "coif17"],
+    }
+    wavelets = ["db2", "db4", "sym4", "coif2"]
+    fig, axs = plt.subplots(4, 3, figsize=(15, 21), constrained_layout=True)
     axs = axs.flatten()
 
+    offsets = [0, 1, 2, 3, 4]
     idx = 0
-    for wavelet, length in zip(wavelets, lengths):
-        coeff = pywt.wavedec(signal, wavelet=wavelet, mode="symmetric")
-        uthresh = 1
-        coeff[1:] = (
-            pywt.threshold(i, value=uthresh, mode="hard") for i in coeff[1:]
-        )
-        reconst_signal = pywt.waverec(coeff, wavelet=wavelet, mode="symmetric")
+    for wv_fam in list(wavelet_fam.keys()):
+        reconst_signals = {}
+        print(f"Using wavelet family: {wv_fam}")
+        for wavelet in wavelet_fam[wv_fam]:
+            print(f"Using wavelet: {wavelet}")
+            coeff = pywt.wavedec(
+                signal, wavelet=wavelet, mode="symmetric", axis=0
+            )
+            uthresh = 1
+            coeff[1:] = (
+                pywt.threshold(i, value=uthresh, mode="hard") for i in coeff[1:]
+            )
+            reconst_signal = pywt.waverec(
+                coeff, wavelet=wavelet, mode="symmetric", axis=0
+            )
+            reconst_signals[wavelet] = reconst_signal
         for ch in channels:
             ax = axs[idx]
-            ax.plot(signal[:, ch], label="original", c="#636EFA", lw=1.25)
+            plt.setp([ax.get_xticklabels(), ax.get_yticklabels()], fontsize=7)
+            for (k, v), off in zip(reconst_signals.items(), offsets):
+                w = pywt.Wavelet(k)
+                ax.plot(
+                    v[:, ch] + off, label=f"{k}, length: {w.dec_len}", lw=1.5
+                )
             ax.plot(
-                reconst_signal[:, ch],
-                label="wavelet transformed",
-                c="#EF553B",
-                lw=0.75,
+                signal[:, ch] + offsets[-1],
+                label="original",
+                lw=1.0,
+                c="slategray",
             )
             ax.set_title(
-                f"Channel: {ch + 1}, wavelet: {wavelet}, length: {length}",
+                f"Channel: {ch + 1}",
                 fontsize=11,
             )
             ax.legend(fontsize=8, frameon=False)
+            ax.grid(axis="y")
             idx += 1
     # plt.tight_layout()
     plt.show()
