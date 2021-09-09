@@ -1,6 +1,7 @@
 import numpy as np
 import pywt
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import seaborn as sns
 
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
@@ -19,11 +20,11 @@ if __name__ == "__main__":
         "bior": ["bior2.8", "bior3.1", "bior3.9", "bior5.5"],
         "coif": ["coif1", "coif4", "coif10", "coif17"],
     }
-    wavelets = ["db2", "db4", "sym4", "coif2"]
     fig, axs = plt.subplots(4, 3, figsize=(15, 21), constrained_layout=True)
     axs = axs.flatten()
 
     offsets = [0, 1, 2, 3, 4]
+    xtick_labels = list(range(1900, 2400, 50))
     idx = 0
     for wv_fam in list(wavelet_fam.keys()):
         reconst_signals = {}
@@ -43,14 +44,17 @@ if __name__ == "__main__":
             reconst_signals[wavelet] = reconst_signal
         for ch in channels:
             ax = axs[idx]
-            plt.setp([ax.get_xticklabels(), ax.get_yticklabels()], fontsize=7)
+            # plt.setp(ax.get_yticklabels(), fontsize=7)
+            ax.tick_params(axis="both", which="major", labelsize=7)
             for (k, v), off in zip(reconst_signals.items(), offsets):
                 w = pywt.Wavelet(k)
                 ax.plot(
-                    v[:, ch] + off, label=f"{k}, length: {w.dec_len}", lw=1.5
+                    v[1900:2300, ch] + off,
+                    label=f"{k}, length: {w.dec_len}",
+                    lw=1.5,
                 )
             ax.plot(
-                signal[:, ch] + offsets[-1],
+                signal[1900:2300, ch] + offsets[-1],
                 label="original",
                 lw=1.0,
                 c="slategray",
@@ -61,6 +65,11 @@ if __name__ == "__main__":
             )
             ax.legend(fontsize=8, frameon=False)
             ax.grid(axis="y")
+            ticks_loc = ax.get_xticks().tolist()
+            ticks_loc = ticks_loc[1:]
+            # taken from: https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
+            ax.xaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
+            ax.set_xticklabels(xtick_labels)
             idx += 1
     # plt.tight_layout()
     plt.show()

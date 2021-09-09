@@ -4,10 +4,6 @@ from typing import Tuple, List, Union
 import argparse
 import logging
 
-# import matplotlib
-
-# matplotlib.use("TkAgg")
-import cv2
 import torch
 import numpy as np
 import pandas as pd
