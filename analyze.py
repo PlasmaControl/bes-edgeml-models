@@ -147,7 +147,7 @@ def predict(
         )
 
         macro_predictions_pre_active_elms = np.array(
-            [np.any(micro_predictions_pre_active_elms > 0.4).astype(int)]
+            [np.any(micro_predictions_pre_active_elms > 0.5).astype(int)]
         )
 
         macro_labels = np.array([0, 1], dtype="int")
@@ -207,8 +207,20 @@ def plot(
         else:
             plt.plot(
                 elm_time,
+                signals[:, 0, 0] / signal_max,
+                label="Ch. 1",  # c=colors[0]
+                lw=1.25,
+            )
+            plt.plot(
+                elm_time,
                 signals[:, 2, 6] / signal_max,
-                label="BES ch. 22",  # c=colors[0]
+                label="Ch. 22",  # c=colors[0]
+                lw=1.25,
+            )
+            plt.plot(
+                elm_time,
+                signals[:, 7, 7] / signal_max,
+                label="Ch. 64",  # c=colors[0]
                 lw=1.25,
             )
         plt.plot(
@@ -225,7 +237,7 @@ def plot(
             label="Prediction",
             ls="-",
             lw=1.25,
-            # c=colors[2],
+            c="slategrey",
         )
         if flag:
             plt.axvline(
@@ -273,7 +285,7 @@ def plot(
         plt.tick_params(axis="y", labelsize=8)
         plt.ylim([None, 1.1])
         sns.despine(offset=10, trim=False)
-        plt.legend(fontsize=8)  # , frameon=False)
+        plt.legend(fontsize=7, ncol=2, frameon=False)
         plt.gca().spines["left"].set_color("lightgrey")
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
