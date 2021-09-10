@@ -209,13 +209,13 @@ def plot(
             )
             plt.plot(
                 elm_time,
-                signals[:, 2, 6] / signal_max,
+                signals[:, 2, 6],  # / signal_max,
                 label="Ch. 22",  # c=colors[0]
                 lw=1.25,
             )
             plt.plot(
                 elm_time,
-                signals[:, 7, 7] / signal_max,
+                signals[:, 7, 7],  # / signal_max,
                 label="Ch. 64",  # c=colors[0]
                 lw=1.25,
             )

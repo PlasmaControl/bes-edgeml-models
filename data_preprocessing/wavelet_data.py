@@ -72,7 +72,7 @@ class WaveletData(BaseData):
                 elm_end_index = active_elm_indices[-1] + 75
             _signals = _signals[:elm_end_index, ...]
             coeffs = pywt.wavedec(
-                _signals, wavelet="sym9", mode="symmetric", axis=0
+                _signals, wavelet="db2", mode="symmetric", axis=0
             )
             uthresh = 1
             coeffs[1:] = (
@@ -80,7 +80,7 @@ class WaveletData(BaseData):
                 for i in coeffs[1:]
             )
             _signals = pywt.waverec(
-                coeffs, wavelet="sym9", mode="symmetric", axis=0
+                coeffs, wavelet="db2", mode="symmetric", axis=0
             )
             _labels = _labels[:elm_end_index]
 
