@@ -216,7 +216,7 @@ def predict(
         # elm_time = np.arange(
         #     active_elm_start_extended, active_elm_end_extended
         # )  [: (-args.signal_window_size - args.label_look_ahead + 1)]
-        elm_time = np.arange(elm_labels.size)
+        elm_time = np.arange(elm_labels.size) + window_start[i_elm]
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals,
             "labels": elm_labels,
@@ -305,7 +305,6 @@ def predict_v2(
             predictions[j] = model(input_signals)
 
         activations = np.array(activations)
-        activations = np.transpose(activations)
 
         elm_signals = elm_signals[
                       : (-args.signal_window_size - args.label_look_ahead + 1), ...
@@ -347,7 +346,7 @@ def predict_v2(
         macro_predictions = np.concatenate(
             [macro_predictions_pre_active_elms, macro_predictions_active_elms]
         )
-        elm_time = np.arange(elm_labels.size)
+        elm_time = np.arange(elm_labels.size) + window_start[i_elm]
         elm_predictions[window_start[i_elm]] = {
             "activations": activations,
             "weights": weights,
@@ -373,35 +372,25 @@ def make_arrays(dic: dict, key: str):
                     }
     Jeff Zimmerman
     '''
-    l, l_label = 0, 0
-    for k in dic.keys():
-        l += dic[k][key].squeeze().shape[1]
-        l_label += dic[k]['labels'].squeeze().shape[0]
-    arr = np.empty((dic[k][key].squeeze().shape[0], l))
-    label_arr = np.empty(l)
 
-    start_idx = 0
-    starts = []
-    ends = []
+    ends = np.cumsum([dic[elm_idx]['elm_time'].shape[0] for elm_idx in list(dic.keys())])
+    starts = np.pad(ends, (1, 0), mode='constant')[:-1]
 
-    for k in dic.keys():
-        end_idx = start_idx + dic[k][key].squeeze().shape[-1]
-        arr[:, start_idx:end_idx] = dic[k][key].squeeze()
-        label_arr[start_idx:end_idx] = dic[k]['labels'].squeeze()
+    arr = np.empty((ends[-1], *list(dic.values())[0][key].squeeze().shape[1:]))
+    label_arr = np.empty(ends[-1])
 
-        starts.append(start_idx)
-        ends.append(end_idx)
+    for i_start, i_end, elm_dic in zip(starts, ends, list(dic.values())):
+        arr[i_start:i_end] = elm_dic[key].squeeze()
+        label_arr[i_start:i_end] = elm_dic['labels'].squeeze()
 
-        start_idx = end_idx
-
-    return {key: arr.T, 'labels': label_arr, 'elm_start': starts, 'elm_end': ends}
+    return {key: arr, 'labels': label_arr, 'elm_start_idx': starts, 'elm_end_idx': ends}
 
 
 def plot_boxes(elm_predictions: dict,
                layer: str = None):
     elm_ids = list(elm_predictions.keys())
     elm_id = elm_ids[0]
-    activations = elm_predictions[elm_id]['activations'].squeeze()
+    activations = elm_predictions[elm_id]['activations'].squeeze().T
 
     ncols = 4
     nrows = ceil(activations.shape[0] / (4 * ncols))
@@ -422,7 +411,8 @@ def plot_boxes(elm_predictions: dict,
 
 
 def perform_PCA(elm_predictions: dict,
-                layer=None):
+                layer=None,
+                plot: bool = True):
     '''
     Use scikit learn's pca analysis tools to reduce dimensionality of hidden layer
     output.
@@ -431,8 +421,7 @@ def perform_PCA(elm_predictions: dict,
 
     elm_arrays = make_arrays(elm_predictions, 'activations')
     activations = elm_arrays['activations']
-    elm_start = elm_arrays['elm_start']
-    elm_end = elm_arrays['elm_end']
+    start_end = zip(elm_arrays['elm_start_idx'], elm_arrays['elm_end_idx'])
     elm_labels = elm_arrays['labels']
     # weights = make_array(elm_predictions, 'weights')
     t_dim = np.arange(activations.shape[0])
@@ -449,48 +438,118 @@ def perform_PCA(elm_predictions: dict,
     pca.fit(standard)
     decomposed = pca.transform(standard)
     decomposed_t = np.append([t_dim], decomposed.T, axis=0).T
-    print(pca.explained_variance_ratio_[:n_components])
-
+    print(f'Explained variance ratio of first {n_components} components')
+    for i, x in enumerate(pca.explained_variance_ratio_[:n_components]):
+        print(f'\tComponent {i}: {x * 100:0.3f}')
     for component in range(3):
-        print(f'Component {component}:\n{pca.components_[component]}')
+        print(f'\nComponent {component}:\n{pca.components_[component]}')
 
-    # fig = plt.figure()
-    # ax = plt.axes(projection='3d')
-    for start, end in list(zip(elm_start, elm_end))[:1]:
-        labels = elm_labels[start:end]
-        fig = px.scatter_3d(x=decomposed_t[:, 0][start:end],
-                            y=decomposed_t[:, 1][start:end],
-                            z=decomposed_t[:, 2][start:end],
-                            color=labels)
+    if plot:
+        # fig = plt.figure()
+        # ax = plt.axes(projection='3d')
+        # for start, end in list(zip(elm_start, elm_end))[:1]:
+        #     labels = elm_labels[start:end]
+        #     fig = px.scatter_3d(x=decomposed_t[:, 0][start:end],
+        #                         y=decomposed_t[:, 1][start:end],
+        #                         z=decomposed_t[:, 2][start:end],
+        #                         color=labels)
+        #
+        # # px.set_xlabel('Time $(\mu s)$')
+        # # px.set_ylabel('PC 1')
+        # # px.set_zlabel('PC 2')
+        # fig.show()
 
-    # px.set_xlabel('Time $(\mu s)$')
-    # px.set_ylabel('PC 1')
-    # px.set_zlabel('PC 2')
-    fig.show()
-    return
+        fig, axs = plt.subplots(nrows=n_components, ncols=n_components, figsize=(16, 9))
+        for ax in axs.flat:
+            ax.set_axis_off()
+        for pc_col in range(0, n_components):
+            for pc_row in range(0, pc_col + 1):
+                ax = axs[pc_row][pc_col]
+                ax.set_axis_on()
+                pc_x = decomposed_t[:, pc_col - pc_row]
+                pc_y = decomposed_t[:, pc_col + 1]
+                for start, end in start_end[:1]:
+                    ax.scatter(x=pc_x[start:end],
+                               y=pc_y[start:end],
+                               edgecolor='none',
+                               c=matplotlib.cm.gist_rainbow(np.linspace(0, 1, end - start)),
+                               s=4)
+                ax.set_ylabel(f'PC_{pc_col + 1}')
+                ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_row + 1}')
 
-    fig, axs = plt.subplots(nrows=n_components, ncols=n_components, figsize=(16, 9))
-    for ax in axs.flat:
-        ax.set_axis_off()
-    for pc_col in range(0, n_components):
-        for pc_row in range(0, pc_col + 1):
-            ax = axs[pc_row][pc_col]
-            ax.set_axis_on()
-            pc_x = decomposed_t[:, pc_col - pc_row]
-            pc_y = decomposed_t[:, pc_col + 1]
-            for start, end in list(zip(elm_start, elm_end))[:1]:
-                ax.scatter(x=pc_x[start:end],
-                           y=pc_y[start:end],
-                           edgecolor='none',
-                           c=matplotlib.cm.gist_rainbow(np.linspace(0, 1, end - start)),
-                           s=4)
-            ax.set_ylabel(f'PC_{pc_col + 1}')
-            ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_row + 1}')
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        fig.suptitle(f'PCA of Layer {layer} in feature model')
+        plt.show()
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    fig.suptitle(f'PCA of Layer {layer} in feature model')
-    plt.show()
-    return
+    return decomposed_t
+
+
+def correlate_pca(pca: np.ndarray, elm_predictions: dict, layer: str, type: str):
+    """
+    Plot correlations of input channels with PCA.
+    Specify type='box' for box plot of correlations along radial dimension
+    Specify type='hist' for histogram of correlation all 64 channels
+    """
+    ixslice = pd.IndexSlice
+    pca_t = pca.T[1:]
+    elm_list = list(elm_predictions.keys())
+    arrs = make_arrays(elm_predictions, 'signals')
+    signals = arrs['signals']
+    start_end = zip(arrs['elm_start_idx'], arrs['elm_end_idx'])
+    reshaped = np.empty((64, signals.shape[0]))
+    df_index_a = np.empty(signals.shape[0])
+    df_index_b = np.empty(signals.shape[0])
+    for i, (start_idx, end_idx) in enumerate(start_end):
+        df_index_a[start_idx:end_idx] = elm_list[i]
+        df_index_b[start_idx:end_idx] = np.arange(end_idx - start_idx)
+
+    df_index = pd.MultiIndex.from_arrays([df_index_a, df_index_b], names=['ELM_ID', 'Time'])
+
+    for channel_y in range(8):
+        for channel_x in range(8):
+            reshaped[8 * channel_x + channel_y] = signals[:, channel_y, channel_x]
+
+    data_arr = np.append(reshaped, pca_t, axis=0).T
+    data_labels = [f'Channel_{x + 1}' for x in range(64)]
+    pc_labels = [f'PC_{x + 1}' for x in range(len(pca_t))]
+    labels_all = np.append(data_labels, pc_labels)
+    df_all = pd.DataFrame(data_arr, columns=labels_all, index=df_index)
+    df_all = df_all.groupby(level='ELM_ID').corr().loc[ixslice[:, 'PC_1':'PC_5'], 'Channel_1':'Channel_64']
+
+    if type.lower() == 'hist':
+        pc1_corr_df = df_all.xs('PC_1', level=1)
+        pc2_corr_df = df_all.xs('PC_2', level=1)
+        for x in range(4):
+            fig, axs = plt.subplots(4, 4)
+            for i, ax in enumerate(axs.flat, start=1):
+                i = x * 16 + i
+                sns.histplot(data=pc1_corr_df, x=f'Channel_{i}', ax=ax, color=sns.color_palette()[1])
+                sns.kdeplot(data=pc1_corr_df, x=f'Channel_{i}', ax=ax, color=sns.color_palette()[1])
+                ax.set_title(f'Channel {i}', loc='left', y=0.8)
+            fig.suptitle('Distribution of Correlations Between PC1 and Input Channels')
+            plt.show()
+
+    if type.lower() == 'box':
+        df_box = df_all.loc[:, 'Channel_17':'Channel_24'].reset_index(level=1)
+        # must make df categorical to work on seaborn box plot.
+        df_box_index = df_box.index
+        all_vals = []
+        pc_vals = []
+        channel_vals = []
+        for col in df_box.loc[:, 'Channel_17':'Channel_24']:
+            this_column_values = df_box[col].tolist()
+            this_column_pc = df_box['level_1'].tolist()
+            all_vals += this_column_values
+            pc_vals += this_column_pc
+            channel_vals += [col] * len(this_column_values)
+        df_box = pd.DataFrame(data=np.transpose([pc_vals, channel_vals, all_vals]),
+                              columns=['Component', 'Channel', 'Correlation'])
+        df_box['Correlation'] = df_box['Correlation'].astype(float)
+        fig, ax = plt.subplots(1, 1)
+        sns.boxplot(data=df_box, x='Channel', y='Correlation', hue='Component', ax=ax)
+        fig.suptitle(f'Distribution of Correlation Along Radial Axis')
+        ax.set_title(f'Layer: {layer}')
+        plt.show()
 
 
 def plot(
@@ -973,10 +1032,11 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pca_layer = 'fc2'
+    pca_layer = 'fc1'
     pred_dict = predict_v2(args=args, test_data=test_data, model=model, device=device, hook_layer=pca_layer)
     # plot_boxes(pred_dict, layer=pca_layer)
-    perform_PCA(pred_dict, layer=pca_layer)
+    pca = perform_PCA(pred_dict, layer=pca_layer, plot=False)
+    correlate_pca(pca, pred_dict, layer=pca_layer, type='box')
     return
 
     if args.plot_data:
