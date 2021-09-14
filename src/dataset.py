@@ -94,6 +94,10 @@ class ELMDataset(torch.utils.data.Dataset):
             signal_window += noise
         if self.args.use_gradients:
             signal_window = np.transpose(signal_window, axes=(3, 0, 1, 2))
+        elif self.args.use_rnn:
+            signal_window = signal_window.reshape(
+                self.args.signal_window_size, -1
+            )
         else:
             signal_window = signal_window[np.newaxis, ...]
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
