@@ -195,30 +195,30 @@ def plot(
         if args.use_gradients:
             plt.plot(
                 elm_time,
-                signals[:, 2, 6, 0] / 10,
+                signals[:, 2, 6, 0] / np.max(signals),
                 label="BES ch. 22",
                 lw=1.25,
                 # c=colors[0],
             )
         else:
+            # plt.plot(
+            #     elm_time,
+            #     signals[:, 0, 0] / signal_max,
+            #     label="Ch. 1",  # c=colors[0]
+            #     lw=1.25,
+            # )
             plt.plot(
                 elm_time,
-                signals[:, 0, 0] / signal_max,
-                label="Ch. 1",  # c=colors[0]
-                lw=1.25,
-            )
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6],  # / signal_max,
+                signals[:, 2, 6] / np.max(signals),  # / signal_max,
                 label="Ch. 22",  # c=colors[0]
                 lw=1.25,
             )
-            plt.plot(
-                elm_time,
-                signals[:, 7, 7],  # / signal_max,
-                label="Ch. 64",  # c=colors[0]
-                lw=1.25,
-            )
+            # plt.plot(
+            #     elm_time,
+            #     signals[:, 7, 7],  # / signal_max,
+            #     label="Ch. 64",  # c=colors[0]
+            #     lw=1.25,
+            # )
         plt.plot(
             elm_time,
             labels + 0.02,
@@ -233,7 +233,7 @@ def plot(
             label="Prediction",
             ls="-",
             lw=1.25,
-            c="slategrey",
+            # c="slategrey",
         )
         if flag:
             plt.axvline(
