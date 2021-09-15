@@ -171,6 +171,8 @@ def train_loop(
                     8,
                     8,
                 )
+            elif args.data_preproc == "rnn":
+                input_size = (args.batch_size, args.signal_window_size, 64)
             else:
                 input_size = (
                     args.batch_size,
