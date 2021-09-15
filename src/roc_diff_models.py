@@ -13,8 +13,8 @@ if __name__ == "__main__":
     path_10 = "outputs/signal_window_16/label_look_ahead_10/roc"
     path_50 = "outputs/signal_window_16/label_look_ahead_50/roc"
     path_100 = "outputs/signal_window_16/label_look_ahead_100/roc"
-    path_120 = "outputs/signal_window_16/label_look_ahead_120/roc"
-    # path_200 = "outputs/signal_window_16/label_look_ahead_200/roc"
+    path_150 = "outputs/signal_window_16/label_look_ahead_150/roc"
+    path_200 = "outputs/signal_window_16/label_look_ahead_200/roc"
     # path_400 = "outputs/signal_window_16/label_look_ahead_400/roc"
 
     # # lr
@@ -70,28 +70,38 @@ if __name__ == "__main__":
 
     # cnn model
     df_cnn_0 = pd.read_csv(
-        os.path.join(path_0, "cnn_roc_details_micro_unbalanced_lookahead_0.csv")
-    )
-    df_cnn_10 = pd.read_csv(
         os.path.join(
-            path_10, "cnn_roc_details_micro_unbalanced_lookahead_10.csv"
+            path_0, "cnn_roc_details_micro_unbalanced_lookahead_0_wavelet.csv"
         )
     )
+    # df_cnn_10 = pd.read_csv(
+    #     os.path.join(
+    #         path_10, "cnn_roc_details_micro_unbalanced_lookahead_10.csv"
+    #     )
+    # )
     df_cnn_50 = pd.read_csv(
         os.path.join(
-            path_50, "cnn_roc_details_micro_unbalanced_lookahead_50.csv"
+            path_50, "cnn_roc_details_micro_unbalanced_lookahead_50_wavelet.csv"
         )
     )
     df_cnn_100 = pd.read_csv(
         os.path.join(
-            path_100, "cnn_roc_details_micro_unbalanced_lookahead_100.csv"
+            path_100,
+            "cnn_roc_details_micro_unbalanced_lookahead_100_wavelet.csv",
         )
     )
-    # df_cnn_120 = pd.read_csv(
-    #     os.path.join(
-    #         path_120, "cnn_roc_details_micro_unbalanced_lookahead_120.csv"
-    #     )
-    # )
+    df_cnn_150 = pd.read_csv(
+        os.path.join(
+            path_150,
+            "cnn_roc_details_micro_unbalanced_lookahead_150_wavelet.csv",
+        )
+    )
+    df_cnn_200 = pd.read_csv(
+        os.path.join(
+            path_200,
+            "cnn_roc_details_micro_unbalanced_lookahead_200_wavelet.csv",
+        )
+    )
 
     # # plotting lr
     # fig, ax = plt.subplots(figsize=(8, 6))
@@ -247,7 +257,7 @@ if __name__ == "__main__":
     # plt.show()
     #
     # plotting cnn
-    fig, ax = plt.subplots(figsize=(4, 3))
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
     ax.plot(
         df_cnn_0["fpr"],
         df_cnn_0["tpr"],
@@ -256,14 +266,14 @@ if __name__ == "__main__":
         # c="#636EFA",
         label="lookahead: 0",
     )
-    ax.plot(
-        df_cnn_10["fpr"],
-        df_cnn_10["tpr"],
-        "-",
-        lw=2,
-        # c="#636EFA",
-        label="lookahead: 10",
-    )
+    # ax.plot(
+    #     df_cnn_10["fpr"],
+    #     df_cnn_10["tpr"],
+    #     "-",
+    #     lw=2,
+    #     # c="#636EFA",
+    #     label="lookahead: 10",
+    # )
     ax.plot(
         df_cnn_50["fpr"],
         df_cnn_50["tpr"],
@@ -281,13 +291,21 @@ if __name__ == "__main__":
         label="lookahead: 100",
     )
     # ax.plot(
-    #     df_cnn_120["fpr"],
-    #     df_cnn_120["tpr"],
+    #     df_cnn_150["fpr"],
+    #     df_cnn_150["tpr"],
     #     "-",
     #     lw=2,
     #     # c="#00CC96",
-    #     label="lookahead: 120",
+    #     label="lookahead: 150",
     # )
+    ax.plot(
+        df_cnn_200["fpr"],
+        df_cnn_200["tpr"],
+        "-",
+        lw=2,
+        # c="#00CC96",
+        label="lookahead: 200",
+    )
     ax.plot([0, 1], [0, 1], c="gray", lw=2)
     ax.legend(fontsize=10, frameon=False)
     sns.despine(offset=10, trim=False)
@@ -300,7 +318,8 @@ if __name__ == "__main__":
     plt.grid(axis="y")
     plt.tight_layout()
     plt.savefig(
-        os.path.join("outputs", "cnn_model_diff_lookaheads.png"), dpi=100
+        os.path.join("outputs", "cnn_model_diff_lookaheads_wavelet.png"),
+        dpi=100,
     )
     plt.show()
 #
