@@ -6,7 +6,6 @@ import seaborn as sns
 
 plt.style.use("/home/lakshya/plt_custom.mplstyle")
 # sns.set_style("darkgrid")
-# sns.set_palette("deep")
 
 if __name__ == "__main__":
     signal = np.load("single_elm_event.npy")

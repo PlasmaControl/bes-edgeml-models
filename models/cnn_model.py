@@ -79,12 +79,11 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(
         [
-            "--use_gradients",
             "--signal_window_size",
-            "8",
+            "16",
         ],  # ["--device", "cpu"]
     )
-    shape = (16, 6, 8, 8, 8)
+    shape = (16, 1, 16, 8, 8)
     x = torch.ones(*shape)
     device = torch.device(
         "cpu"
