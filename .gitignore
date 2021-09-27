@@ -166,3 +166,6 @@ outputs/signal_window_16/label_look_ahead_50/roc/cnn_feature_df_50.csv
 outputs/signal_window_16/label_look_ahead_100/roc/roc_details_lr_manual_lookahead_100.csv
 outputs/signal_window_16/label_look_ahead_200/roc/roc_details_lr_manual_lookahead_200.csv
 outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead_50.csv
+X_valid.npy
+y_valid.npy
+lstm_ae.pth
