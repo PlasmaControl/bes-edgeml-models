@@ -64,15 +64,10 @@ class RNNData(BaseData):
 
             if self.args.truncate_inputs:
                 active_elm_indices = np.where(_labels > 0)[0]
-                elm_start_index = active_elm_indices[0]
-                if is_test_data:
-                    elm_end_index = (
-                        active_elm_indices[-1] + self.args.truncate_buffer
-                    )
-                else:
-                    elm_end_index = (
-                        active_elm_indices[-1] + self.args.truncate_buffer
-                    )
+                # elm_start_index = active_elm_indices[0]
+                elm_end_index = (
+                    active_elm_indices[-1] + self.args.truncate_buffer
+                )
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
 

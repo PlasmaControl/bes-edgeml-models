@@ -59,9 +59,14 @@ class BaseData:
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
-    ) -> Union[Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]], Tuple[
-        Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[
-            ndarray, ndarray, ndarray, ndarray]]]:
+    ) -> Union[
+        Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]],
+        Tuple[
+            Tuple[ndarray, ndarray, ndarray, ndarray],
+            Tuple[ndarray, ndarray, ndarray, ndarray],
+            Tuple[ndarray, ndarray, ndarray, ndarray],
+        ],
+    ]:
         """Method to create data for training, validation and testing.
 
         Args:
