@@ -2,6 +2,9 @@ import time
 import argparse
 import logging
 from typing import Tuple, Union
+import warnings
+
+warnings.filterwarnings(action="ignore")
 
 import numpy as np
 import pandas as pd
@@ -119,9 +122,50 @@ def create_tensor_dataset(
     return dataset
 
 
+class FCAutoencoder(nn.Module):
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        input_features: int = 1024,
+        num_nodes: list = [128, 32],
+        dropout: float = 0.3,
+    ) -> None:
+        super(FCAutoencoder, self).__init__()
+        self.args = args
+        self.num_nodes = num_nodes
+        self.fc1 = nn.Linear(
+            in_features=input_features, out_features=num_nodes[0]
+        )
+        self.fc2 = nn.Linear(
+            in_features=num_nodes[0], out_features=num_nodes[1]
+        )
+        self.fc3 = nn.Linear(
+            in_features=num_nodes[1], out_features=num_nodes[0]
+        )
+        self.fc4 = nn.Linear(
+            in_features=num_nodes[0], out_features=input_features
+        )
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        x = torch.flatten(x, 1)
+        x = self.relu(self.dropout(self.fc1(x)))
+        x = self.relu(self.dropout(self.fc2(x)))
+        x = self.relu(self.dropout(self.fc3(x)))
+        x = self.fc4(x)
+
+        return x.view(-1, self.args.signal_window_size, 64)
+
+
 class Encoder(nn.Module):
     def __init__(
-        self, args, seq_len, n_features, n_layers, dropout, batch_size
+        self,
+        args: argparse.Namespace,
+        seq_len: int,
+        n_features: int,
+        n_layers: int,
+        dropout: float,
     ):
         super(Encoder, self).__init__()
         self.args = args
@@ -130,7 +174,6 @@ class Encoder(nn.Module):
         self.hidden_dim = self.args.hidden_size
         self.n_layers = n_layers
         self.dropout = dropout
-        self.batch_size = batch_size
         self.rnn = nn.LSTM(
             input_size=self.n_features,
             hidden_size=self.hidden_dim,
@@ -140,7 +183,6 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x):
-        batch_size = self.batch_size
         _, (hidden, _) = self.rnn(x)
         # hidden size: (num_layers, batch_size, hidden_size)
         # hidden = hidden.reshape(
@@ -156,7 +198,12 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(
-        self, args, seq_len, n_features, n_layers, dropout, batch_size
+        self,
+        args: argparse.Namespace,
+        seq_len: int,
+        n_features: int,
+        n_layers: int,
+        dropout: float,
     ):
         super(Decoder, self).__init__()
         self.args = args
@@ -165,7 +212,6 @@ class Decoder(nn.Module):
         self.hidden_dim = self.args.hidden_size
         self.n_layers = n_layers
         self.dropout = dropout
-        self.batch_size = batch_size
         self.rnn = nn.LSTM(
             input_size=self.n_layers * self.hidden_dim,
             hidden_size=self.hidden_dim,
@@ -186,7 +232,7 @@ class Decoder(nn.Module):
 
 
 class LSTMAutoencoder(nn.Module):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder: Encoder, decoder: Decoder):
         super(LSTMAutoencoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -209,7 +255,11 @@ class LSTMAutoencoder(nn.Module):
         return y.squeeze(0)
 
 
-def train_model(args, train_dataloader, valid_dataloader):
+def train_model(
+    args: argparse.Namespace,
+    train_dataloader: torch.utils.data.DataLoader,
+    valid_dataloader: torch.utils.data.DataLoader,
+):
     seq_len = 16
     n_features = 64
     n_layers = 2
@@ -220,7 +270,6 @@ def train_model(args, train_dataloader, valid_dataloader):
         n_features=n_features,
         n_layers=n_layers,
         dropout=pct,
-        batch_size=args.batch_size,
     )
     decoder = Decoder(
         args,
@@ -228,9 +277,9 @@ def train_model(args, train_dataloader, valid_dataloader):
         n_features=n_features,
         n_layers=n_layers,
         dropout=pct,
-        batch_size=args.batch_size,
     )
-    model = LSTMAutoencoder(encoder, decoder)
+    # model = LSTMAutoencoder(encoder, decoder)
+    model = FCAutoencoder(args, input_features=1024)
     model = model.to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.L1Loss(reduction="sum")
@@ -283,7 +332,7 @@ def train_model(args, train_dataloader, valid_dataloader):
     return model, history
 
 
-def plot_metrics(history: dict):
+def plot_loss(args: argparse.Namespace, history: dict):
     plt.figure(figsize=(8, 6), dpi=200)
     plt.plot(history["train"], label="train", lw=2.5)
     plt.plot(history["valid"], label="valid", lw=2.5)
@@ -291,10 +340,247 @@ def plot_metrics(history: dict):
     plt.xlabel("epoch")
     plt.title("Loss over training epochs")
     plt.legend(frameon=False)
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/train_valid_loss_lstm_ae.png",
-        dpi=200,
+    if not args.dry_run:
+        plt.savefig(
+            "outputs/ts_anomaly_detection_plots/train_valid_loss_fc_ae.png",
+            dpi=200,
+        )
+    plt.show()
+
+
+def precision_recall_curve(
+    args, error_df
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # plot precision-recall curve
+    precision, recall, threshold = metrics.precision_recall_curve(
+        error_df.ground_truth.values, error_df.reconstruction_error.values
     )
+    print(
+        f"Precision, recall, thresh shape: {precision.shape}, {recall.shape}, {threshold.shape}"
+    )
+    plt.figure(figsize=(8, 6), dpi=200)
+    plt.plot(threshold, precision[1:], label="Precision", lw=2.5)
+    plt.plot(threshold, recall[1:], label="Recall", lw=2.5)
+    plt.title("Precision and recall for different thresholds")
+    plt.xlabel("Threshold")
+    plt.ylabel("Precision/Recall")
+    plt.legend(frameon=False)
+    plt.tight_layout()
+    if not args.dry_run:
+        plt.savefig(
+            "outputs/ts_anomaly_detection_plots/fc_ae_precision_recall_curve.png",
+            dpi=200,
+        )
+    plt.show()
+    return precision, recall, threshold
+
+
+def plot_recons_loss_dist(args, error_df, plot_log=False):
+    if plot_log:
+        # plot the distribution of reconstruction losses in log scale
+        plt.figure(figsize=(8, 6), dpi=200)
+        sns.distplot(
+            error_df["log_reconstruction_error"],
+            bins=50,
+            kde=True,
+            label=r"$\log$(1+MAE)",
+        )
+        plt.title(r"Error distribution ($\log$ scale)")
+        plt.legend(frameon=False)
+        plt.tight_layout()
+        if not args.dry_run:
+            plt.savefig(
+                "outputs/ts_anomaly_detection_plots/fc_ae_error_distribution_log.png",
+                dpi=200,
+            )
+        plt.show()
+    else:
+        # plot the distribution of reconstruction losses
+        plt.figure(figsize=(8, 6), dpi=200)
+        sns.distplot(
+            error_df["reconstruction_error"],
+            bins=50,
+            kde=True,
+            label="MAE",
+        )
+        plt.title("Error distribution")
+        plt.legend(frameon=False)
+        plt.tight_layout()
+        if not args.dry_run:
+            plt.savefig(
+                "outputs/ts_anomaly_detection_plots/fc_ae_error_distribution.png",
+                dpi=200,
+            )
+        plt.show()
+
+
+def plot_recons_loss_with_signals(
+    args,
+    error_df: pd.DataFrame,
+    X_valid,
+    precision=None,
+    recall=None,
+    threshold=None,
+    plot_thresh=False,
+) -> Union[None, float]:
+    # fig = plt.figure(figsize=(14, 12), dpi=200)
+    # for i, id in enumerate(error_df["id"].unique().tolist()):
+    #     print(f"ID: {id}")
+    #     df = error_df[error_df["id"] == id]
+    #     ax = plt.subplot(4, 3, i + 1)
+    #     groups = df.groupby("ground_truth")
+    #     # df = df.reset_index(drop=True)
+    #     indices = df.index.tolist()
+    #     start_idx = indices[0]
+    #     end_idx = indices[-1]
+    #     print(f"Start index: {start_idx}, end index: {end_idx}")
+    #     for (name, group), alpha in zip(groups, [1, 0.5]):
+    #         ax.plot(
+    #             # group.index,
+    #             group.reconstruction_error_scaled,
+    #             marker="o",
+    #             ms=3,
+    #             linestyle="",
+    #             label=LABELS[1] if name == 1 else LABELS[0],
+    #             alpha=alpha,
+    #         )
+    #     ticklabels = [item.get_text() for item in ax.get_xticklabels()]
+    #     labels = list(range(start_idx, end_idx + 1))
+    #     ticklabels = [labels[i] for i in range(len(labels))]
+    #     ax.set_xticklabels(ticklabels)
+    #     ax.plot(
+    #         X_valid[start_idx:end_idx, 0, 21],
+    #         zorder=-1,
+    #         label="Ch:22",
+    #         c="slategrey",
+    #     )
+    #     # plt.plot(df.ground_truth, label="ground truth")
+    #     plt.ylabel("Reconstruction Loss", fontsize=6)
+    #     plt.xlabel("Data point index", fontsize=6)
+    #     plt.tick_params(axis="x", labelsize=4)
+    #     plt.tick_params(axis="y", labelsize=4)
+    #     plt.legend(fontsize=5, frameon=False)
+    #     plt.grid(axis="x")
+    # plt.suptitle("Reconstruction error for different classes")
+    # plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    # if not args.dry_run:
+    #     plt.savefig(
+    #         "outputs/ts_anomaly_detection_plots/lstm_ae_recon_error_with_signals.png",
+    #         dpi=200,
+    #     )
+    # plt.show()
+    # plot reconstruction loss with signals
+    if plot_thresh:
+        if precision is None or recall is None or threshold is None:
+            raise TypeError(
+                "Precision, recall and threshold values are not provided!"
+            )
+        else:
+            # plot reconstruction loss without signals and with a threshold
+            precision_recall_eq = np.where(precision == recall)[0][0]
+            threshold_val = threshold[precision_recall_eq - 1]
+            print(f"Using threshold value: {threshold_val}")
+            groups = error_df.groupby("ground_truth")
+            fig = plt.figure(figsize=(12, 6), dpi=200)
+            ax = fig.add_subplot()
+            for (name, group), alpha in zip(groups, [1, 0.5]):
+                ax.plot(
+                    group.index,
+                    group.reconstruction_error,
+                    marker="o",
+                    ms=3,
+                    linestyle="",
+                    label=LABELS[1] if name == 1 else LABELS[0],
+                    alpha=alpha,
+                )
+            ax.axhline(
+                y=threshold_val,
+                zorder=10,
+                ls="--",
+                lw=1.0,
+                c="crimson",
+                label="Threshold",
+            )
+            ax.set_ylabel("Reconstruction Loss")
+            ax.set_xlabel("Data point index")
+            ax.set_title("Reconstruction error for different classes")
+            ax.legend(frameon=False)
+            plt.tight_layout()
+            if not args.dry_run:
+                plt.savefig(
+                    "outputs/ts_anomaly_detection_plots/fc_ae_recon_error_with_threshold.png",
+                    dpi=200,
+                )
+            plt.show()
+            return threshold_val
+    else:
+        plt.figure(figsize=(12, 6), dpi=200, constrained_layout=True)
+        groups = error_df.groupby("ground_truth")
+        for (name, group), alpha in zip(groups, [1, 0.5]):
+            plt.plot(
+                # group.index,
+                group.reconstruction_error_scaled,
+                marker="o",
+                ms=3,
+                linestyle="",
+                label=LABELS[1] if name == 1 else LABELS[0],
+                alpha=alpha,
+            )
+        plt.plot(
+            X_valid[:, 0, 21],
+            zorder=-1,
+            label="Ch:22",
+            c="slategrey",
+        )
+        plt.plot(error_df.ground_truth, label="ground truth")
+        plt.ylabel("Reconstruction Loss")
+        plt.xlabel("Data point index")
+        plt.legend(frameon=False)
+        plt.title("Reconstruction error for different classes")
+        plt.tight_layout()  # rect=[0, 0.03, 1, 0.95])
+        if not args.dry_run:
+            plt.savefig(
+                "outputs/ts_anomaly_detection_plots/fc_ae_recon_error_with_signals.png",
+                dpi=200,
+            )
+        plt.show()
+
+
+def plot_metrics(
+    args: argparse.Namespace, error_df: pd.DataFrame, X_valid: np.ndarray
+):
+    precision, recall, threshold = precision_recall_curve(args, error_df)
+    plot_recons_loss_dist(args, error_df, plot_log=False)
+    plot_recons_loss_dist(args, error_df, plot_log=True)
+    plot_recons_loss_with_signals(
+        args, error_df, X_valid, precision, recall, threshold, plot_thresh=False
+    )
+    threshold_val = plot_recons_loss_with_signals(
+        args, error_df, X_valid, precision, recall, threshold, plot_thresh=True
+    )
+
+    # confusion matrix
+    y_pred = np.array(
+        [
+            1 if error > threshold_val else 0
+            for error in error_df.reconstruction_error.values
+        ]
+    )
+
+    conf_matrix = metrics.confusion_matrix(error_df.ground_truth.values, y_pred)
+    plt.figure(figsize=(8, 6), dpi=100)
+    sns.heatmap(
+        conf_matrix, xticklabels=LABELS, yticklabels=LABELS, annot=True, fmt="d"
+    )
+    plt.title("Confusion Matrix")
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.tight_layout()
+    if not args.dry_run:
+        plt.savefig(
+            "outputs/ts_anomaly_detection_plots/fc_ae_confusion_matrix.png",
+            dpi=200,
+        )
     plt.show()
 
 
@@ -407,7 +693,7 @@ def main():
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
-        # shuffle=True,
+        shuffle=False,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
@@ -415,7 +701,7 @@ def main():
         num_workers=args.num_workers,
         pin_memory=True,
         drop_last=True,
-        # shuffle=True,
+        shuffle=False,
     )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
@@ -436,9 +722,10 @@ def main():
     model, history = train_model(args, train_loader, valid_loader)
 
     # save the model
-    model_path = "lstm_ae.pth"
+    # model_path = "lstm_ae.pth"
+    model_path = "fc_ae.pth"
     torch.save(model, model_path)
-    plot_metrics(history)
+    plot_loss(args, history)
 
     # create ELM event unique identifier
     identifier = list(range(1, len(valid_window_start) + 1))
@@ -469,139 +756,7 @@ def main():
         }
     )
     print(error_df)
-
-    # plot precision-recall curve
-    precision, recall, threshold = metrics.precision_recall_curve(
-        error_df.ground_truth.values, error_df.reconstruction_error.values
-    )
-    plt.figure(figsize=(8, 6), dpi=200)
-    plt.plot(threshold, precision[1:], label="Precision", lw=2.5)
-    plt.plot(threshold, recall[1:], label="Recall", lw=2.5)
-    plt.title("Precision and recall for different thresholds")
-    plt.xlabel("Threshold")
-    plt.ylabel("Precision/Recall")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_precision_recall_curve.png",
-        dpi=200,
-    )
-    plt.show()
-
-    # plot the distribution of reconstruction losses
-    plt.figure(figsize=(8, 6), dpi=200)
-    sns.distplot(
-        error_df["reconstruction_error"],
-        bins=50,
-        kde=True,
-        label="MAE",
-    )
-    plt.title("Error distribution")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_error_distribution.png",
-        dpi=200,
-    )
-    plt.show()
-
-    # plot the distribution of reconstruction losses in log scale
-    plt.figure(figsize=(8, 6), dpi=200)
-    sns.distplot(
-        error_df["log_reconstruction_error"],
-        bins=50,
-        kde=True,
-        label=r"$\log$(1+MAE)",
-    )
-    plt.title(r"Error distribution ($\log$ scale)")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_error_distribution_log.png",
-        dpi=200,
-    )
-    plt.show()
-
-    # plot reconstruction loss with signals
-    groups = error_df.groupby("ground_truth")
-    plt.figure(figsize=(12, 6), dpi=200)
-    for (name, group), alpha in zip(groups, [1, 0.5]):
-        plt.plot(
-            group.index,
-            group.reconstruction_error_scaled,
-            marker="o",
-            ms=3,
-            linestyle="",
-            label=LABELS[1] if name == 1 else LABELS[0],
-            alpha=alpha,
-        )
-    plt.plot(X_valid[:, 0, 21], zorder=-1, label="Ch:22", c="slategrey")
-    plt.plot(error_df.ground_truth, label="ground truth")
-    plt.ylabel("Reconstruction Loss")
-    plt.xlabel("Data point index")
-    plt.title("Reconstruction error for different classes")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_recon_error_with_signals.png",
-        dpi=200,
-    )
-    plt.show()
-
-    # plot reconstruction loss without signals and with a threshold
-    threshold_val = 120
-    groups = error_df.groupby("ground_truth")
-    plt.figure(figsize=(12, 6), dpi=200)
-    for (name, group), alpha in zip(groups, [1, 0.5]):
-        plt.plot(
-            group.index,
-            group.reconstruction_error,
-            marker="o",
-            ms=3,
-            linestyle="",
-            label=LABELS[1] if name == 1 else LABELS[0],
-            alpha=alpha,
-        )
-    plt.plot(error_df.ground_truth, label="ground truth")
-    plt.axhline(
-        y=threshold_val,
-        zorder=10,
-        c="crimson",
-        label="Threshold",
-    )
-    plt.ylabel("Reconstruction Loss")
-    plt.xlabel("Data point index")
-    plt.title("Reconstruction error for different classes")
-    plt.legend(frameon=False)
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_recon_error_with_threshold.png",
-        dpi=200,
-    )
-    plt.show()
-
-    # confusion matrix
-    y_pred = np.array(
-        [
-            1 if error > threshold_val else 0
-            for error in error_df.reconstruction_error.values
-        ]
-    )
-
-    conf_matrix = metrics.confusion_matrix(error_df.ground_truth.values, y_pred)
-    plt.figure(figsize=(8, 6), dpi=100)
-    sns.heatmap(
-        conf_matrix, xticklabels=LABELS, yticklabels=LABELS, annot=True, fmt="d"
-    )
-    plt.title("Confusion Matrix")
-    plt.xlabel("Predicted Label")
-    plt.ylabel("True Label")
-    plt.tight_layout()
-    plt.savefig(
-        "outputs/ts_anomaly_detection_plots/lstm_ae_confusion_matrix.png",
-        dpi=200,
-    )
-    plt.show()
+    plot_metrics(args, error_df, X_valid)
 
 
 if __name__ == "__main__":

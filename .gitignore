@@ -169,3 +169,4 @@ outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead
 X_valid.npy
 y_valid.npy
 lstm_ae.pth
+fc_ae.pth
