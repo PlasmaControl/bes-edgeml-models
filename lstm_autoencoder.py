@@ -9,6 +9,7 @@ warnings.filterwarnings(action="ignore")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import seaborn as sns
 import torch
 import torch.nn as nn
@@ -27,6 +28,7 @@ sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
 #     "#8F00FF",
 # ]
 # sns.set_palette(sns.color_palette(COLORS_PALETTE))
+palette = list(sns.color_palette("muted").as_hex())
 LABELS = ["no ELM", "ELM"]
 
 
@@ -257,29 +259,35 @@ class LSTMAutoencoder(nn.Module):
 
 def train_model(
     args: argparse.Namespace,
+    name: str,
     train_dataloader: torch.utils.data.DataLoader,
     valid_dataloader: torch.utils.data.DataLoader,
 ):
-    seq_len = 16
-    n_features = 64
-    n_layers = 2
-    pct = 0.3
-    encoder = Encoder(
-        args,
-        seq_len=seq_len,
-        n_features=n_features,
-        n_layers=n_layers,
-        dropout=pct,
-    )
-    decoder = Decoder(
-        args,
-        seq_len=seq_len,
-        n_features=n_features,
-        n_layers=n_layers,
-        dropout=pct,
-    )
-    # model = LSTMAutoencoder(encoder, decoder)
-    model = FCAutoencoder(args, input_features=1024)
+    model = None
+    if name == "lstm":
+        seq_len = 16
+        n_features = 64
+        n_layers = 2
+        pct = 0.3
+        encoder = Encoder(
+            args,
+            seq_len=seq_len,
+            n_features=n_features,
+            n_layers=n_layers,
+            dropout=pct,
+        )
+        decoder = Decoder(
+            args,
+            seq_len=seq_len,
+            n_features=n_features,
+            n_layers=n_layers,
+            dropout=pct,
+        )
+        model = LSTMAutoencoder(encoder, decoder)
+    elif name == "fc":
+        model = FCAutoencoder(args, input_features=1024)
+    else:
+        raise NameError("Model name is not understood.")
     model = model.to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.L1Loss(reduction="sum")
@@ -324,7 +332,7 @@ def train_model(
         history["train"].append(train_epoch_loss)
         history["valid"].append(valid_epoch_loss)
 
-        print(f"Epoch: {epoch+1}, time taken: {(te-ts):.3f}")
+        print(f"Epoch: {epoch+1}, time taken: {(te-ts):.2f} seconds")
         print(
             f"\ttrain loss: {train_epoch_loss:.5f}, valid loss: {valid_epoch_loss:.5f}"
         )
@@ -332,7 +340,7 @@ def train_model(
     return model, history
 
 
-def plot_loss(args: argparse.Namespace, history: dict):
+def plot_loss(args: argparse.Namespace, name: str, history: dict):
     plt.figure(figsize=(8, 6), dpi=200)
     plt.plot(history["train"], label="train", lw=2.5)
     plt.plot(history["valid"], label="valid", lw=2.5)
@@ -342,14 +350,14 @@ def plot_loss(args: argparse.Namespace, history: dict):
     plt.legend(frameon=False)
     if not args.dry_run:
         plt.savefig(
-            "outputs/ts_anomaly_detection_plots/train_valid_loss_fc_ae.png",
+            f"outputs/ts_anomaly_detection_plots/train_valid_loss_{name}_ae.png",
             dpi=200,
         )
     plt.show()
 
 
 def precision_recall_curve(
-    args, error_df
+    args: argparse.Namespace, name: str, error_df: pd.DataFrame
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # plot precision-recall curve
     precision, recall, threshold = metrics.precision_recall_curve(
@@ -368,14 +376,19 @@ def precision_recall_curve(
     plt.tight_layout()
     if not args.dry_run:
         plt.savefig(
-            "outputs/ts_anomaly_detection_plots/fc_ae_precision_recall_curve.png",
+            f"outputs/ts_anomaly_detection_plots/{name}_ae_precision_recall_curve.png",
             dpi=200,
         )
     plt.show()
     return precision, recall, threshold
 
 
-def plot_recons_loss_dist(args, error_df, plot_log=False):
+def plot_recons_loss_dist(
+    args: argparse.Namespace,
+    name: str,
+    error_df: pd.DataFrame,
+    plot_log: bool = False,
+):
     if plot_log:
         # plot the distribution of reconstruction losses in log scale
         plt.figure(figsize=(8, 6), dpi=200)
@@ -390,7 +403,7 @@ def plot_recons_loss_dist(args, error_df, plot_log=False):
         plt.tight_layout()
         if not args.dry_run:
             plt.savefig(
-                "outputs/ts_anomaly_detection_plots/fc_ae_error_distribution_log.png",
+                f"outputs/ts_anomaly_detection_plots/{name}_ae_error_distribution_log.png",
                 dpi=200,
             )
         plt.show()
@@ -408,67 +421,21 @@ def plot_recons_loss_dist(args, error_df, plot_log=False):
         plt.tight_layout()
         if not args.dry_run:
             plt.savefig(
-                "outputs/ts_anomaly_detection_plots/fc_ae_error_distribution.png",
+                f"outputs/ts_anomaly_detection_plots/{name}_ae_error_distribution.png",
                 dpi=200,
             )
         plt.show()
 
 
 def plot_recons_loss_with_signals(
-    args,
+    args: argparse.Namespace,
+    name: str,
     error_df: pd.DataFrame,
-    X_valid,
     precision=None,
     recall=None,
     threshold=None,
     plot_thresh=False,
 ) -> Union[None, float]:
-    # fig = plt.figure(figsize=(14, 12), dpi=200)
-    # for i, id in enumerate(error_df["id"].unique().tolist()):
-    #     print(f"ID: {id}")
-    #     df = error_df[error_df["id"] == id]
-    #     ax = plt.subplot(4, 3, i + 1)
-    #     groups = df.groupby("ground_truth")
-    #     # df = df.reset_index(drop=True)
-    #     indices = df.index.tolist()
-    #     start_idx = indices[0]
-    #     end_idx = indices[-1]
-    #     print(f"Start index: {start_idx}, end index: {end_idx}")
-    #     for (name, group), alpha in zip(groups, [1, 0.5]):
-    #         ax.plot(
-    #             # group.index,
-    #             group.reconstruction_error_scaled,
-    #             marker="o",
-    #             ms=3,
-    #             linestyle="",
-    #             label=LABELS[1] if name == 1 else LABELS[0],
-    #             alpha=alpha,
-    #         )
-    #     ticklabels = [item.get_text() for item in ax.get_xticklabels()]
-    #     labels = list(range(start_idx, end_idx + 1))
-    #     ticklabels = [labels[i] for i in range(len(labels))]
-    #     ax.set_xticklabels(ticklabels)
-    #     ax.plot(
-    #         X_valid[start_idx:end_idx, 0, 21],
-    #         zorder=-1,
-    #         label="Ch:22",
-    #         c="slategrey",
-    #     )
-    #     # plt.plot(df.ground_truth, label="ground truth")
-    #     plt.ylabel("Reconstruction Loss", fontsize=6)
-    #     plt.xlabel("Data point index", fontsize=6)
-    #     plt.tick_params(axis="x", labelsize=4)
-    #     plt.tick_params(axis="y", labelsize=4)
-    #     plt.legend(fontsize=5, frameon=False)
-    #     plt.grid(axis="x")
-    # plt.suptitle("Reconstruction error for different classes")
-    # plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    # if not args.dry_run:
-    #     plt.savefig(
-    #         "outputs/ts_anomaly_detection_plots/lstm_ae_recon_error_with_signals.png",
-    #         dpi=200,
-    #     )
-    # plt.show()
     # plot reconstruction loss with signals
     if plot_thresh:
         if precision is None or recall is None or threshold is None:
@@ -476,6 +443,7 @@ def plot_recons_loss_with_signals(
                 "Precision, recall and threshold values are not provided!"
             )
         else:
+            print(f"For threshold, model name: {name}")
             # plot reconstruction loss without signals and with a threshold
             precision_recall_eq = np.where(precision == recall)[0][0]
             threshold_val = threshold[precision_recall_eq - 1]
@@ -483,7 +451,7 @@ def plot_recons_loss_with_signals(
             groups = error_df.groupby("ground_truth")
             fig = plt.figure(figsize=(12, 6), dpi=200)
             ax = fig.add_subplot()
-            for (name, group), alpha in zip(groups, [1, 0.5]):
+            for (name, group), alpha in zip(groups, [1, 0.8]):
                 ax.plot(
                     group.index,
                     group.reconstruction_error,
@@ -508,57 +476,100 @@ def plot_recons_loss_with_signals(
             plt.tight_layout()
             if not args.dry_run:
                 plt.savefig(
-                    "outputs/ts_anomaly_detection_plots/fc_ae_recon_error_with_threshold.png",
+                    f"outputs/ts_anomaly_detection_plots/{name}_ae_recon_error_with_threshold.png",
                     dpi=200,
                 )
             plt.show()
             return threshold_val
     else:
-        plt.figure(figsize=(12, 6), dpi=200, constrained_layout=True)
-        groups = error_df.groupby("ground_truth")
-        for (name, group), alpha in zip(groups, [1, 0.5]):
-            plt.plot(
-                # group.index,
-                group.reconstruction_error_scaled,
+        print(f"For signals, model name: {name}")
+        fig = plt.figure(figsize=(14, 12), dpi=200, constrained_layout=True)
+        classes = ["no ELM", "ELM"]
+        class_colors = [palette[0], palette[1]]
+        for i, id in enumerate(error_df["id"].unique().tolist()):
+            print(f"ID: {id}")
+            df = error_df[error_df["id"] == id]
+            ax = plt.subplot(4, 3, i + 1)
+            df = df.reset_index(drop=True)
+            indices = df.index.tolist()
+            ax.scatter(
+                indices,
+                df.reconstruction_error_scaled,
+                c=df["ground_truth"].map({0: palette[0], 1: palette[1]}),
+                s=2,
                 marker="o",
-                ms=3,
-                linestyle="",
-                label=LABELS[1] if name == 1 else LABELS[0],
-                alpha=alpha,
             )
-        plt.plot(
-            X_valid[:, 0, 21],
-            zorder=-1,
-            label="Ch:22",
-            c="slategrey",
-        )
-        plt.plot(error_df.ground_truth, label="ground truth")
-        plt.ylabel("Reconstruction Loss")
-        plt.xlabel("Data point index")
-        plt.legend(frameon=False)
-        plt.title("Reconstruction error for different classes")
-        plt.tight_layout()  # rect=[0, 0.03, 1, 0.95])
+            # handles = []
+            # for i in range(0, len(class_colors)):
+            #     handles.append(
+            #         mpatches.Circle(
+            #             (0, 0),
+            #             1,
+            #             # 0.5,
+            #             color=class_colors[i],  # ec=None, fc=class_colors[i]
+            #         )
+            #     )
+            handles = [
+                plt.plot(
+                    [],
+                    [],
+                    marker="o",
+                    ms=3,
+                    ls="",
+                    color=class_colors[i],
+                    label="{:s}".format(classes[i]),
+                )[0]
+                for i in range(len(classes))
+            ]
+            legend1 = ax.legend(
+                handles=handles,
+                # classes,
+                loc="upper left",
+                fontsize=4,
+                frameon=False,
+            )
+            ax.add_artist(legend1)
+            (line1,) = ax.plot(
+                indices, df.ground_truth, label="ground truth", c=palette[2]
+            )
+            (line2,) = ax.plot(
+                indices,
+                df.ch_22,
+                zorder=-1,
+                label="Ch:22",
+                c="slategrey",
+            )
+            if i in [0, 3, 6, 9]:
+                ax.set_ylabel("Reconstruction Loss", fontsize=5)
+            if i in [9, 10, 11]:
+                ax.set_xlabel("Data point index", fontsize=5)
+            ax.tick_params(axis="x", labelsize=4)
+            ax.tick_params(axis="y", labelsize=4)
+            ax.legend(
+                handles=[line1, line2],
+                loc="upper right",
+                fontsize=5,
+                frameon=False,
+            )
+            # plt.grid(axis="x", lw=0.5)
+            ax.xaxis.grid(False)
+            ax.yaxis.grid(True, lw=0.5)
+        plt.suptitle("Reconstruction error for different classes", fontsize=15)
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
             plt.savefig(
-                "outputs/ts_anomaly_detection_plots/fc_ae_recon_error_with_signals.png",
+                f"outputs/ts_anomaly_detection_plots/{name}_ae_recon_error_with_signals.png",
                 dpi=200,
             )
         plt.show()
 
 
-def plot_metrics(
-    args: argparse.Namespace, error_df: pd.DataFrame, X_valid: np.ndarray
-):
-    precision, recall, threshold = precision_recall_curve(args, error_df)
-    plot_recons_loss_dist(args, error_df, plot_log=False)
-    plot_recons_loss_dist(args, error_df, plot_log=True)
-    plot_recons_loss_with_signals(
-        args, error_df, X_valid, precision, recall, threshold, plot_thresh=False
-    )
-    threshold_val = plot_recons_loss_with_signals(
-        args, error_df, X_valid, precision, recall, threshold, plot_thresh=True
-    )
-
+def plot_confusion_matrix(
+    args: argparse.Namespace,
+    name: str,
+    threshold_val: float,
+    error_df: pd.DataFrame,
+) -> None:
     # confusion matrix
     y_pred = np.array(
         [
@@ -578,13 +589,26 @@ def plot_metrics(
     plt.tight_layout()
     if not args.dry_run:
         plt.savefig(
-            "outputs/ts_anomaly_detection_plots/fc_ae_confusion_matrix.png",
+            f"outputs/ts_anomaly_detection_plots/{name}_ae_confusion_matrix.png",
             dpi=200,
         )
     plt.show()
 
 
-def main():
+def plot_metrics(args: argparse.Namespace, name: str, error_df: pd.DataFrame):
+    precision, recall, threshold = precision_recall_curve(args, name, error_df)
+    plot_recons_loss_dist(args, name, error_df, plot_log=False)
+    plot_recons_loss_dist(args, name, error_df, plot_log=True)
+    plot_recons_loss_with_signals(
+        args, name, error_df, precision, recall, threshold, plot_thresh=False
+    )
+    threshold_val = plot_recons_loss_with_signals(
+        args, name, error_df, precision, recall, threshold, plot_thresh=True
+    )
+    plot_confusion_matrix(args, name, threshold_val, error_df)
+
+
+def main(name: str):
     # initialize the argparse and the logger
     args, parser = TrainArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
@@ -719,13 +743,17 @@ def main():
     # print(y.shape)
     # # for seq in train_dataset:
     # #     print(seq[0].shape)
-    model, history = train_model(args, train_loader, valid_loader)
+    model, history = train_model(args, name, train_loader, valid_loader)
 
     # save the model
-    # model_path = "lstm_ae.pth"
-    model_path = "fc_ae.pth"
+    if name == "lstm":
+        model_path = "lstm_ae.pth"
+    elif name == "fc":
+        model_path = "fc_ae.pth"
+    else:
+        raise NameError("Model name is not understood.")
     torch.save(model, model_path)
-    plot_loss(args, history)
+    plot_loss(args, name, history)
 
     # create ELM event unique identifier
     identifier = list(range(1, len(valid_window_start) + 1))
@@ -739,9 +767,11 @@ def main():
     # # classification
     with torch.no_grad():
         mae = []
+        sequences = []
         for data in test_loader:
             seq = data[0]
             seq = seq.to(args.device)
+            sequences.append(seq[0, 0, 21].cpu().numpy().tolist())
             pred_seq = model(seq)
             loss = torch.sum(torch.abs(torch.squeeze(seq, 0) - pred_seq))
             mae.append(loss.cpu().numpy())
@@ -753,11 +783,12 @@ def main():
             "log_reconstruction_error": np.log1p(mae),
             "ground_truth": y_valid.tolist(),
             "id": broadcast_identifier.tolist(),
+            "ch_22": sequences,
         }
     )
     print(error_df)
-    plot_metrics(args, error_df, X_valid)
+    plot_metrics(args, name, error_df)
 
 
 if __name__ == "__main__":
-    main()
+    main("lstm")
