@@ -235,6 +235,7 @@ def predict_v2(
         hook_layer: str,
         device: torch.device,
 ) -> dict:
+
     signals = test_data[0]
     print(f"Signals shape: {signals.shape}")
     labels = test_data[1]
@@ -245,18 +246,16 @@ def predict_v2(
 
     ### ------------ Forward Hook ---------- ###
     activations = []
-
     def get_activation():
         def hook(model, input, output):
-            o = output.detach()[0].numpy()
+            o = output.detach().squeeze().tolist()
             activations.append(o)
-
         return hook
 
     (act_layer, weight_layer) = get_layer(model, hook_layer)
 
     act_layer.register_forward_hook(get_activation())
-    weights = weight_layer.weight.detach().numpy()[0]
+    weights = weight_layer.weight.detach().squeeze().numpy()
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
@@ -281,7 +280,6 @@ def predict_v2(
             - args.label_look_ahead
             + 1
         )
-        activations = []
         for j in range(predictions.size):
             if args.use_gradients:
                 input_signals = np.array(
@@ -303,8 +301,6 @@ def predict_v2(
             input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
             input_signals = input_signals.to(device)
             predictions[j] = model(input_signals)
-
-        activations = np.array(activations)
 
         elm_signals = elm_signals[
                       : (-args.signal_window_size - args.label_look_ahead + 1), ...
@@ -347,8 +343,10 @@ def predict_v2(
             [macro_predictions_pre_active_elms, macro_predictions_active_elms]
         )
         elm_time = np.arange(elm_labels.size) + window_start[i_elm]
+        activations_ = activations
+        activations = []
         elm_predictions[window_start[i_elm]] = {
-            "activations": activations,
+            "activations": np.asarray(activations_),
             "weights": weights,
             "signals": elm_signals,
             "labels": elm_labels,
@@ -962,12 +960,13 @@ def get_dict_values(pred_dict: dict, mode: str):
 
 def get_layer(model: object, layer: str):
     layer_dict = model.layers
-
     layer_idx = list(layer_dict.keys()).index(layer)
-    weight_idx = layer_idx + 1
+
+    if 'conv' not in layer:
+        layer_idx += 1
 
     act_layer = layer_dict[layer]
-    weight_layer = list(layer_dict.items())[weight_idx][1]
+    weight_layer = list(layer_dict.items())[layer_idx][1]
 
     return (act_layer, weight_layer)
 
