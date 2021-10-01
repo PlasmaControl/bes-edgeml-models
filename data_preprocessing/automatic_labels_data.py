@@ -17,7 +17,6 @@ class AutomaticLabelsData(BaseData):
         self,
         elm_indices: np.ndarray = None,
         shuffle_sample_indices: bool = False,
-        is_test_data: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
@@ -59,18 +58,17 @@ class AutomaticLabelsData(BaseData):
             _labels = elm_df.loc[:, "automatic_label"].values
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
-                _signals[:, :33] = _signals[:, :33] / 10.0
-                _signals[:, 33:] = _signals[:, 33:] / 5.0
+                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
+                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
                 _signals = _signals.reshape(-1, 8, 8)
 
-            active_elm_indices = np.where(_labels > 0)[0]
-            elm_start_index = active_elm_indices[0]
-            if is_test_data:
-                elm_end_index = active_elm_indices[-1]
-            else:
-                elm_end_index = elm_start_index + self.args.truncate_buffer
-            _signals = _signals[:elm_end_index, ...]
-            _labels = _labels[:elm_end_index]
+            if self.args.truncate_inputs:
+                active_elm_indices = np.where(_labels > 0)[0]
+                elm_end_index = (
+                    active_elm_indices[-1] + self.args.truncate_buffer
+                )
+                _signals = _signals[:elm_end_index, ...]
+                _labels = _labels[:elm_end_index]
 
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
@@ -123,30 +121,30 @@ class AutomaticLabelsData(BaseData):
         return signals, labels, sample_indices, window_start
 
 
-if __name__ == "__main__":
-    import os
-    import sys
-    import torch
-    import torch.nn as nn
+# if __name__ == "__main__":
+#     import os
+#     import sys
+#     import torch
+#     import torch.nn as nn
 
-    sys.path.append(os.getcwd())
-    from src import utils
-    from options.base_arguments import BaseArguments
+#     sys.path.append(os.getcwd())
+#     from src import utils
+#     from options.base_arguments import BaseArguments
 
-    args, _ = BaseArguments().parse()
+#     args, _ = BaseArguments().parse()
 
-    # create the logger object
-    logger = utils.get_logger(
-        script_name=__name__,
-        stream_handler=True,
-        # log_file=f"output_logs_{args.data_mode}.log",
-    )
-    data = AutomaticLabelsData(args, logger)
-    train_data, _, _ = data.get_data()
-    signals, labels, sample_indices, window_start = train_data
-    start = window_start[0]
-    stop = window_start[1] - 1
-    print(f"start index: {start}, stop index: {stop}")
-    first_elm_event = signals[start : stop + 1]
-    print(first_elm_event.shape)
-    signal_length = first_elm_event.shape[0]
+#     # create the logger object
+#     logger = utils.get_logger(
+#         script_name=__name__,
+#         stream_handler=True,
+#         # log_file=f"output_logs_{args.data_mode}.log",
+#     )
+#     data = AutomaticLabelsData(args, logger)
+#     train_data, _, _ = data.get_data()
+#     signals, labels, sample_indices, window_start = train_data
+#     start = window_start[0]
+#     stop = window_start[1] - 1
+#     print(f"start index: {start}, stop index: {stop}")
+#     first_elm_event = signals[start : stop + 1]
+#     print(first_elm_event.shape)
+#     signal_length = first_elm_event.shape[0]

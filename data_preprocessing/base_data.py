@@ -42,17 +42,20 @@ class BaseData:
             f"Total frames in the whole data: {self._get_total_frames()}"
         )
         if self.args.data_preproc == "automatic_labels":
-            csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
-            self.labels_df = pd.read_csv(
-                os.path.join(
-                    csv_path,
-                    f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
+            try:
+                csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
+                self.labels_df = pd.read_csv(
+                    os.path.join(
+                        csv_path,
+                        f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
+                    )
                 )
-            )
-            self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
-                lambda x: f"{x:05d}"
-            )
-            print(self.labels_df.info())
+                self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
+                    lambda x: f"{x:05d}"
+                )
+                print(self.labels_df.info())
+            except FileNotFoundError:
+                print("CSV file containing the automatic labels not found.")
         # self.transition = np.linspace(
         #     0, 1, 2 * self.args.transition_halfwidth + 3
         # )
@@ -80,7 +83,11 @@ class BaseData:
         --------
             Tuple: Tuple containing data for training, validation and test sets.
         """
-        global train_data, validation_data, test_data, all_elms, all_data
+        train_data = None
+        validation_data = None
+        test_data = None
+        all_elms = None
+        all_data = None
         training_elms, validation_elms, test_elms = self._partition_elms(
             max_elms=self.args.max_elms, fold=fold
         )
@@ -95,7 +102,6 @@ class BaseData:
             all_data = self._preprocess_data(
                 all_elms,
                 shuffle_sample_indices=shuffle_sample_indices,
-                is_test_data=False,
             )
         else:
             train_data = self._preprocess_data(
@@ -109,7 +115,6 @@ class BaseData:
             validation_data = self._preprocess_data(
                 validation_elms,
                 shuffle_sample_indices=shuffle_sample_indices,
-                is_test_data=False,
             )
             self.logger.info("-" * 30)
             self.logger.info("  Creating test data")
@@ -117,7 +122,6 @@ class BaseData:
             test_data = self._preprocess_data(
                 test_elms,
                 shuffle_sample_indices=shuffle_sample_indices,
-                is_test_data=True,
             )
 
         self.hf.close()

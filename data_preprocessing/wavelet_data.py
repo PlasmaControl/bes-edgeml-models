@@ -60,17 +60,18 @@ class WaveletData(BaseData):
             )
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
-                _signals[:, :33] = _signals[:, :33] / 10.0
-                _signals[:, 33:] = _signals[:, 33:] / 5.0
+                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
+                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
                 _signals = _signals.reshape(-1, 8, 8)
 
-            active_elm_indices = np.where(_labels > 0)[0]
-            # elm_start_index = active_elm_indices[0]
-            if is_test_data:
-                elm_end_index = active_elm_indices[-1] + 75
-            else:
-                elm_end_index = active_elm_indices[-1] + 75
-            _signals = _signals[:elm_end_index, ...]
+            if self.args.truncate_inputs:
+                active_elm_indices = np.where(_labels > 0)[0]
+                elm_end_index = (
+                    active_elm_indices[-1] + self.args.truncate_buffer
+                )
+                _signals = _signals[:elm_end_index, ...]
+                _labels = _labels[:elm_end_index]
+
             coeffs = pywt.wavedec(
                 _signals, wavelet="db2", mode="symmetric", axis=0
             )
@@ -82,7 +83,6 @@ class WaveletData(BaseData):
             _signals = pywt.waverec(
                 coeffs, wavelet="db2", mode="symmetric", axis=0
             )
-            _labels = _labels[:elm_end_index]
 
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
