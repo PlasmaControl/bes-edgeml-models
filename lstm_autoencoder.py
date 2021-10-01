@@ -1,6 +1,7 @@
 import time
 import argparse
 import logging
+import pickle
 from typing import Tuple, Union
 import warnings
 
@@ -72,12 +73,6 @@ def print_data_info(args: argparse.Namespace, data: tuple, verbose=0) -> None:
                     - 1
                 ].shape
             )
-
-
-# def scale(X, scaler):
-#     for i in range(X.shape[0]):
-#         X[i, :, :] = scaler.transform(X[i, :, :])
-#     return X
 
 
 def print_arrays_shape(X: np.ndarray, y: np.ndarray, mode: str) -> None:
@@ -265,7 +260,7 @@ def train_model(
 ):
     model = None
     if name == "lstm":
-        seq_len = 16
+        seq_len = args.signal_window_size
         n_features = 64
         n_layers = 2
         pct = 0.3
@@ -638,44 +633,44 @@ def main(name: str):
     print_data_info(args, valid_data)
     del valid_data, train_data
 
-    # normalize the data
-    train_signals_032_scaled = train_signals[:, :32] / np.max(
-        train_signals[:, :32]
-    )
-    train_signals_3264_scaled = train_signals[:, 32:] / np.max(
-        train_signals[:, 32:]
-    )
-    train_signals_scaled = np.concatenate(
-        [train_signals_032_scaled, train_signals_3264_scaled], axis=1
-    )
-    del train_signals, train_signals_032_scaled, train_signals_3264_scaled
+    # # normalize the data
+    # train_signals_032_scaled = train_signals[:, :32] / np.max(
+    #     train_signals[:, :32]
+    # )
+    # train_signals_3264_scaled = train_signals[:, 32:] / np.max(
+    #     train_signals[:, 32:]
+    # )
+    # train_signals_scaled = np.concatenate(
+    #     [train_signals_032_scaled, train_signals_3264_scaled], axis=1
+    # )
+    # del train_signals, train_signals_032_scaled, train_signals_3264_scaled
 
-    valid_signals_032_scaled = valid_signals[:, :32] / np.max(
-        valid_signals[:, :32]
-    )
-    valid_signals_3264_scaled = valid_signals[:, 32:] / np.max(
-        valid_signals[:, 32:]
-    )
-    valid_signals_scaled = np.concatenate(
-        [valid_signals_032_scaled, valid_signals_3264_scaled], axis=1
-    )
-    del valid_signals, valid_signals_032_scaled, valid_signals_3264_scaled
-    # (
-    #     test_signals,
-    #     test_labels,
-    #     test_allowed_indices,
-    #     test_window_start,
-    # ) = test_data
+    # valid_signals_032_scaled = valid_signals[:, :32] / np.max(
+    #     valid_signals[:, :32]
+    # )
+    # valid_signals_3264_scaled = valid_signals[:, 32:] / np.max(
+    #     valid_signals[:, 32:]
+    # )
+    # valid_signals_scaled = np.concatenate(
+    #     [valid_signals_032_scaled, valid_signals_3264_scaled], axis=1
+    # )
+    # del valid_signals, valid_signals_032_scaled, valid_signals_3264_scaled
+    # # (
+    # #     test_signals,
+    # #     test_labels,
+    # #     test_allowed_indices,
+    # #     test_window_start,
+    # # ) = test_data
 
     # create train signals and labels suited for an RNN
     X_train, y_train = temporalize(
-        args, train_signals_scaled, train_labels, train_allowed_indices
+        args, train_signals, train_labels, train_allowed_indices
     )
     print_arrays_shape(X_train, y_train, mode="train")
 
     # create valid signals and labels suited for an RNN
     X_valid, y_valid = temporalize(
-        args, valid_signals_scaled, valid_labels, valid_allowed_indices
+        args, valid_signals, valid_labels, valid_allowed_indices
     )
     print_arrays_shape(X_valid, y_valid, mode="valid")
 
@@ -699,10 +694,15 @@ def main(name: str):
     y_valid_y0 = y_valid[y_valid_y0_idx]
     y_valid_y1 = y_valid[y_valid_y1_idx]
 
-    # with open("X_valid.npy", "wb") as f:
-    #     np.save(f, X_valid)
-    # with open("y_valid.npy", "wb") as f:
-    #     np.save(f, y_valid)
+    if not args.dry_run:
+        with open("validation_data.pkl", "wb") as f:
+            pickle.dump(
+                {
+                    "signals": X_valid,
+                    "labels": y_valid,
+                },
+                f,
+            )
 
     print_arrays_shape(X_valid_y0, y_valid_y0, mode="valid_y0")
     print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
@@ -746,13 +746,14 @@ def main(name: str):
     model, history = train_model(args, name, train_loader, valid_loader)
 
     # save the model
-    if name == "lstm":
-        model_path = "lstm_ae.pth"
-    elif name == "fc":
-        model_path = "fc_ae.pth"
-    else:
-        raise NameError("Model name is not understood.")
-    torch.save(model, model_path)
+    if not args.dry_run:
+        if name == "lstm":
+            model_path = "lstm_ae.pth"
+        elif name == "fc":
+            model_path = "fc_ae.pth"
+        else:
+            raise NameError("Model name is not understood.")
+        torch.save(model, model_path)
     plot_loss(args, name, history)
 
     # create ELM event unique identifier
