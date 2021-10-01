@@ -41,7 +41,7 @@ class FeatureV2Model(nn.Module):
         super(FeatureV2Model, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        in_channels = 6 if self.args.use_gradients else 1
+        in_channels = 6 if self.args.data_preproc == "gradient" else 1
         self.conv1 = nn.Conv3d(
             in_channels=in_channels,
             out_channels=num_filters[0],
@@ -81,12 +81,13 @@ if __name__ == "__main__":
     from torchinfo import summary
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--use_gradients", action="store_true", default=False)
+    parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(
         [
-            "--use_gradients",
+            "--data_preproc",
+            "unprocessed",
             "--signal_window_size",
             "8",
         ],  # ["--device", "cpu"]

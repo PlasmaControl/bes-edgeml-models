@@ -8,7 +8,7 @@ class CNN2DModel(nn.Module):
     def __init__(self, args: argparse.Namespace):
         super(CNN2DModel, self).__init__()
         self.args = args
-        in_channels = 6 if self.args.use_gradients else 1
+        in_channels = 6 if self.args.data_preproc == "gradient" else 1
         projection_size = int(
             in_channels * (512 if self.args.signal_window_size == 8 else 1024)
         )
@@ -58,12 +58,13 @@ if __name__ == "__main__":
     from torchinfo import summary
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--use_gradients", action="store_true", default=False)
+    parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(
         [
-            "--use_gradients",
+            "--data_preproc",
+            "gradient",
             "--signal_window_size",
             "16",
         ],  # ["--device", "cpu"]

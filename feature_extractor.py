@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     model_ckpt_path = os.path.join(
         model_ckpt_dir,
-        f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_truncate.pth",
+        f"{args.model_name}_lookahead_{args.label_look_ahead}_truncate.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
