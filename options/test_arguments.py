@@ -47,12 +47,6 @@ class TestArguments(BaseArguments):
             help="number of columns in the plot to show the predictions, [3 | 2].",
         )
         parser.add_argument(
-            "--buffer_frames",
-            type=int,
-            default=200,
-            help="number of buffer time frames to use while chopping off the time series signals.",
-        )
-        parser.add_argument(
             "--plot_data",
             action="store_true",
             default=False,
