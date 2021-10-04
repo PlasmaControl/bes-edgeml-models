@@ -1,6 +1,7 @@
 """
 Data class to package BES data with their gradients. These gradients are then 
-added as separate channels in addition to the original signals.  
+added as separate channels in addition to the original signals. It takes first 
+and second order derivatives of the signals along radial, z and time dimensions.
 """
 from typing import Tuple
 
@@ -49,14 +50,10 @@ class GradientData(BaseData):
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(
-                elm_event["signals"], dtype=self.args.signal_dtype
-            )
+            _signals = np.array(elm_event["signals"], dtype=np.float32)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            _labels = np.array(
-                elm_event["labels"], dtype=self.args.signal_dtype
-            )
+            _labels = np.array(elm_event["labels"], dtype=np.float32)
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -153,7 +150,7 @@ class GradientData(BaseData):
 #     logger = utils.get_logger(
 #         script_name=__name__,
 #         stream_handler=True,
-#         # log_file=f"output_logs_{args.data_mode}.log",
+#         # log_file=f"output_logs.log",
 #     )
 #     data = GradientData(args, logger)
 #     train_data, _, _ = data.get_data()

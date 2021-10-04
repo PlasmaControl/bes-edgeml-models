@@ -107,7 +107,6 @@ class BaseData:
             train_data = self._preprocess_data(
                 training_elms,
                 shuffle_sample_indices=shuffle_sample_indices,
-                is_test_data=False,
             )
             self.logger.info("-" * 30)
             self.logger.info("  Creating validation data")
@@ -189,26 +188,26 @@ class BaseData:
         )
 
         # kfold cross validation
-        if self.args.kfold and fold is None:
-            raise ValueError(
-                f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
-            )
+        # if self.args.kfold and fold is None:
+        #     raise ValueError(
+        #         f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
+        #     )
 
-        if self.args.kfold:
-            self.logger.info("Using K-fold cross validation")
-            self._kfold_cross_val(training_elms)
-            training_elms = self.df[self.df["fold"] != fold]["elm_events"]
-            validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
-        else:
-            self.logger.info(
-                "Creating training and validation datasets by simple splitting"
-            )
-            training_elms, validation_elms = model_selection.train_test_split(
-                training_elms,
-                test_size=self.args.fraction_valid,
-                shuffle=True,
-                random_state=self.args.seed,
-            )
+        # if self.args.kfold:
+        #     self.logger.info("Using K-fold cross validation")
+        #     self._kfold_cross_val(training_elms)
+        #     training_elms = self.df[self.df["fold"] != fold]["elm_events"]
+        #     validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
+        # else:
+        self.logger.info(
+            "Creating training and validation datasets by simple splitting"
+        )
+        training_elms, validation_elms = model_selection.train_test_split(
+            training_elms,
+            test_size=self.args.fraction_valid,
+            shuffle=True,
+            random_state=self.args.seed,
+        )
         self.logger.info(f"Number of training ELM events: {training_elms.size}")
         self.logger.info(
             f"Number of validation ELM events: {validation_elms.size}"

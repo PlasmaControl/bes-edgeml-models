@@ -1,6 +1,6 @@
 """
-Data class to package BES data for training after resizing the input tensors using 
-interpolation techniques.
+Data class to package BES data for training using PyTorch without any 
+modifications and transformations.
 """
 from typing import Tuple
 
@@ -12,7 +12,7 @@ except ImportError:
     from base_data import BaseData
 
 
-class AutomaticLabelsData(BaseData):
+class GaussianNoiseData(BaseData):
     def _preprocess_data(
         self,
         elm_indices: np.ndarray = None,
@@ -52,8 +52,7 @@ class AutomaticLabelsData(BaseData):
             _signals = np.array(elm_event["signals"], dtype=np.float32)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            elm_df = self.labels_df[self.labels_df["elm_event"] == elm_key]
-            _labels = elm_df.loc[:, "automatic_label"].values
+            _labels = np.array(elm_event["labels"], dtype=np.float32)
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -67,7 +66,12 @@ class AutomaticLabelsData(BaseData):
                 )
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
-
+            noise = np.random.normal(
+                loc=self.args.mu,
+                scale=self.args.sigma,
+                size=_signals.shape,
+            )
+            _signals += noise
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
                 _signals=_signals,
@@ -94,10 +98,10 @@ class AutomaticLabelsData(BaseData):
         valid_indices = np.arange(valid_t0.size, dtype="int")
         valid_indices = valid_indices[valid_t0 == 1]
         sample_indices = valid_indices
-
         # sample_indices = self._oversample_data(
         #     _labels, valid_indices, elm_start, elm_stop
         # )
+
         if shuffle_sample_indices:
             np.random.shuffle(sample_indices)
 
@@ -122,8 +126,6 @@ class AutomaticLabelsData(BaseData):
 # if __name__ == "__main__":
 #     import os
 #     import sys
-#     import torch
-#     import torch.nn as nn
 
 #     sys.path.append(os.getcwd())
 #     from src import utils
@@ -137,12 +139,6 @@ class AutomaticLabelsData(BaseData):
 #         stream_handler=True,
 #         # log_file=f"output_logs.log",
 #     )
-#     data = AutomaticLabelsData(args, logger)
+#     data = GaussianNoiseData(args, logger)
 #     train_data, _, _ = data.get_data()
-#     signals, labels, sample_indices, window_start = train_data
-#     start = window_start[0]
-#     stop = window_start[1] - 1
-#     print(f"start index: {start}, stop index: {stop}")
-#     first_elm_event = signals[start : stop + 1]
-#     print(first_elm_event.shape)
-#     signal_length = first_elm_event.shape[0]
+#     print(train_data)

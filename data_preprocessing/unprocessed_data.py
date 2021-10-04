@@ -12,7 +12,7 @@ except ImportError:
     from base_data import BaseData
 
 
-class UnalteredData(BaseData):
+class UnprocessedData(BaseData):
     def _preprocess_data(
         self,
         elm_indices: np.ndarray = None,
@@ -49,14 +49,10 @@ class UnalteredData(BaseData):
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(
-                elm_event["signals"], dtype=self.args.signal_dtype
-            )
+            _signals = np.array(elm_event["signals"], dtype=np.float32)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            _labels = np.array(
-                elm_event["labels"], dtype=self.args.signal_dtype
-            )
+            _labels = np.array(elm_event["labels"], dtype=np.float32)
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -136,8 +132,8 @@ class UnalteredData(BaseData):
 #     logger = utils.get_logger(
 #         script_name=__name__,
 #         stream_handler=True,
-#         # log_file=f"output_logs_{args.data_mode}.log",
+#         # log_file=f"output_logs.log",
 #     )
-#     data = UnalteredData(args, logger)
+#     data = UnprocessedData(args, logger)
 #     train_data, _, _ = data.get_data()
 #     print(train_data)

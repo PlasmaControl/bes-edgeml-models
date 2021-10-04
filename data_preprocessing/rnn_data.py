@@ -48,14 +48,10 @@ class RNNData(BaseData):
         for elm_index in elm_indices:
             elm_key = f"{elm_index:05d}"
             elm_event = self.hf[elm_key]
-            _signals = np.array(
-                elm_event["signals"], dtype=self.args.signal_dtype
-            )
+            _signals = np.array(elm_event["signals"], dtype=np.float32)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0))
-            _labels = np.array(
-                elm_event["labels"], dtype=self.args.signal_dtype
-            )
+            _labels = np.array(elm_event["labels"], dtype=np.float32)
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -120,22 +116,38 @@ class RNNData(BaseData):
         return signals, labels, sample_indices, window_start
 
 
-# if __name__ == "__main__":
-#     import os
-#     import sys
+if __name__ == "__main__":
+    import os
+    import sys
+    import argparse
 
-#     sys.path.append(os.getcwd())
-#     from src import utils
-#     from options.base_arguments import BaseArguments
+    sys.path.append(os.getcwd())
+    from src import utils
 
-#     args, _ = BaseArguments().parse()
+    from options.train_arguments import TrainArguments
 
-#     # create the logger object
-#     logger = utils.get_logger(
-#         script_name=__name__,
-#         stream_handler=True,
-#         # log_file=f"output_logs_{args.data_mode}.log",
-#     )
-#     data = RNNData(args, logger)
-#     train_data, _, _ = data.get_data()
-#     print(train_data)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--normalize_data", action="store_true", default=False)
+    # parser.add_argument("--truncate_inputs", action="store_true", default=False)
+    # parser.add_argument("--truncate_buffer", type=int, default=75)
+    # args = parser.parse_args(
+    #     [
+    #         "--normalize_data",
+    #         "--truncate_inputs",
+    #     ]
+    # )
+
+    args, _ = TrainArguments().parse()
+
+    # create the logger object
+    logger = utils.get_logger(
+        script_name=__name__,
+        stream_handler=True,
+        # log_file=f"output_logs.log",
+    )
+    data = RNNData(args, logger)
+    train_data, _, _ = data.get_data()
+    signals, labels, _, _ = train_data
+    print("Using RNN data:")
+    print(signals.shape)
+    print(labels.shape)
