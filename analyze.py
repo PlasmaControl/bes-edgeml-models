@@ -90,7 +90,7 @@ def predict(
             + 1
         )
         for j in range(predictions.size):
-            if args.use_gradients:
+            if args.data_preproc == "gradient":
                 input_signals = np.array(
                     elm_signals[j : j + args.signal_window_size, :, :].reshape(
                         [1, args.signal_window_size, 8, 8, 6]
@@ -287,7 +287,7 @@ def plot(
         plt.grid(axis="y")
         flag = False
     plt.suptitle(
-        f"Model output on {args.data_mode} classes, ELM index: {elm_range}",
+        f"Model output, ELM index: {elm_range}",
         fontsize=20,
     )
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -295,7 +295,7 @@ def plot(
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series{args.filename_suffix}_{elm_range}.png",
+                f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series{args.filename_suffix}_{elm_range}.png",
             ),
             dpi=200,
         )
@@ -420,21 +420,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_micro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )
@@ -487,21 +487,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_macro_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )
@@ -582,7 +582,7 @@ def main(
     ) = output_paths
     model_ckpt_path = os.path.join(
         model_ckpt_dir,
-        f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
+        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
@@ -595,7 +595,7 @@ def main(
     # get the test data and dataloader
     test_fname = os.path.join(
         test_data_dir,
-        f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
 
     print(f"Using test data file: {test_fname}")

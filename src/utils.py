@@ -102,59 +102,6 @@ def test_args_compat(
 ):
     """Checks if all the parameters with dependencies are passed."""
     compat = True
-    # check the basic arguments and their dependencies
-    if args.kfold and args.n_folds is None:
-        parser.error(
-            "K-fold cross validation is set to True but `n_folds` argument is not passed."
-        )
-        compat = False
-    if args.data_preproc == "interpolate" and args.interpolate_size is None:
-        parser.error(
-            "Interpolation is set to True but interpolation size is not passed."
-        )
-        compat = False
-    if args.model_name == "stacked_elm" and (
-        (not args.stack_elm_events) or (args.size is None)
-    ):
-        parser.error(
-            f"{args.model_name} requires arguments `size` and `stack_elm_events` set to True."
-        )
-        compat = False
-    if args.model_name == "rnn" and (
-        (args.data_preproc != "rnn")
-        or (not args.use_rnn)
-        or (args.hidden_size is None)
-    ):
-        parser.error(
-            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
-            "and `use_rnn` set to True."
-        )
-        compat = False
-    if args.data_preproc == "rnn" and (
-        (args.model_name != "rnn")
-        or (not args.use_rnn)
-        or (args.hidden_size is None)
-    ):
-        parser.error(
-            f"RNN model requires arguments `hidden_size`, `data_preproc`=`rnn` "
-            "and `use_rnn` set to True."
-        )
-        compat = False
-    if args.data_preproc == "gradient" and not args.use_gradients:
-        parser.error(
-            f"{args.data_preproc} requires argument `use_gradients` set to True."
-        )
-        compat = False
-    if args.smoothen_transition and args.transition_halfwidth is None:
-        parser.error(
-            "`smoothen_transition` argument requires argument `transition_halfwidth`."
-        )
-        compat = False
-    if (args.add_noise) and ((args.mu is None) or (args.sigma is None)):
-        parser.error(
-            "`add_noise` argument requires arguments `mu` and `sigma`."
-        )
-        compat = False
     # check the inference related parameters
     if infer_mode:
         if (
@@ -171,6 +118,8 @@ def test_args_compat(
                 f"are not compatible with total number of plots: {args.plot_num}"
             )
             compat = False
+    else:
+        raise ValueError("Function only required for inference.")
     if compat:
         print("All the parsed parameters are compatible with each other!")
 
@@ -286,65 +235,3 @@ def create_model(model_name: str):
             model = cls
 
     return model
-
-
-def get_lr_scheduler(
-    args: argparse.Namespace,
-    optimizer: torch.optim.Optimizer,
-    dataloader: torch.utils.data.DataLoader,
-):
-    # learning rate scheduler
-    if args.scheduler == "ReduceLROnPlateau":
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode=args.lr_plateau_mode,
-            factor=args.decay_factor,
-            patience=args.patience,
-            verbose=True,
-        )
-    elif args.scheduler == "CosineAnnealingLR":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=args.T_max, eta_min=args.eta_min, verbose=False
-        )
-    elif args.scheduler == "CyclicLR":
-        scheduler = torch.optim.lr_scheduler.CyclicLR(
-            optimizer,
-            base_lr=args.base_lr,
-            max_lr=args.max_lr,
-            mode=args.cyclic_mode,
-            cycle_momentum=args.cycle_momentum,
-            verbose=False,
-        )
-    elif args.scheduler == "OneCycleLR":
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            optimizer,
-            epochs=args.n_epochs,
-            steps_per_epoch=len(dataloader),
-            max_lr=args.max_lr,
-            pct_start=args.pct_start,
-            anneal_strategy=args.anneal_policy,
-        )
-    else:
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer, gamma=args.decay_factor, verbose=True
-        )
-
-    return scheduler
-
-
-def get_optimizer(
-    args: argparse.ArgumentParser, model: object
-) -> torch.optim.Optimizer:
-    if args.optimizer == "SGD":
-        optimizer = torch.optim.SGD(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
-    elif args.optimizer == "Adam":
-        optimizer = torch.optim.Adam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
-    else:
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-        )
-    return optimizer

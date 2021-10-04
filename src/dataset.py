@@ -16,7 +16,6 @@ class ELMDataset(torch.utils.data.Dataset):
         sample_indices: np.ndarray,
         window_start: np.ndarray,
         logger: logging.getLogger,
-        transform: Callable = None,
         phase: str = "training",
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
@@ -36,16 +35,12 @@ class ELMDataset(torch.utils.data.Dataset):
                 stacking.
             label_look_ahead (int): Label look ahead to find which time step label
                 is to used.
-            stack_elm_events (bool): Whether to use stacked ELM events. It stitches
-                the input 3d-tensor together to get a 2d tensor representation on
-                which larger CNNs can be trained. Defaults to False.
         """
         self.args = args
         self.signals = signals
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
-        self.transform = transform
         self.logger = logger
         self.logger.info("-" * 40)
         self.logger.info(f" Creating pytorch dataset for {phase} ")
@@ -68,33 +63,9 @@ class ELMDataset(torch.utils.data.Dataset):
             + self.args.label_look_ahead
             - 1
         ].astype("int")
-        if self.args.stack_elm_events:
-            if self.args.signal_window_size == 8:
-                signal_window = np.hsplit(
-                    np.concatenate(signal_window, axis=-1), 2
-                )
-                signal_window = np.concatenate(signal_window)
-            elif self.args.signal_window_size == 16:
-                signal_window = np.hsplit(
-                    np.concatenate(signal_window, axis=-1), 4
-                )
-                signal_window = np.concatenate(signal_window)
-            else:
-                raise ValueError(
-                    f"Expected signal window size is 8 or 16 but got {self.args.signal_window_size}."
-                )
-            if self.transform:
-                signal_window = self.transform(image=signal_window)["image"]
-        if self.args.add_noise:
-            noise = np.random.normal(
-                loc=self.args.mu,
-                scale=self.args.sigma,
-                size=signal_window.shape,
-            )
-            signal_window += noise
-        if self.args.use_gradients:
+        if self.args.data_preproc == "gradient":
             signal_window = np.transpose(signal_window, axes=(3, 0, 1, 2))
-        elif self.args.use_rnn:
+        elif self.args.data_preproc == "rnn":
             signal_window = signal_window.reshape(
                 self.args.signal_window_size, -1
             )
