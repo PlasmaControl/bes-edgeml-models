@@ -10,25 +10,15 @@ warnings.filterwarnings(action="ignore")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import seaborn as sns
 import torch
 import torch.nn as nn
 from sklearn import metrics
 
 from options.train_arguments import TrainArguments
-from src import utils, dataset, run
+from src import utils
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
-# COLORS_PALETTE = [
-#     "#01BEFE",
-#     "#FFDD00",
-#     "#FF7D00",
-#     "#FF006D",
-#     "#93D30C",
-#     "#8F00FF",
-# ]
-# sns.set_palette(sns.color_palette(COLORS_PALETTE))
 palette = list(sns.color_palette("muted").as_hex())
 LABELS = ["no ELM", "ELM"]
 
@@ -50,9 +40,8 @@ def print_data_info(args: argparse.Namespace, data: tuple, verbose=0) -> None:
 
     print(f"Signals shape: {signals.shape}")
     print(f"Labels shape: {labels.shape}")
-    print(f"Allowed indices: {allowed_indices}")
-    print(allowed_indices.shape)
-    print(f"Window start: {window_start}")
+    print(f"Allowed indices shape: {allowed_indices.shape}")
+    print(f"Window start shape: {window_start.shape}")
 
     if verbose > 0:
         num_elms = len(window_start)
@@ -88,17 +77,39 @@ def temporalize(
 ) -> Tuple[np.ndarray, np.ndarray]:
     X = []
     y = []
-    for i_allowed in range(len(allowed_indices)):
-        elm_idx = allowed_indices[i_allowed]
-        signal_window = signals[elm_idx : elm_idx + args.signal_window_size]
+    count = 1
+    repeats = []
+    for i_current in range(len(allowed_indices)):
+        if i_current == 0:
+            i_prev = 0
+        else:
+            i_prev = i_current - 1
+        prev_time_idx = allowed_indices[i_prev]
+        current_time_idx = allowed_indices[i_current]
+        diff = current_time_idx - prev_time_idx
+        if diff == 1 or diff == 0:
+            repeats.append(count)
+        else:
+            repeats.append(count)
+            count += 1
+        signal_window = signals[
+            current_time_idx : current_time_idx + args.signal_window_size
+        ]
         label = labels[
-            elm_idx + args.signal_window_size + args.label_look_ahead - 1
+            current_time_idx
+            + args.signal_window_size
+            + args.label_look_ahead
+            - 1
         ]
         X.append(signal_window)
         y.append(label)
+    repeats = np.array(repeats)
     X = np.array(X).reshape(-1, args.signal_window_size, 64)
     X = X.astype(np.float32)
     y = np.array(y).astype(np.uint8)
+    print(f"X shape: {X.shape}")
+    print(f"y shape: {y.shape}")
+    print(f"Repeats shape: {repeats.shape}")
     return X, y
 
 
@@ -603,12 +614,7 @@ def plot_metrics(args: argparse.Namespace, name: str, error_df: pd.DataFrame):
     plot_confusion_matrix(args, name, threshold_val, error_df)
 
 
-def main(name: str):
-    # initialize the argparse and the logger
-    args, parser = TrainArguments().parse(verbose=True)
-    utils.test_args_compat(args, parser)
-    logger = utils.get_logger(script_name=__name__)
-
+def main(args: argparse.Namespace, logger: logging.Logger):
     # get train and valid data
     train_data, valid_data, _ = get_all_data(args, logger)
 
@@ -694,102 +700,95 @@ def main(name: str):
     y_valid_y0 = y_valid[y_valid_y0_idx]
     y_valid_y1 = y_valid[y_valid_y1_idx]
 
-    if not args.dry_run:
-        with open("validation_data.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    "signals": X_valid,
-                    "labels": y_valid,
-                },
-                f,
-            )
+    # if not args.dry_run:
+    #     with open("validation_data.pkl", "wb") as f:
+    #         pickle.dump(
+    #             {
+    #                 "signals": X_valid,
+    #                 "labels": y_valid,
+    #             },
+    #             f,
+    #         )
 
-    print_arrays_shape(X_valid_y0, y_valid_y0, mode="valid_y0")
-    print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
+    # print_arrays_shape(X_valid_y0, y_valid_y0, mode="valid_y0")
+    # print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
 
-    train_dataset = create_tensor_dataset(X_train_y0, y_train_y0)
-    valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
-    test_dataset = create_tensor_dataset(X_valid, y_valid)
+    # train_dataset = create_tensor_dataset(X_train_y0, y_train_y0)
+    # valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
+    # test_dataset = create_tensor_dataset(X_valid, y_valid)
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True,
-        shuffle=False,
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True,
-        shuffle=False,
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=1,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=False,
-        # shuffle=True,
-    )
-    # encoder = Encoder(args, seq_len=16, n_features=64, n_layers=2, dropout=0.3)
-    # decoder = Decoder(args, seq_len=16, n_features=64, n_layers=2, dropout=0.3)
-    # x = torch.rand(1, 16, 64)
-    # lstm_ae = LSTMAutoencoder(encoder, decoder)
-    # y = lstm_ae(x)
-    # print(y.shape)
-    # # for seq in train_dataset:
-    # #     print(seq[0].shape)
-    model, history = train_model(args, name, train_loader, valid_loader)
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_dataset,
+    #     batch_size=args.batch_size,
+    #     num_workers=args.num_workers,
+    #     pin_memory=True,
+    #     drop_last=True,
+    #     shuffle=False,
+    # )
+    # valid_loader = torch.utils.data.DataLoader(
+    #     valid_dataset,
+    #     batch_size=args.batch_size,
+    #     num_workers=args.num_workers,
+    #     pin_memory=True,
+    #     drop_last=True,
+    #     shuffle=False,
+    # )
+    # test_loader = torch.utils.data.DataLoader(
+    #     test_dataset,
+    #     batch_size=1,
+    #     num_workers=args.num_workers,
+    #     pin_memory=True,
+    #     drop_last=False,
+    #     # shuffle=True,
+    # )
+    # model, history = train_model(args, name, train_loader, valid_loader)
 
-    # save the model
-    if not args.dry_run:
-        if name == "lstm":
-            model_path = "lstm_ae.pth"
-        elif name == "fc":
-            model_path = "fc_ae.pth"
-        else:
-            raise NameError("Model name is not understood.")
-        torch.save(model, model_path)
-    plot_loss(args, name, history)
+    # # save the model
+    # if not args.dry_run:
+    #     if name in ["lstm_ae", "fc_ae"]:
+    #         model_path = f"{name}.pth"
+    #     else:
+    #         raise NameError("Model name is not understood.")
+    #     torch.save(model, model_path)
+    # plot_loss(args, name, history)
 
-    # create ELM event unique identifier
-    identifier = list(range(1, len(valid_window_start) + 1))
-    num_repeats = list(valid_window_start)
-    num_repeats.append(len(X_valid))
-    diffs = np.diff(num_repeats)
-    broadcast_identifier = np.repeat(identifier, repeats=diffs)
-    print(broadcast_identifier)
-    print(broadcast_identifier.shape, X_valid.shape)
+    # # create ELM event unique identifier
+    # identifier = list(range(1, len(valid_window_start) + 1))
+    # num_repeats = list(valid_window_start)
+    # num_repeats.append(len(X_valid))
+    # diffs = np.diff(num_repeats)
+    # broadcast_identifier = np.repeat(identifier, repeats=diffs)
+    # print(broadcast_identifier)
+    # print(broadcast_identifier.shape, X_valid.shape)
 
-    # # classification
-    with torch.no_grad():
-        mae = []
-        sequences = []
-        for data in test_loader:
-            seq = data[0]
-            seq = seq.to(args.device)
-            sequences.append(seq[0, 0, 21].cpu().numpy().tolist())
-            pred_seq = model(seq)
-            loss = torch.sum(torch.abs(torch.squeeze(seq, 0) - pred_seq))
-            mae.append(loss.cpu().numpy())
-        mae = np.array(mae)
-    error_df = pd.DataFrame(
-        {
-            "reconstruction_error": mae,
-            "reconstruction_error_scaled": mae / np.max(mae),
-            "log_reconstruction_error": np.log1p(mae),
-            "ground_truth": y_valid.tolist(),
-            "id": broadcast_identifier.tolist(),
-            "ch_22": sequences,
-        }
-    )
-    print(error_df)
-    plot_metrics(args, name, error_df)
+    # # # classification
+    # with torch.no_grad():
+    #     mae = []
+    #     sequences = []
+    #     for data in test_loader:
+    #         seq = data[0]
+    #         seq = seq.to(args.device)
+    #         sequences.append(seq[0, 0, 21].cpu().numpy().tolist())
+    #         pred_seq = model(seq)
+    #         loss = torch.sum(torch.abs(torch.squeeze(seq, 0) - pred_seq))
+    #         mae.append(loss.cpu().numpy())
+    #     mae = np.array(mae)
+    # error_df = pd.DataFrame(
+    #     {
+    #         "reconstruction_error": mae,
+    #         "reconstruction_error_scaled": mae / np.max(mae),
+    #         "log_reconstruction_error": np.log1p(mae),
+    #         "ground_truth": y_valid.tolist(),
+    #         "id": broadcast_identifier.tolist(),
+    #         "ch_22": sequences,
+    #     }
+    # )
+    # print(error_df)
+    # plot_metrics(args, name, error_df)
 
 
 if __name__ == "__main__":
-    main("lstm")
+    # initialize the argparse and the logger
+    args, parser = TrainArguments().parse(verbose=True)
+    logger = utils.get_logger(script_name=__name__)
+    main(args, logger)
