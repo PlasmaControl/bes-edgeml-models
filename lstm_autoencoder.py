@@ -436,38 +436,54 @@ def plot_recons_loss_dist(
 
 def plot_recons_loss_with_signals(
     args: argparse.Namespace,
-    name: str,
     error_df: pd.DataFrame,
-    precision=None,
-    recall=None,
-    threshold=None,
-    plot_thresh=False,
-) -> Union[None, float]:
+    threshold_val: float,
+    plot_thresh: bool,
+    show_plots: bool = True,
+) -> None:
     # plot reconstruction loss with signals
     if plot_thresh:
-        if precision is None or recall is None or threshold is None:
-            raise TypeError(
-                "Precision, recall and threshold values are not provided!"
+        # groups = error_df.groupby("ground_truth")
+        # fig = plt.figure(figsize=(12, 6), dpi=200)
+        # ax = fig.add_subplot()
+        # for (name, group), alpha in zip(groups, [1, 0.8]):
+        #     ax.plot(
+        #         group.index,
+        #         group.reconstruction_error,
+        #         marker="o",
+        #         ms=3,
+        #         linestyle="",
+        #         label=LABELS[1] if name == 1 else LABELS[0],
+        #         alpha=alpha,
+        #     )
+        # ax.axhline(
+        #     y=threshold_val,
+        #     zorder=10,
+        #     ls="--",
+        #     lw=1.0,
+        #     c="crimson",
+        #     label="Threshold",
+        # )
+        # ax.set_ylabel("Reconstruction Loss")
+        # ax.set_xlabel("Data point index")
+        # ax.set_title("Reconstruction error for different classes")
+        # ax.legend(frameon=False)
+        fig = plt.figure(figsize=(14, 12), dpi=120)
+        classes = ["no ELM", "ELM", "Threshold"]
+        class_colors = [palette[0], palette[1], "crimson"]
+        for i, id in enumerate(error_df["id"].unique().tolist()):
+            print(f"ID: {id}")
+            df = error_df[error_df["id"] == id]
+            ax = plt.subplot(4, 3, i + 1)
+            df = df.reset_index(drop=True)
+            indices = df.index.tolist()
+            ax.scatter(
+                indices,
+                df.reconstruction_error,
+                c=df["ground_truth"].map({0: palette[0], 1: palette[1]}),
+                s=2,
+                marker="o",
             )
-        else:
-            print(f"For threshold, model name: {name}")
-            # plot reconstruction loss without signals and with a threshold
-            precision_recall_eq = np.where(precision == recall)[0][0]
-            threshold_val = threshold[precision_recall_eq - 1]
-            print(f"Using threshold value: {threshold_val}")
-            groups = error_df.groupby("ground_truth")
-            fig = plt.figure(figsize=(12, 6), dpi=200)
-            ax = fig.add_subplot()
-            for (name, group), alpha in zip(groups, [1, 0.8]):
-                ax.plot(
-                    group.index,
-                    group.reconstruction_error,
-                    marker="o",
-                    ms=3,
-                    linestyle="",
-                    label=LABELS[1] if name == 1 else LABELS[0],
-                    alpha=alpha,
-                )
             ax.axhline(
                 y=threshold_val,
                 zorder=10,
@@ -476,21 +492,46 @@ def plot_recons_loss_with_signals(
                 c="crimson",
                 label="Threshold",
             )
-            ax.set_ylabel("Reconstruction Loss")
-            ax.set_xlabel("Data point index")
-            ax.set_title("Reconstruction error for different classes")
-            ax.legend(frameon=False)
-            plt.tight_layout()
-            if not args.dry_run:
-                plt.savefig(
-                    f"outputs/ts_anomaly_detection_plots/{name}_ae_recon_error_with_threshold.png",
-                    dpi=200,
-                )
+            handles = [
+                plt.plot(
+                    [],
+                    [],
+                    marker="o",
+                    ms=3,
+                    ls="",
+                    color=class_colors[i],
+                    label="{:s}".format(classes[i]),
+                )[0]
+                for i in range(len(classes))
+            ]
+            legend1 = ax.legend(
+                handles=handles,
+                # classes,
+                loc="upper left",
+                fontsize=4,
+                frameon=False,
+            )
+            ax.add_artist(legend1)
+            if i in [0, 3, 6, 9]:
+                ax.set_ylabel("Reconstruction Loss", fontsize=5)
+            if i in [9, 10, 11]:
+                ax.set_xlabel("Data point index", fontsize=5)
+            ax.tick_params(axis="x", labelsize=4)
+            ax.tick_params(axis="y", labelsize=4)
+            ax.xaxis.grid(False)
+            ax.yaxis.grid(True, lw=0.5)
+        plt.suptitle("Reconstruction error")
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        if not args.dry_run:
+            fname = f"{args.model_name}_recon_error_with_threshold_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+            plt.savefig(
+                f"outputs/ts_anomaly_detection_plots/{fname}",
+                dpi=200,
+            )
+        if show_plots:
             plt.show()
-            return threshold_val
     else:
-        print(f"For signals, model name: {name}")
-        fig = plt.figure(figsize=(14, 12), dpi=200, constrained_layout=True)
+        fig = plt.figure(figsize=(14, 12), dpi=120)
         classes = ["no ELM", "ELM"]
         class_colors = [palette[0], palette[1]]
         for i, id in enumerate(error_df["id"].unique().tolist()):
@@ -506,16 +547,6 @@ def plot_recons_loss_with_signals(
                 s=2,
                 marker="o",
             )
-            # handles = []
-            # for i in range(0, len(class_colors)):
-            #     handles.append(
-            #         mpatches.Circle(
-            #             (0, 0),
-            #             1,
-            #             # 0.5,
-            #             color=class_colors[i],  # ec=None, fc=class_colors[i]
-            #         )
-            #     )
             handles = [
                 plt.plot(
                     [],
@@ -558,23 +589,23 @@ def plot_recons_loss_with_signals(
                 fontsize=5,
                 frameon=False,
             )
-            # plt.grid(axis="x", lw=0.5)
             ax.xaxis.grid(False)
             ax.yaxis.grid(True, lw=0.5)
-        plt.suptitle("Reconstruction error for different classes", fontsize=15)
+        plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
+            fname = f"{args.model_name}_recon_error_with_signals_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
             plt.savefig(
-                f"outputs/ts_anomaly_detection_plots/{name}_ae_recon_error_with_signals.png",
+                f"outputs/ts_anomaly_detection_plots/{fname}",
                 dpi=200,
             )
-        plt.show()
+        if show_plots:
+            plt.show()
 
 
 def plot_confusion_matrix(
     args: argparse.Namespace,
     name: str,
-    threshold_val: float,
     error_df: pd.DataFrame,
 ) -> None:
     # confusion matrix
