@@ -605,8 +605,8 @@ def plot_recons_loss_with_signals(
 
 def plot_confusion_matrix(
     args: argparse.Namespace,
-    name: str,
     error_df: pd.DataFrame,
+    show_plots: bool = True,
 ) -> None:
     # confusion matrix
     conf_matrix = metrics.confusion_matrix(
@@ -621,27 +621,36 @@ def plot_confusion_matrix(
     plt.ylabel("True Label")
     plt.tight_layout()
     if not args.dry_run:
+        fname = f"{args.model_name}_confusion_matrix_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{name}_ae_confusion_matrix.png",
+            f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
         )
-    plt.show()
+    if show_plots:
+        plt.show()
 
 
-def plot_metrics(args: argparse.Namespace, name: str, error_df: pd.DataFrame):
-    precision, recall, threshold = precision_recall_curve(args, name, error_df)
-    plot_recons_loss_dist(args, name, error_df, plot_log=False)
-    plot_recons_loss_dist(args, name, error_df, plot_log=True)
+def plot_metrics(
+    args: argparse.Namespace,
+    error_df: pd.DataFrame,
+    threshold_val: float,
+    show_plots: bool = True,
+):
+    precision_recall_curve(args, error_df, show_plots=show_plots)
+    plot_recons_loss_dist(args, error_df, show_plots=show_plots)
+    # plot_recons_loss_dist(args, name, error_df, plot_log=True)
     plot_recons_loss_with_signals(
-        args, name, error_df, precision, recall, threshold, plot_thresh=False
+        args, error_df, threshold_val, plot_thresh=False, show_plots=show_plots
     )
-    threshold_val = plot_recons_loss_with_signals(
-        args, name, error_df, precision, recall, threshold, plot_thresh=True
+    plot_recons_loss_with_signals(
+        args, error_df, threshold_val, plot_thresh=True, show_plots=show_plots
     )
-    plot_confusion_matrix(args, name, threshold_val, error_df)
+    plot_confusion_matrix(args, error_df, show_plots=show_plots)
 
 
-def main(args: argparse.Namespace, logger: logging.Logger):
+def main(
+    args: argparse.Namespace, logger: logging.Logger, show_plots: bool = True
+):
     # get train and valid data
     train_data, valid_data, _ = get_all_data(args, logger)
 
@@ -750,7 +759,7 @@ def main(args: argparse.Namespace, logger: logging.Logger):
         else:
             raise NameError("Model name is not understood.")
         torch.save(model, model_path)
-    plot_loss(args, name, history)
+    plot_loss(args, history, show_plots=show_plots)
 
     # # classification
     with torch.no_grad():
@@ -776,11 +785,11 @@ def main(args: argparse.Namespace, logger: logging.Logger):
     predictions = (error_df.reconstruction_error.values > threshold).astype(int)
     error_df["predictions"] = predictions
     print(error_df)
-    plot_metrics(args, name, error_df)
+    plot_metrics(args, error_df, threshold_val=threshold, show_plots=show_plots)
 
 
 if __name__ == "__main__":
     # initialize the argparse and the logger
     args, parser = TrainArguments().parse(verbose=True)
     logger = utils.get_logger(script_name=__name__)
-    main(args, logger)
+    main(args, logger, show_plots=True)
