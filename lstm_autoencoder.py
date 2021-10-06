@@ -361,7 +361,7 @@ def plot_loss(
     plt.title("Loss over training epochs")
     plt.legend(frameon=False)
     if not args.dry_run:
-        fname = f"train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+        fname = f"train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
         plt.savefig(
             f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
@@ -389,7 +389,7 @@ def precision_recall_curve(
     plt.legend(frameon=False)
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_precision_recall_curve_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+        fname = f"{args.model_name}_precision_recall_curve_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
         plt.savefig(
             f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
@@ -466,7 +466,7 @@ def plot_recons_loss_dist(
     plt.suptitle("Comparison of reconstruction Error")
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_reconstruction_error_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+        fname = f"{args.model_name}_reconstruction_error_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
         plt.savefig(
             f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
@@ -566,7 +566,7 @@ def plot_recons_loss_with_signals(
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
-            fname = f"{args.model_name}_recon_error_with_threshold_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+            fname = f"{args.model_name}_recon_error_with_threshold_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
             plt.savefig(
                 f"outputs/ts_anomaly_detection_plots/{fname}",
                 dpi=200,
@@ -639,7 +639,7 @@ def plot_recons_loss_with_signals(
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
-            fname = f"{args.model_name}_recon_error_with_signals_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+            fname = f"{args.model_name}_recon_error_with_signals_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
             plt.savefig(
                 f"outputs/ts_anomaly_detection_plots/{fname}",
                 dpi=200,
@@ -666,7 +666,7 @@ def plot_confusion_matrix(
     plt.ylabel("True Label")
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_confusion_matrix_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+        fname = f"{args.model_name}_confusion_matrix_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
         plt.savefig(
             f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
@@ -753,7 +753,7 @@ def main(
     y_valid_y1 = y_valid[y_valid_y1_idx]
 
     if not args.dry_run:
-        with open("validation_data.pkl", "wb") as f:
+        with open(f"validation_data{args.filename_suffix}.pkl", "wb") as f:
             pickle.dump(
                 {
                     "signals": X_valid,
@@ -800,7 +800,7 @@ def main(
     # save the model
     if not args.dry_run:
         if args.model_name in ["lstm_ae", "fc_ae"]:
-            model_path = f"{args.model_name}.pth"
+            model_path = f"{args.model_name}{args.filename_suffix}.pth"
         else:
             raise NameError("Model name is not understood.")
         torch.save(model, model_path)
