@@ -10,6 +10,7 @@ warnings.filterwarnings(action="ignore")
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
 import seaborn as sns
 import torch
 import torch.nn as nn
@@ -265,12 +266,11 @@ class LSTMAutoencoder(nn.Module):
 
 def train_model(
     args: argparse.Namespace,
-    name: str,
     train_dataloader: torch.utils.data.DataLoader,
     valid_dataloader: torch.utils.data.DataLoader,
 ):
     model = None
-    if name == "lstm":
+    if args.model_name == "lstm_ae":
         seq_len = args.signal_window_size
         n_features = 64
         n_layers = 2
@@ -290,12 +290,15 @@ def train_model(
             dropout=pct,
         )
         model = LSTMAutoencoder(encoder, decoder)
-    elif name == "fc":
+    elif args.model_name == "fc_ae":
         model = FCAutoencoder(args, input_features=1024)
     else:
         raise NameError("Model name is not understood.")
     model = model.to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=4, verbose=True
+    )
     criterion = nn.L1Loss(reduction="sum")
     history = dict(train=[], valid=[])
 
@@ -334,6 +337,7 @@ def train_model(
         te = time.time()
         train_epoch_loss = np.mean(train_losses)
         valid_epoch_loss = np.mean(valid_losses)
+        scheduler.step(valid_epoch_loss)
 
         history["train"].append(train_epoch_loss)
         history["valid"].append(valid_epoch_loss)
