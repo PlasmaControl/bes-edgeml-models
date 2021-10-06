@@ -401,6 +401,7 @@ def precision_recall_curve(
 def plot_recons_loss_dist(
     args: argparse.Namespace,
     error_df: pd.DataFrame,
+    threshold_val: float,
     show_plots: bool = True,
 ):
     # plot reconstruction error distribution for no ELMs
@@ -411,6 +412,14 @@ def plot_recons_loss_dist(
     ]
     ax = fig.add_subplot(121)
     sns.distplot(no_elms, bins=50, kde=True, label="no ELMS", ax=ax)
+    ax.axvline(
+        threshold_val,
+        zorder=10,
+        ls="--",
+        lw=1.25,
+        c="crimson",
+        label="Threshold",
+    )
     ax.legend(frameon=False)
 
     # plot reconstruction error for ELMS
@@ -419,6 +428,14 @@ def plot_recons_loss_dist(
     ]
     ax = fig.add_subplot(122)
     sns.distplot(elms, bins=50, kde=True, label="ELMS", ax=ax)
+    ax.axvline(
+        threshold_val,
+        zorder=10,
+        ls="--",
+        lw=1.25,
+        c="crimson",
+        label="Threshold",
+    )
     ax.legend(frameon=False)
     plt.suptitle("Comparison of reconstruction Error")
     plt.tight_layout()
@@ -635,7 +652,7 @@ def plot_metrics(
     show_plots: bool = True,
 ):
     precision_recall_curve(args, error_df, show_plots=show_plots)
-    plot_recons_loss_dist(args, error_df, show_plots=show_plots)
+    plot_recons_loss_dist(args, error_df, threshold_val, show_plots=show_plots)
     # plot_recons_loss_dist(args, name, error_df, plot_log=True)
     plot_recons_loss_with_signals(
         args, error_df, threshold_val, plot_thresh=False, show_plots=show_plots
