@@ -404,14 +404,13 @@ def plot_recons_loss_dist(
     show_plots: bool = True,
 ):
     # plot reconstruction error distribution for no ELMs
-    fig = plt.figure(figsize=(8, 6), dpi=120)
+    fig = plt.figure(figsize=(14, 6), dpi=120)
 
     no_elms = error_df[error_df["ground_truth"] == 0].loc[
         :, "reconstruction_error"
     ]
     ax = fig.add_subplot(121)
     sns.distplot(no_elms, bins=50, kde=True, label="no ELMS", ax=ax)
-    ax.set_title("Reconstruction Error distribution for no ELMs")
     ax.legend(frameon=False)
 
     # plot reconstruction error for ELMS
@@ -420,9 +419,8 @@ def plot_recons_loss_dist(
     ]
     ax = fig.add_subplot(122)
     sns.distplot(elms, bins=50, kde=True, label="ELMS", ax=ax)
-    ax.set_title("Reconstruction Error distribution for ELMs")
     ax.legend(frameon=False)
-
+    plt.suptitle("Comparison of reconstruction Error")
     plt.tight_layout()
     if not args.dry_run:
         fname = f"{args.model_name}_reconstruction_error_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
@@ -496,28 +494,28 @@ def plot_recons_loss_with_signals(
                 plt.plot(
                     [],
                     [],
-                    marker="o",
+                    marker="o" if j <= 1 else "_",
                     ms=3,
                     ls="",
-                    color=class_colors[i],
-                    label="{:s}".format(classes[i]),
+                    color=class_colors[j],
+                    label="{:s}".format(classes[j]),
                 )[0]
-                for i in range(len(classes))
+                for j in range(len(classes))
             ]
             legend1 = ax.legend(
                 handles=handles,
                 # classes,
                 loc="upper left",
-                fontsize=4,
+                fontsize=8,
                 frameon=False,
             )
             ax.add_artist(legend1)
             if i in [0, 3, 6, 9]:
-                ax.set_ylabel("Reconstruction Loss", fontsize=5)
+                ax.set_ylabel("Reconstruction Loss", fontsize=9)
             if i in [9, 10, 11]:
-                ax.set_xlabel("Data point index", fontsize=5)
-            ax.tick_params(axis="x", labelsize=4)
-            ax.tick_params(axis="y", labelsize=4)
+                ax.set_xlabel("Data point index", fontsize=9)
+            ax.tick_params(axis="x", labelsize=7)
+            ax.tick_params(axis="y", labelsize=7)
             ax.xaxis.grid(False)
             ax.yaxis.grid(True, lw=0.5)
         plt.suptitle("Reconstruction error")
@@ -563,7 +561,7 @@ def plot_recons_loss_with_signals(
                 handles=handles,
                 # classes,
                 loc="upper left",
-                fontsize=4,
+                fontsize=8,
                 frameon=False,
             )
             ax.add_artist(legend1)
@@ -578,15 +576,15 @@ def plot_recons_loss_with_signals(
                 c="slategrey",
             )
             if i in [0, 3, 6, 9]:
-                ax.set_ylabel("Reconstruction Loss", fontsize=5)
+                ax.set_ylabel("Reconstruction Loss", fontsize=9)
             if i in [9, 10, 11]:
-                ax.set_xlabel("Data point index", fontsize=5)
-            ax.tick_params(axis="x", labelsize=4)
-            ax.tick_params(axis="y", labelsize=4)
+                ax.set_xlabel("Data point index", fontsize=9)
+            ax.tick_params(axis="x", labelsize=7)
+            ax.tick_params(axis="y", labelsize=7)
             ax.legend(
                 handles=[line1, line2],
-                loc="upper right",
-                fontsize=5,
+                loc="center left",
+                fontsize=8,
                 frameon=False,
             )
             ax.xaxis.grid(False)
