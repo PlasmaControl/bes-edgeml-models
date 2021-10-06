@@ -429,7 +429,7 @@ def plot_recons_loss_dist(
         f"{threshold_val:.3f}",
         color="crimson",
         transform=trans,
-        ha="right",
+        ha="center",
         va="center",
         fontsize=7,
     )
@@ -794,7 +794,7 @@ def main(
         shuffle=False,
     )
     model, history = train_model(args, train_loader, valid_loader)
-    threshold = np.mean(history["train"]) + 2 * np.std(history["train"])
+    threshold = np.mean(history["train"]) + 3 * np.std(history["train"])
     print(f"Threshold value: {threshold}")
 
     # save the model
