@@ -420,6 +420,19 @@ def plot_recons_loss_dist(
         c="crimson",
         label="Threshold",
     )
+    trans = transforms.blended_transform_factory(
+        ax.transData, ax.get_xticklabels()[0].get_transform()
+    )
+    ax.text(
+        threshold_val,
+        0,
+        f"{threshold_val:.3f}",
+        color="crimson",
+        transform=trans,
+        ha="right",
+        va="center",
+        fontsize=7,
+    )
     ax.legend(frameon=False)
 
     # plot reconstruction error for ELMS
@@ -435,6 +448,19 @@ def plot_recons_loss_dist(
         lw=1.25,
         c="crimson",
         label="Threshold",
+    )
+    trans = transforms.blended_transform_factory(
+        ax.transData, ax.get_xticklabels()[0].get_transform()
+    )
+    ax.text(
+        threshold_val,
+        0,
+        f"{threshold_val:.3f}",
+        color="crimson",
+        transform=trans,
+        ha="left",
+        va="center",
+        fontsize=7,
     )
     ax.legend(frameon=False)
     plt.suptitle("Comparison of reconstruction Error")
@@ -585,14 +611,14 @@ def plot_recons_loss_with_signals(
             )
             ax.add_artist(legend1)
             (line1,) = ax.plot(
-                indices, df.ground_truth, label="ground truth", c=palette[2]
+                indices, df.ground_truth, label="ground truth", c=palette[-3]
             )
             (line2,) = ax.plot(
                 indices,
                 df.ch_22,
                 zorder=-1,
                 label="Ch:22",
-                c="slategrey",
+                c=palette[2],
             )
             if i in [0, 3, 6, 9]:
                 ax.set_ylabel("Reconstruction Loss", fontsize=9)
