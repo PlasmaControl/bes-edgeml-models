@@ -361,7 +361,7 @@ def plot_loss(
     plt.title("Loss over training epochs")
     plt.legend(frameon=False)
     if not args.dry_run:
-        fname = f'train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"'
+        fname = f"train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
         plt.savefig(
             f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
@@ -535,6 +535,8 @@ def plot_recons_loss_with_signals(
             ax.tick_params(axis="y", labelsize=7)
             ax.xaxis.grid(False)
             ax.yaxis.grid(True, lw=0.5)
+            if i == 11:
+                break
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
@@ -606,6 +608,8 @@ def plot_recons_loss_with_signals(
             )
             ax.xaxis.grid(False)
             ax.yaxis.grid(True, lw=0.5)
+            if i == 11:
+                break
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
