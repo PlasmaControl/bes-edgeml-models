@@ -75,7 +75,7 @@ def temporalize(
     signals: np.ndarray,
     labels: np.ndarray,
     allowed_indices: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     X = []
     y = []
     count = 1
@@ -111,7 +111,7 @@ def temporalize(
     print(f"X shape: {X.shape}")
     print(f"y shape: {y.shape}")
     print(f"Repeats shape: {repeats.shape}")
-    return X, y
+    return X, y, repeats
 
 
 def make_tensors(
@@ -581,14 +581,9 @@ def plot_confusion_matrix(
     error_df: pd.DataFrame,
 ) -> None:
     # confusion matrix
-    y_pred = np.array(
-        [
-            1 if error > threshold_val else 0
-            for error in error_df.reconstruction_error.values
-        ]
+    conf_matrix = metrics.confusion_matrix(
+        error_df.ground_truth.values, error_df.predictions
     )
-
-    conf_matrix = metrics.confusion_matrix(error_df.ground_truth.values, y_pred)
     plt.figure(figsize=(8, 6), dpi=100)
     sns.heatmap(
         conf_matrix, xticklabels=LABELS, yticklabels=LABELS, annot=True, fmt="d"
@@ -673,13 +668,13 @@ def main(args: argparse.Namespace, logger: logging.Logger):
     # # ) = test_data
 
     # create train signals and labels suited for an RNN
-    X_train, y_train = temporalize(
+    X_train, y_train, _ = temporalize(
         args, train_signals, train_labels, train_allowed_indices
     )
     print_arrays_shape(X_train, y_train, mode="train")
 
     # create valid signals and labels suited for an RNN
-    X_valid, y_valid = temporalize(
+    X_valid, y_valid, repeats_valid = temporalize(
         args, valid_signals, valid_labels, valid_allowed_indices
     )
     print_arrays_shape(X_valid, y_valid, mode="valid")
@@ -704,91 +699,85 @@ def main(args: argparse.Namespace, logger: logging.Logger):
     y_valid_y0 = y_valid[y_valid_y0_idx]
     y_valid_y1 = y_valid[y_valid_y1_idx]
 
-    # if not args.dry_run:
-    #     with open("validation_data.pkl", "wb") as f:
-    #         pickle.dump(
-    #             {
-    #                 "signals": X_valid,
-    #                 "labels": y_valid,
-    #             },
-    #             f,
-    #         )
+    if not args.dry_run:
+        with open("validation_data.pkl", "wb") as f:
+            pickle.dump(
+                {
+                    "signals": X_valid,
+                    "labels": y_valid,
+                },
+                f,
+            )
 
-    # print_arrays_shape(X_valid_y0, y_valid_y0, mode="valid_y0")
-    # print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
+    print_arrays_shape(X_valid_y0, y_valid_y0, mode="valid_y0")
+    print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
 
-    # train_dataset = create_tensor_dataset(X_train_y0, y_train_y0)
-    # valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
-    # test_dataset = create_tensor_dataset(X_valid, y_valid)
+    train_dataset = create_tensor_dataset(X_train_y0, y_train_y0)
+    valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
+    validation_dataset = create_tensor_dataset(X_valid, y_valid)
 
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dataset,
-    #     batch_size=args.batch_size,
-    #     num_workers=args.num_workers,
-    #     pin_memory=True,
-    #     drop_last=True,
-    #     shuffle=False,
-    # )
-    # valid_loader = torch.utils.data.DataLoader(
-    #     valid_dataset,
-    #     batch_size=args.batch_size,
-    #     num_workers=args.num_workers,
-    #     pin_memory=True,
-    #     drop_last=True,
-    #     shuffle=False,
-    # )
-    # test_loader = torch.utils.data.DataLoader(
-    #     test_dataset,
-    #     batch_size=1,
-    #     num_workers=args.num_workers,
-    #     pin_memory=True,
-    #     drop_last=False,
-    #     # shuffle=True,
-    # )
-    # model, history = train_model(args, name, train_loader, valid_loader)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=True,
+        shuffle=False,
+    )
+    valid_loader = torch.utils.data.DataLoader(
+        valid_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=True,
+        shuffle=False,
+    )
+    validation_loader = torch.utils.data.DataLoader(
+        validation_dataset,
+        batch_size=1,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=False,
+        shuffle=False,
+    )
+    model, history = train_model(args, name, train_loader, valid_loader)
+    threshold = np.mean(history["train"]) + 2 * np.std(history["train"])
+    print(f"Threshold value: {threshold}")
 
-    # # save the model
-    # if not args.dry_run:
-    #     if name in ["lstm_ae", "fc_ae"]:
-    #         model_path = f"{name}.pth"
-    #     else:
-    #         raise NameError("Model name is not understood.")
-    #     torch.save(model, model_path)
-    # plot_loss(args, name, history)
+    # save the model
+    if not args.dry_run:
+        if args.model_name in ["lstm_ae", "fc_ae"]:
+            model_path = f"{args.model_name}.pth"
+        else:
+            raise NameError("Model name is not understood.")
+        torch.save(model, model_path)
+    plot_loss(args, name, history)
 
-    # # create ELM event unique identifier
-    # identifier = list(range(1, len(valid_window_start) + 1))
-    # num_repeats = list(valid_window_start)
-    # num_repeats.append(len(X_valid))
-    # diffs = np.diff(num_repeats)
-    # broadcast_identifier = np.repeat(identifier, repeats=diffs)
-    # print(broadcast_identifier)
-    # print(broadcast_identifier.shape, X_valid.shape)
-
-    # # # classification
-    # with torch.no_grad():
-    #     mae = []
-    #     sequences = []
-    #     for data in test_loader:
-    #         seq = data[0]
-    #         seq = seq.to(args.device)
-    #         sequences.append(seq[0, 0, 21].cpu().numpy().tolist())
-    #         pred_seq = model(seq)
-    #         loss = torch.sum(torch.abs(torch.squeeze(seq, 0) - pred_seq))
-    #         mae.append(loss.cpu().numpy())
-    #     mae = np.array(mae)
-    # error_df = pd.DataFrame(
-    #     {
-    #         "reconstruction_error": mae,
-    #         "reconstruction_error_scaled": mae / np.max(mae),
-    #         "log_reconstruction_error": np.log1p(mae),
-    #         "ground_truth": y_valid.tolist(),
-    #         "id": broadcast_identifier.tolist(),
-    #         "ch_22": sequences,
-    #     }
-    # )
-    # print(error_df)
-    # plot_metrics(args, name, error_df)
+    # # classification
+    with torch.no_grad():
+        mae = []
+        sequences = []
+        for data in validation_loader:
+            seq = data[0]
+            seq = seq.to(args.device)
+            sequences.append(seq[0, 0, 21].cpu().numpy().tolist())
+            pred_seq = model(seq)
+            loss = torch.mean(torch.abs(torch.squeeze(seq, 0) - pred_seq))
+            mae.append(loss.cpu().numpy())
+        mae = np.array(mae)
+    error_df = pd.DataFrame(
+        {
+            "reconstruction_error": mae,
+            "reconstruction_error_scaled": mae / np.max(mae),
+            "ground_truth": y_valid.tolist(),
+            "id": repeats_valid.tolist(),
+            "ch_22": sequences,
+        }
+    )
+    predictions = (error_df.reconstruction_error.values > threshold).astype(int)
+    error_df["predictions"] = predictions
+    print(error_df)
+    plot_metrics(args, name, error_df)
 
 
 if __name__ == "__main__":
