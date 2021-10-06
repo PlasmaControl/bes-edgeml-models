@@ -299,7 +299,7 @@ def train_model(
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=4, verbose=True
     )
-    criterion = nn.L1Loss(reduction="sum")
+    criterion = nn.L1Loss(reduction="mean")
     history = dict(train=[], valid=[])
 
     for epoch in range(args.n_epochs):
@@ -350,8 +350,10 @@ def train_model(
     return model, history
 
 
-def plot_loss(args: argparse.Namespace, name: str, history: dict):
-    plt.figure(figsize=(8, 6), dpi=200)
+def plot_loss(
+    args: argparse.Namespace, history: dict, show_plots: bool = True
+) -> None:
+    plt.figure(figsize=(8, 6), dpi=120)
     plt.plot(history["train"], label="train", lw=2.5)
     plt.plot(history["valid"], label="valid", lw=2.5)
     plt.ylabel("Loss")
@@ -359,16 +361,18 @@ def plot_loss(args: argparse.Namespace, name: str, history: dict):
     plt.title("Loss over training epochs")
     plt.legend(frameon=False)
     if not args.dry_run:
+        fname = f'train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"'
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/train_valid_loss_{name}_ae.png",
+            f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
         )
-    plt.show()
+    if show_plots:
+        plt.show()
 
 
 def precision_recall_curve(
-    args: argparse.Namespace, name: str, error_df: pd.DataFrame
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    args: argparse.Namespace, error_df: pd.DataFrame, show_plots: bool = True
+) -> None:
     # plot precision-recall curve
     precision, recall, threshold = metrics.precision_recall_curve(
         error_df.ground_truth.values, error_df.reconstruction_error.values
@@ -376,7 +380,7 @@ def precision_recall_curve(
     print(
         f"Precision, recall, thresh shape: {precision.shape}, {recall.shape}, {threshold.shape}"
     )
-    plt.figure(figsize=(8, 6), dpi=200)
+    plt.figure(figsize=(8, 6), dpi=120)
     plt.plot(threshold, precision[1:], label="Precision", lw=2.5)
     plt.plot(threshold, recall[1:], label="Recall", lw=2.5)
     plt.title("Precision and recall for different thresholds")
@@ -385,55 +389,48 @@ def precision_recall_curve(
     plt.legend(frameon=False)
     plt.tight_layout()
     if not args.dry_run:
+        fname = f"{args.model_name}_precision_recall_curve_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{name}_ae_precision_recall_curve.png",
+            f"outputs/ts_anomaly_detection_plots/{fname}",
             dpi=200,
         )
-    plt.show()
-    return precision, recall, threshold
+    if show_plots:
+        plt.show()
 
 
 def plot_recons_loss_dist(
     args: argparse.Namespace,
-    name: str,
     error_df: pd.DataFrame,
-    plot_log: bool = False,
+    show_plots: bool = True,
 ):
-    if plot_log:
-        # plot the distribution of reconstruction losses in log scale
-        plt.figure(figsize=(8, 6), dpi=200)
-        sns.distplot(
-            error_df["log_reconstruction_error"],
-            bins=50,
-            kde=True,
-            label=r"$\log$(1+MAE)",
+    # plot reconstruction error distribution for no ELMs
+    fig = plt.figure(figsize=(8, 6), dpi=120)
+
+    no_elms = error_df[error_df["ground_truth"] == 0].loc[
+        :, "reconstruction_error"
+    ]
+    ax = fig.add_subplot(121)
+    sns.distplot(no_elms, bins=50, kde=True, label="no ELMS", ax=ax)
+    ax.set_title("Reconstruction Error distribution for no ELMs")
+    ax.legend(frameon=False)
+
+    # plot reconstruction error for ELMS
+    elms = error_df[error_df["ground_truth"] == 1].loc[
+        :, "reconstruction_error"
+    ]
+    ax = fig.add_subplot(122)
+    sns.distplot(elms, bins=50, kde=True, label="ELMS", ax=ax)
+    ax.set_title("Reconstruction Error distribution for ELMs")
+    ax.legend(frameon=False)
+
+    plt.tight_layout()
+    if not args.dry_run:
+        fname = f"{args.model_name}_reconstruction_error_sws_{args.signal_window_size}_la_{args.label_look_ahead}.png"
+        plt.savefig(
+            f"outputs/ts_anomaly_detection_plots/{fname}",
+            dpi=200,
         )
-        plt.title(r"Error distribution ($\log$ scale)")
-        plt.legend(frameon=False)
-        plt.tight_layout()
-        if not args.dry_run:
-            plt.savefig(
-                f"outputs/ts_anomaly_detection_plots/{name}_ae_error_distribution_log.png",
-                dpi=200,
-            )
-        plt.show()
-    else:
-        # plot the distribution of reconstruction losses
-        plt.figure(figsize=(8, 6), dpi=200)
-        sns.distplot(
-            error_df["reconstruction_error"],
-            bins=50,
-            kde=True,
-            label="MAE",
-        )
-        plt.title("Error distribution")
-        plt.legend(frameon=False)
-        plt.tight_layout()
-        if not args.dry_run:
-            plt.savefig(
-                f"outputs/ts_anomaly_detection_plots/{name}_ae_error_distribution.png",
-                dpi=200,
-            )
+    if show_plots:
         plt.show()
 
 
@@ -638,35 +635,6 @@ def main(args: argparse.Namespace, logger: logging.Logger):
     print_data_info(args, valid_data)
     del valid_data, train_data
 
-    # # normalize the data
-    # train_signals_032_scaled = train_signals[:, :32] / np.max(
-    #     train_signals[:, :32]
-    # )
-    # train_signals_3264_scaled = train_signals[:, 32:] / np.max(
-    #     train_signals[:, 32:]
-    # )
-    # train_signals_scaled = np.concatenate(
-    #     [train_signals_032_scaled, train_signals_3264_scaled], axis=1
-    # )
-    # del train_signals, train_signals_032_scaled, train_signals_3264_scaled
-
-    # valid_signals_032_scaled = valid_signals[:, :32] / np.max(
-    #     valid_signals[:, :32]
-    # )
-    # valid_signals_3264_scaled = valid_signals[:, 32:] / np.max(
-    #     valid_signals[:, 32:]
-    # )
-    # valid_signals_scaled = np.concatenate(
-    #     [valid_signals_032_scaled, valid_signals_3264_scaled], axis=1
-    # )
-    # del valid_signals, valid_signals_032_scaled, valid_signals_3264_scaled
-    # # (
-    # #     test_signals,
-    # #     test_labels,
-    # #     test_allowed_indices,
-    # #     test_window_start,
-    # # ) = test_data
-
     # create train signals and labels suited for an RNN
     X_train, y_train, _ = temporalize(
         args, train_signals, train_labels, train_allowed_indices
@@ -740,7 +708,7 @@ def main(args: argparse.Namespace, logger: logging.Logger):
         drop_last=False,
         shuffle=False,
     )
-    model, history = train_model(args, name, train_loader, valid_loader)
+    model, history = train_model(args, train_loader, valid_loader)
     threshold = np.mean(history["train"]) + 2 * np.std(history["train"])
     print(f"Threshold value: {threshold}")
 
