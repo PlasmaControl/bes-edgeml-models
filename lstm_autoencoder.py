@@ -1,3 +1,4 @@
+import os
 import time
 import argparse
 import logging
@@ -351,7 +352,10 @@ def train_model(
 
 
 def plot_loss(
-    args: argparse.Namespace, history: dict, show_plots: bool = True
+    args: argparse.Namespace,
+    history: dict,
+    base_path: str,
+    show_plots: bool = True,
 ) -> None:
     plt.figure(figsize=(8, 6), dpi=120)
     plt.plot(history["train"], label="train", lw=2.5)
@@ -361,9 +365,15 @@ def plot_loss(
     plt.title("Loss over training epochs")
     plt.legend(frameon=False)
     if not args.dry_run:
-        fname = f"train_valid_loss_{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+        fname = f"train_valid_loss_{args.model_name}{args.filename_suffix}.png"
+        fpath = os.path.join(
+            base_path,
+            f"signal_window_{args.signal_window_size}",
+            f"label_look_ahead_{args.label_look_ahead}",
+            fname,
+        )
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{fname}",
+            fpath,
             dpi=200,
         )
     if show_plots:
@@ -371,7 +381,10 @@ def plot_loss(
 
 
 def precision_recall_curve(
-    args: argparse.Namespace, error_df: pd.DataFrame, show_plots: bool = True
+    args: argparse.Namespace,
+    error_df: pd.DataFrame,
+    base_path: str,
+    show_plots: bool = True,
 ) -> None:
     # plot precision-recall curve
     precision, recall, threshold = metrics.precision_recall_curve(
@@ -389,9 +402,15 @@ def precision_recall_curve(
     plt.legend(frameon=False)
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_precision_recall_curve_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+        fname = f"{args.model_name}_precision_recall_curve{args.filename_suffix}.png"
+        fpath = os.path.join(
+            base_path,
+            f"signal_window_{args.signal_window_size}",
+            f"label_look_ahead_{args.label_look_ahead}",
+            fname,
+        )
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{fname}",
+            fpath,
             dpi=200,
         )
     if show_plots:
@@ -402,6 +421,7 @@ def plot_recons_loss_dist(
     args: argparse.Namespace,
     error_df: pd.DataFrame,
     threshold_val: float,
+    base_path: str,
     show_plots: bool = True,
 ):
     # plot reconstruction error distribution for no ELMs
@@ -466,9 +486,17 @@ def plot_recons_loss_dist(
     plt.suptitle("Comparison of reconstruction Error")
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_reconstruction_error_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+        fname = (
+            f"{args.model_name}_reconstruction_error{args.filename_suffix}.png"
+        )
+        fpath = os.path.join(
+            base_path,
+            f"signal_window_{args.signal_window_size}",
+            f"label_look_ahead_{args.label_look_ahead}",
+            fname,
+        )
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{fname}",
+            fpath,
             dpi=200,
         )
     if show_plots:
@@ -480,6 +508,7 @@ def plot_recons_loss_with_signals(
     error_df: pd.DataFrame,
     threshold_val: float,
     plot_thresh: bool,
+    base_path: str,
     show_plots: bool = True,
 ) -> None:
     # plot reconstruction loss with signals
@@ -566,9 +595,15 @@ def plot_recons_loss_with_signals(
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
-            fname = f"{args.model_name}_recon_error_with_threshold_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+            fname = f"{args.model_name}_recon_error_with_threshold{args.filename_suffix}.png"
+            fpath = os.path.join(
+                base_path,
+                f"signal_window_{args.signal_window_size}",
+                f"label_look_ahead_{args.label_look_ahead}",
+                fname,
+            )
             plt.savefig(
-                f"outputs/ts_anomaly_detection_plots/{fname}",
+                fpath,
                 dpi=200,
             )
         if show_plots:
@@ -639,9 +674,15 @@ def plot_recons_loss_with_signals(
         plt.suptitle("Reconstruction error")
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         if not args.dry_run:
-            fname = f"{args.model_name}_recon_error_with_signals_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+            fname = f"{args.model_name}_recon_error_with_signals{args.filename_suffix}.png"
+            fpath = os.path.join(
+                base_path,
+                f"signal_window_{args.signal_window_size}",
+                f"label_look_ahead_{args.label_look_ahead}",
+                fname,
+            )
             plt.savefig(
-                f"outputs/ts_anomaly_detection_plots/{fname}",
+                fpath,
                 dpi=200,
             )
         if show_plots:
@@ -651,6 +692,7 @@ def plot_recons_loss_with_signals(
 def plot_confusion_matrix(
     args: argparse.Namespace,
     error_df: pd.DataFrame,
+    base_path: str,
     show_plots: bool = True,
 ) -> None:
     # confusion matrix
@@ -666,9 +708,15 @@ def plot_confusion_matrix(
     plt.ylabel("True Label")
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_confusion_matrix_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.png"
+        fname = f"{args.model_name}_confusion_matrix{args.filename_suffix}.png"
+        fpath = os.path.join(
+            base_path,
+            f"signal_window_{args.signal_window_size}",
+            f"label_look_ahead_{args.label_look_ahead}",
+            fname,
+        )
         plt.savefig(
-            f"outputs/ts_anomaly_detection_plots/{fname}",
+            fpath,
             dpi=200,
         )
     if show_plots:
@@ -680,22 +728,42 @@ def plot_metrics(
     error_df: pd.DataFrame,
     threshold_val: float,
     show_plots: bool = True,
+    base_path: str = "outputs/ts_anomaly_detection_plots",
 ):
-    precision_recall_curve(args, error_df, show_plots=show_plots)
-    plot_recons_loss_dist(args, error_df, threshold_val, show_plots=show_plots)
+    precision_recall_curve(
+        args, error_df, base_path=base_path, show_plots=show_plots
+    )
+    plot_recons_loss_dist(
+        args, error_df, threshold_val, base_path, show_plots=show_plots
+    )
     # plot_recons_loss_dist(args, name, error_df, plot_log=True)
     plot_recons_loss_with_signals(
-        args, error_df, threshold_val, plot_thresh=False, show_plots=show_plots
+        args,
+        error_df,
+        threshold_val,
+        plot_thresh=False,
+        base_path=base_path,
+        show_plots=show_plots,
     )
     plot_recons_loss_with_signals(
-        args, error_df, threshold_val, plot_thresh=True, show_plots=show_plots
+        args,
+        error_df,
+        threshold_val,
+        plot_thresh=True,
+        base_path=base_path,
+        show_plots=show_plots,
     )
-    plot_confusion_matrix(args, error_df, show_plots=show_plots)
+    plot_confusion_matrix(args, error_df, base_path, show_plots=show_plots)
 
 
 def main(
     args: argparse.Namespace, logger: logging.Logger, show_plots: bool = True
 ):
+    # get model checkpoint and test data path
+    test_data_path, model_ckpt_path = utils.create_output_paths(
+        args, infer_mode=False
+    )
+
     # get train and valid data
     train_data, valid_data, _ = get_all_data(args, logger)
 
@@ -714,7 +782,7 @@ def main(
         valid_signals,
         valid_labels,
         valid_allowed_indices,
-        valid_window_start,
+        _,
     ) = valid_data
     valid_signals = valid_signals.reshape(-1, 64)
     print_data_info(args, valid_data)
@@ -753,7 +821,11 @@ def main(
     y_valid_y1 = y_valid[y_valid_y1_idx]
 
     if not args.dry_run:
-        with open(f"validation_data{args.filename_suffix}.pkl", "wb") as f:
+        fname = os.path.join(
+            test_data_path,
+            f"validation_data_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.pkl",
+        )
+        with open(fname, "wb") as f:
             pickle.dump(
                 {
                     "signals": X_valid,
@@ -778,7 +850,7 @@ def main(
         shuffle=False,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
+        validation_dataset,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=True,
@@ -800,7 +872,10 @@ def main(
     # save the model
     if not args.dry_run:
         if args.model_name in ["lstm_ae", "fc_ae"]:
-            model_path = f"{args.model_name}{args.filename_suffix}.pth"
+            model_path = os.path.join(
+                model_ckpt_path,
+                f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}.pth",
+            )
         else:
             raise NameError("Model name is not understood.")
         torch.save(model, model_path)
