@@ -54,11 +54,6 @@ class WaveletData(BaseData):
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
             _labels = np.array(elm_event["labels"], dtype=np.float32)
-            if self.args.normalize_data:
-                _signals = _signals.reshape(-1, 64)
-                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
-                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
-                _signals = _signals.reshape(-1, 8, 8)
 
             if self.args.truncate_inputs:
                 active_elm_indices = np.where(_labels > 0)[0]
@@ -79,6 +74,11 @@ class WaveletData(BaseData):
             _signals = pywt.waverec(
                 coeffs, wavelet="db2", mode="symmetric", axis=0
             )
+            if self.args.normalize_data:
+                _signals = _signals.reshape(-1, 64)
+                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
+                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
+                _signals = _signals.reshape(-1, 8, 8)
 
             # get all the allowed indices till current time step
             indices_data = self._get_valid_indices(
