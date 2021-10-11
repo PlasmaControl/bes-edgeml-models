@@ -757,7 +757,10 @@ def plot_metrics(
 
 
 def main(
-    args: argparse.Namespace, logger: logging.Logger, show_plots: bool = True
+    args: argparse.Namespace,
+    logger: logging.Logger,
+    show_plots: bool = True,
+    base_path="outputs/ts_anomaly_detection_plots",
 ):
     # get model checkpoint and test data path
     test_data_path, model_ckpt_path = utils.create_output_paths(
@@ -879,7 +882,7 @@ def main(
         else:
             raise NameError("Model name is not understood.")
         torch.save(model, model_path)
-    plot_loss(args, history, show_plots=show_plots)
+    plot_loss(args, history, base_path=base_path, show_plots=show_plots)
 
     # # classification
     with torch.no_grad():
@@ -905,11 +908,17 @@ def main(
     predictions = (error_df.reconstruction_error.values > threshold).astype(int)
     error_df["predictions"] = predictions
     print(error_df)
-    plot_metrics(args, error_df, threshold_val=threshold, show_plots=show_plots)
+    plot_metrics(
+        args,
+        error_df,
+        threshold_val=threshold,
+        show_plots=show_plots,
+        base_path=base_path,
+    )
 
 
 if __name__ == "__main__":
     # initialize the argparse and the logger
     args, parser = TrainArguments().parse(verbose=True)
     logger = utils.get_logger(script_name=__name__)
-    main(args, logger, show_plots=True)
+    main(args, logger, show_plots=False)
