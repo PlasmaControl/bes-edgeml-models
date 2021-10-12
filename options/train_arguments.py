@@ -26,7 +26,7 @@ class TrainArguments(BaseArguments):
         parser.add_argument(
             "--hidden_size",
             type=int,
-            required="rnn" or "lstm_ae" in sys.argv,
+            required=("rnn" or "lstm_ae") in sys.argv,
             help="hidden size of the RNN. Must be used "
             "if rnn is used as a Model or for data_preprocessing.",
         )

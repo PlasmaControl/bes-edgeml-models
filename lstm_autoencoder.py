@@ -726,7 +726,7 @@ def plot_confusion_matrix(
             dpi=200,
         )
         with open(npy_fpath, "wb") as f:
-            np.save(conf_matrix)
+            np.save(f, conf_matrix)
     if show_plots:
         plt.show()
 
