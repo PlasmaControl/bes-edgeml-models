@@ -708,17 +708,25 @@ def plot_confusion_matrix(
     plt.ylabel("True Label")
     plt.tight_layout()
     if not args.dry_run:
-        fname = f"{args.model_name}_confusion_matrix{args.filename_suffix}.png"
-        fpath = os.path.join(
+        png_fname = (
+            f"{args.model_name}_confusion_matrix{args.filename_suffix}.png"
+        )
+        npy_fname = (
+            f"{args.model_name}_confusion_matrix{args.filename_suffix}.npy"
+        )
+        specific_path = os.path.join(
             base_path,
             f"signal_window_{args.signal_window_size}",
             f"label_look_ahead_{args.label_look_ahead}",
-            fname,
         )
+        png_fpath = os.path.join(specific_path, png_fname)
+        npy_fpath = os.path.join(specific_path, npy_fname)
         plt.savefig(
-            fpath,
+            png_fpath,
             dpi=200,
         )
+        with open(npy_fpath, "wb") as f:
+            np.save(conf_matrix)
     if show_plots:
         plt.show()
 
