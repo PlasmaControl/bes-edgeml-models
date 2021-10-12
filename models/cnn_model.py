@@ -49,7 +49,18 @@ class CNNModel(nn.Module):
         )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        input_features = 128 if self.args.signal_window_size == 8 else 1152
+        if self.args.signal_window_size == 8:
+            input_features = 128
+        elif self.args.signal_window_size == 16:
+            input_features = 1152
+        elif self.args.signal_window_size == 32:
+            input_features = 3200
+        elif self.args.signal_window_size == 64:
+            input_features = 7296
+        else:
+            raise ValueError(
+                "Input features for given signal window size are not parsed!"
+            )
         self.fc1 = nn.Linear(
             in_features=input_features, out_features=fc_units[0]
         )
@@ -80,10 +91,10 @@ if __name__ == "__main__":
     args = parser.parse_args(
         [
             "--signal_window_size",
-            "16",
+            "64",
         ],  # ["--device", "cpu"]
     )
-    shape = (16, 1, 16, 8, 8)
+    shape = (16, 1, 64, 8, 8)
     x = torch.ones(*shape)
     device = torch.device(
         "cpu"
