@@ -14,7 +14,6 @@ from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, run, dataset
 
-# TODO: Take care of `log_dir` arg
 # TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(
     args: argparse.Namespace,
@@ -36,12 +35,12 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    if (not args.kfold) and (fold is not None):
-        LOGGER.info(
-            f"K-fold is set to {args.kfold} but fold index is passed!"
-            " Proceeding without using K-fold."
-        )
-        fold = None
+    # if (not args.kfold) and (fold is not None):
+    #     LOGGER.info(
+    #         f"K-fold is set to {args.kfold} but fold index is passed!"
+    #         " Proceeding without using K-fold."
+    #     )
+    #     fold = None
     # containers to hold train and validation losses
     train_loss = []
     valid_loss = []
@@ -74,7 +73,7 @@ def train_loop(
             desc = False
 
     # create train, valid and test data
-    train_data, valid_data, test_data = data_obj.get_data(
+    train_data, valid_data, _ = data_obj.get_data(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
 
@@ -83,10 +82,10 @@ def train_loop(
         with open(test_data_file, "wb") as f:
             pickle.dump(
                 {
-                    "signals": test_data[0],
-                    "labels": test_data[1],
-                    "sample_indices": test_data[2],
-                    "window_start": test_data[3],
+                    "signals": valid_data[0],
+                    "labels": valid_data[1],
+                    "sample_indices": valid_data[2],
+                    "window_start": valid_data[3],
                 },
                 f,
             )
@@ -103,14 +102,13 @@ def train_loop(
 
     # create datasets
     train_dataset = dataset.ELMDataset(
-        args, *train_data, logger=LOGGER, transform=transforms, phase="training"
+        args, *train_data, logger=LOGGER, phase="training"
     )
 
     valid_dataset = dataset.ELMDataset(
         args,
         *valid_data,
         logger=LOGGER,
-        transform=transforms,
         phase="validation",
     )
 
@@ -260,7 +258,7 @@ def train_loop(
                 # save the model if best ROC is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
-                    f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
+                    f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
                 )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
@@ -299,5 +297,5 @@ if __name__ == "__main__":
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl",
     )
