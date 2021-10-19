@@ -1,14 +1,15 @@
-#1/bin/bash
+#!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --tasks=8
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2
-#SBATCH --mem=128
+#SBATCH --mem=128G
 #SBATCH --time=0-5
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
 #SBATCH --mail-user=lmalhotra@wisc.edu
-
+#SBATCH --output=logs/slurm_out_%J.log
+#SBATCH --error=logs/slurm_err_%J.log
 module list
 
 source "/scratch/gpfs/lm9679/miniconda3/etc/profile.d/conda.sh"
