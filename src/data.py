@@ -636,7 +636,7 @@ def get_confinement(confinement_dir: str) -> dict:
             
         shot_no = int(re.findall(r'\d+', f)[0])
         signals = np.array(shot_data['signals'])
-        time = np.array(shot_data['time'])
+        time = np.array(shot_data['time']) * 1000
 
         labels = np.zeros((len(time), 4))
         label_df = pd.read_csv(confinement_dir + '/confinement_database - Sheet1.csv')
