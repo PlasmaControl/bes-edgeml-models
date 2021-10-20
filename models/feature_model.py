@@ -48,6 +48,18 @@ class FeatureModel(nn.Module):
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
         input_features = 10 if self.args.signal_window_size == 8 else 90
+        if self.args.signal_window_size == 8:
+            input_features = 10
+        elif self.args.signal_window_size == 16:
+            input_features = 90
+        elif self.args.signal_window_size == 32:
+            input_features = 250
+        elif self.args.signal_window_size == 64:
+            input_features = 570
+        else:
+            raise ValueError(
+                "Input features for given signal window size are not parsed!"
+            )
         self.fc1 = nn.Linear(
             in_features=input_features, out_features=fc_units[0]
         )
@@ -65,3 +77,37 @@ class FeatureModel(nn.Module):
         x = self.fc3(x)
 
         return x
+
+
+if __name__ == "__main__":
+    from torchinfo import summary
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_preproc", type=str, default="unprocessed")
+    parser.add_argument("--signal_window_size", type=int)
+    parser.add_argument("--device", default="cpu")
+    args = parser.parse_args(
+        [
+            "--signal_window_size",
+            "64",
+        ],  # ["--device", "cpu"]
+    )
+    shape = (16, 1, 64, 8, 8)
+    x = torch.ones(*shape)
+    device = torch.device(
+        "cpu"
+    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    x = x.to(device)
+    model = FeatureModel(args)
+    print(summary(model, input_size=shape, device="cpu"))
+
+    for param in list(model.named_parameters()):
+        print(
+            f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+        )
+    print(
+        f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
+    y = model(x)
+    # print(y)
+    print(y.shape)
