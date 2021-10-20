@@ -6,7 +6,9 @@ import logging
 import argparse
 from typing import Tuple, Callable
 
+
 import h5py
+import re
 import numpy as np
 import pandas as pd
 from sklearn import model_selection
@@ -614,3 +616,40 @@ if __name__ == "__main__":
 
     x = np.where(last_event_label > 0)
     print(x)
+
+
+def get_confinement(confinement_dir: str) -> dict:
+    """
+    Function to package labels and shot data as nested dict. Similar format to analyze.predict_v2.
+    Labels in order ['L-mode', 'H-mode', 'QH-mode', 'WP QH-mode'].
+    @param confinement_dir: directory of confinement data shots and labels
+    @return: nested dict {'shot_no': {'signals': np.ndarray(len(time), 64), 'time': np.1darray, 'labels': np.ndarray(len(time), 4)}
+    """
+    shot_dict = {}
+    for f in os.listdir(confinement_dir):
+        data_dict = {}
+
+        try:
+            shot_data = h5py.File(f'{confinement_dir}/{f}')
+        except OSError:
+            continue
+            
+        shot_no = int(re.findall(r'\d+', f)[0])
+        signals = np.array(shot_data['signals'])
+        time = np.array(shot_data['time'])
+
+        labels = np.zeros((len(time), 4))
+        label_df = pd.read_csv(confinement_dir + '/confinement_database - Sheet1.csv')
+        shot_labels = label_df.loc[label_df['shot'] == shot_no]
+        for i, row in shot_labels.iterrows():
+            tstart = row['tstart (ms)']
+            tstop = row['tstop (ms)']
+            label_vec = row[['L-mode', 'H-mode', 'QH-mode', 'WP QH-mode']].to_numpy(na_value=0).astype(int)
+            labels[tstart:tstop] = label_vec
+
+        data_dict['signals'] = signals
+        data_dict['time'] = time
+        data_dict['labels'] = labels
+        shot_dict[shot_no] = data_dict
+
+    return shot_dict
