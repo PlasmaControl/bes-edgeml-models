@@ -12,7 +12,9 @@ import shap
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-from sklearn.preprocessing import StandardScaler
+import plotly.graph_objects as go
+import sklearn.preprocessing
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn import decomposition as comp
 import torch
 from torch import device
@@ -26,7 +28,7 @@ from visualizations.utils.utils import get_dataloader, get_model
 
 class Visualizations:
 
-    def __init__(self, args: argparse.Namespace, logger: logging.Logger):
+    def __init__(self, args: argparse.Namespace, logger: logging.Logger) -> object:
         self.args = args
         self.logger = logger
         self.train_set = get_dataloader(self.args, self.logger, use_saved=True)
@@ -260,7 +262,7 @@ class PCA():
 
     def __init__(self, viz: Visualizations,
                  layer: str,
-                 elm_index: int or slice = None
+                 elm_index: int or np.ndarray = None
                  ):
 
         self.args = viz.args
@@ -268,7 +270,7 @@ class PCA():
         self.model = viz.model
         self.device = viz.device
         self.layer = layer
-        self.elm_index = elm_index
+        self.usr_elm_index = np.array([elm_index]).reshape(-1, ) if elm_index is not None else elm_index
 
         self.n_components = 5
         self.batch_num = 1
@@ -351,10 +353,10 @@ class PCA():
         'evr': explained variance ratio of each primary component.}
         """
 
-        if not np.array(self.elm_index).any():
-            self.elm_index = np.arange(len(self.elm_id))
+        if self.usr_elm_index is None:
+            self.usr_elm_index = np.arange(len(self.elm_id))
 
-        elm_dict = {self.elm_id[i]: self.elm_predictions[self.elm_id[i]] for i in self.elm_index}
+        elm_dict = {self.elm_id[i]: self.elm_predictions[self.elm_id[i]] for i in self.usr_elm_index}
         elm_arrays = self.make_arrays(elm_dict, 'activations')
         activations = elm_arrays['activations']
         # weights = make_array(self.elm_predictions, 'weights')
@@ -394,18 +396,23 @@ class PCA():
         """
 
         elm_arrays = self.make_arrays(self.elm_predictions, 'activations')
-        start_end = np.column_stack((elm_arrays['elm_start_idx'], elm_arrays['elm_end_idx']))[self.elm_index]
+        start_end = np.column_stack((elm_arrays['elm_start_idx'], elm_arrays['elm_end_idx']))[self.usr_elm_index]
         elm_labels = elm_arrays['labels']
         decomposed_t = self.pca_dict['pca']
 
+        labels_all = np.array([(1 - int(i)) * 'pre-' + 'ELM' for i in elm_labels])
+
         if plot_type == '3d':
-            fig = plt.figure()
             for start, end in start_end[:1]:
-                labels = elm_labels[start:end]
+                labels = labels_all[start:end]
                 fig = px.scatter_3d(x=decomposed_t[:, 0][start:end],
                                     y=decomposed_t[:, 1][start:end],
                                     z=decomposed_t[:, 2][start:end],
                                     color=labels)
+
+            fig.update_traces(marker=dict(size=2,
+                                          line=dict(width=1)),
+                              selector=dict(mode='markers'))
 
             fig.update_layout(
                 title="PC_1 and PC_2 vs Time",
@@ -416,21 +423,21 @@ class PCA():
                 font=dict(
                     family="Courier New, monospace",
                     size=18,
-                    color="RebeccaPurple"
-                ))
+                    color="RebeccaPurple"))
             fig.show()
 
         if plot_type == 'grid':
-            fig, axs = plt.subplots(nrows=self.n_components, ncols=self.n_components, figsize=(16, 9))
+            fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(16, 9))
             for ax in axs.flat:
                 ax.set_axis_off()
-            for pc_col in range(0, self.n_components):
+            for pc_col in range(0, 3):
                 for pc_row in range(0, pc_col + 1):
                     ax = axs[pc_row][pc_col]
                     ax.set_axis_on()
                     pc_x = decomposed_t[:, pc_col - pc_row]
                     pc_y = decomposed_t[:, pc_col + 1]
                     for start, end in start_end:
+                        colors = matplotlib.cm.Set1((1 - elm_labels[start:end]) / 9)
                         if pc_row == pc_col:
                             x = np.arange(end - start)
                             y = pc_y[start:end]
@@ -440,14 +447,72 @@ class PCA():
                         ax.scatter(x=x,
                                    y=y,
                                    edgecolor='none',
-                                   c=matplotlib.cm.gist_rainbow(np.linspace(0, 1, end - start)),
+                                   c=colors,
                                    s=4)
-                    ax.set_ylabel(f'PC_{pc_col + 1}')
-                    ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_col - pc_row}')
+                    ax.set_ylabel(f'PC_{pc_col + 1}', fontsize='large')
+                    ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_col - pc_row}', fontsize='large')
+            from matplotlib.lines import Line2D
+            legend_elements = [Line2D([0], [0], marker='o', color=colors[0], label='pre-ELM'),
+                               Line2D([0], [0], marker='o', color=colors[-1], label='ELM')]
+
+            fig.legend(handles=legend_elements)
 
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-            fig.suptitle(f'PCA of Layer {self.layer} in feature model')
+            fig.suptitle(f'PCA of Layer {self.layer} in feature model', fontsize='x-large')
             plt.show()
+
+        if plot_type == 'compare':
+
+            elm_predictions = self.make_arrays(self.elm_predictions, 'micro_predictions')['micro_predictions']
+
+            d_lst = []
+            l_lst = []
+            p_lst = []
+            for (start, end), elm_id in zip(start_end, self.usr_elm_index):
+                labels = elm_labels[start:end]
+                pred = elm_predictions[start:end]
+
+                l_lst.append(labels.tolist())
+                p_lst += pred.tolist()
+
+            pc_arr = decomposed_t[:, :3]
+            l_arr = np.array([(1 - int(j)) * 'pre-' + 'ELM' for i in l_lst for j in i])
+            id_arr = np.array([self.usr_elm_index[i] for i, k in enumerate(l_lst) for _ in k])
+            p_arr = np.array(p_lst)
+            df = pd.DataFrame({'ELM_ID': id_arr,
+                               'Time': pc_arr[:, 0],
+                               'Label': l_arr.astype(str),
+                               'Predictions': p_arr,
+                               'PC_1': pc_arr[:, 1],
+                               'PC_2': pc_arr[:, 2]})
+
+            df_melt = pd.melt(df, id_vars=['Time', 'Label'], value_vars=['PC_1', 'PC_2'],
+                              var_name='PC', value_name='Activation')
+
+            df_melt['Activation'] = MinMaxScaler().fit_transform(df_melt[['Activation']])
+
+            fig = px.scatter(df_melt, x='Time', y='Activation',
+                             color='PC',
+                             title=f'Primary Components at Layer {self.layer} and Model Output')
+
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['Predictions'],
+                                     mode='lines',
+                                     name='Model Prediction'))
+
+            last = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').last()['Time'].tolist()
+            first = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').first()['Time'].tolist()
+            for x0, x1 in zip(first, last):
+                fig.add_vrect(x0=x0, x1=x1,
+                              annotation_text='Active ELM Region', annotation_position='top left',
+                              fillcolor='red',
+                              opacity=0.2,
+                              line_width=0)
+
+            fig.update_layout(hovermode='x unified',
+                              font=dict(size=18)
+                              )
+
+            fig.show()
 
     def correlate_pca(self, plot_type: str) -> None:
         """
@@ -516,37 +581,45 @@ class PCA():
             df_box = pd.DataFrame(data=np.transpose([pc_vals, channel_vals, all_vals]),
                                   columns=['Component', 'Channel', 'Correlation'])
             df_box['Correlation'] = df_box['Correlation'].astype(float)
+            df_new = df_box.loc[df_box['Component'] != 'PC_4']
+            df_new = df_new.loc[df_new['Component'] != 'PC_5']
+            df_new = df_new.loc[df_new['Component'] != 'PC_3']
             fig, ax = plt.subplots(1, 1)
-            sns.boxplot(data=df_box, x='Channel', y='Correlation', hue='Component', ax=ax)
+            sns.boxplot(data=df_new, x='Channel', y='Correlation', hue='Component', ax=ax)
             fig.suptitle(f'Distribution of Correlation Along Radial Axis')
             ax.set_title(f'layer: {self.layer}')
             plt.show()
 
         if plot_type.lower() == 'line':
             df_line = df_all.loc[:, 'Channel_17':'Channel_24']
-            fig, ax = plt.subplots(1, 1)
-            df_line.groupby(level=1).mean().transpose().plot(xlabel='Channel',
-                                                             ylabel='Correlation',
-                                                             ax=ax)
+            # fig, ax = plt.subplots(1, 1)
+            # df_line.groupby(level=1).mean().transpose().plot(xlabel='Channel',
+            #                                                  ylabel='Correlation',
+            #                                                  ax=ax)
 
-            fig.suptitle('Mean Correlation Along Radial Axis')
-            ax.set_title(f'Layer: {self.layer}')
-            ax.legend()
-            plt.show()
+            # fig.suptitle('Mean Correlation Along Radial Axis')
+            # ax.set_title(f'Layer: {self.layer}')
+            # ax.legend()
+            # plt.show()
 
-    def FFT(self, show_plot: bool = False):
+            return df_line.groupby(level=1).mean().transpose()
 
+    def decompose_kernel(self):
         kernels = self.elm_predictions[self.elm_id[0]]['weights']
         pca_weights = self.pca_dict['components']
 
-        K_w = np.sum(
-            np.multiply(
-                kernels,
-                pca_weights[0].repeat(np.prod(kernels.shape[1:])).reshape(kernels.shape)
-            ),
-            axis=0)
+        K_w = np.multiply(
+            kernels,
+            pca_weights[0].repeat(np.prod(kernels.shape[1:])).reshape(kernels.shape)
+        )
 
-        fft = np.fft.rfftn(K_w, axes=(1, 2, 0))
+        K_ws = np.sum(K_w, axis=0)
+
+        return K_w
+
+    def FFT(self, kernel, show_plot: bool = False):
+
+        fft = np.fft.rfftn(kernel, axes=(1, 2, 0))
         if show_plot:
             fig, axs = plt.subplots(int(np.ceil(fft.shape[0] / 2)), 2)
             for ax, frame in zip(axs.flat, fft):
@@ -562,7 +635,7 @@ class PCA():
 
         for x in range(n_samples):
             sample = np.random.choice(self.num_elms, s_sample, replace=False)
-            self.elm_index = sample
+            self.usr_elm_index = sample
             self.perform_PCA()
             fft = self.FFT()
             fft1d = fft.sum(axis=(1, 2))
@@ -648,10 +721,58 @@ def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     df_arr = np.array(d_lst).reshape((-1, 2))
     df = pd.DataFrame({'Layer': l_lst,
                        'Label': np.tile(labels, len(layers)),
+                       'Time': np.tile(np.arange(len(labels)), len(layers)),
                        'PC_1': df_arr[:, 0],
                        'PC_2': df_arr[:, 1]})
-    fig = px.scatter(df, x='PC_1', y='PC_2', animation_frame='Layer', color='Label')
-    fig.show()
+    fig1 = px.scatter(df, x='PC_1', y='PC_2', animation_frame='Layer', color='Label',
+                      title='PC 1 vs PC 2 Over Hidden Neural Network Layers')
+    fig2 = px.scatter(df, x='Time', y='PC_1', animation_frame='Layer', color='Label',
+                      title='PC 1 vs Time Over Hidden Neural Network Layers')
+    fig3 = px.scatter(df, x='Time', y='PC_2', animation_frame='Layer', color='Label',
+                      title='PC 2 vs Time Over Hidden Neural Network Layers')
+    fig1.show()
+    fig2.show()
+    fig3.show()
+
+
+def plot_signal(pca: PCA):
+    import matplotlib.transforms as mtransforms
+
+    signal = pca.elm_predictions[0]['signals'][:, 0, 0]
+    time = np.arange(len(signal))
+
+    fig, ax = plt.subplots(1, 1)
+    trans = mtransforms.blended_transform_factory(ax.transData, ax.transAxes)
+    ax.plot(time, signal)
+    ax.fill_between(time, 0, 1, where=pca.elm_predictions[0]['labels'],
+                    facecolor='red', alpha=0.5, transform=trans)
+    ax.set_ylabel('Channel Activation (V)')
+    ax.set_xlabel('Time (ns)')
+    plt.show()
+
+
+def plot_corr_layers(viz_obj):
+    fig, (ax1, ax2) = plt.subplots(2, 1)
+    for layer in ['conv', 'fc1', 'fc2']:
+        pca = PCA(viz_obj, layer=layer)
+        df = pca.correlate_pca(plot_type='line')
+        ax1.plot(df['PC_1'], label=layer)
+        ax2.plot(df['PC_2'], label=layer)
+
+    ax1.set_title('PC 1', y=0.85, fontsize='x-large')
+    ax2.set_title('PC 2', y=0.85, fontsize='x-large')
+    fig.suptitle('Mean Correlation of PCs with BES Channels Across NN Layers', fontsize='xx-large')
+    ax1.set_ylabel('Correlation Coef.', fontsize='medium')
+    ax1.set_xlabel(None)
+    ax2.set_ylabel('Correlation Coef.', fontsize='large')
+    ax2.set_xlabel('Channel', fontsize='large')
+
+    xticks = [str(i) for i in range(17, 25)]
+    ax1.set_xticklabels([])
+    ax2.set_xticklabels(xticks)
+    ax1.legend(fontsize="large")
+    plt.show()
+    return None
 
 
 if __name__ == "__main__":
@@ -665,6 +786,34 @@ if __name__ == "__main__":
     )
 
     viz = Visualizations(args=args, logger=LOGGER)
-    make_animation(viz)
-    # pca = PCA(viz, layer='conv')
-    # pca.plot_pca('grid')
+    # PCA(viz, layer='fc2', elm_index=[0]).plot_pca(plot_type='grid')
+    pca = PCA(viz, layer='conv')
+    kernels = pca.decompose_kernel()
+
+    fft = []
+    for i in range(3):
+        fft_i = pca.FFT(kernels[i])
+        fft_i = np.log(np.abs(np.fft.fftshift(fft_i)) ** 2)
+        fft.append(fft_i)
+
+    fig, axs = plt.subplots(3, 1)
+    for i, ax in enumerate(axs):
+        kernel = fft[i]
+        ax.imshow(kernel.reshape(8, -1), cmap='jet')
+        ax.set_title(f'kernel {i}')
+        ax.set_ylabel(r'$\theta$')
+
+        ax.set_xticks([])
+
+    xticks = np.arange(0, np.shape(kernel.reshape(8, -1))[-1], 2)
+    xlabels = [str((t + 1, r + 1)) for t in range(kernel.shape[0]) for r in range(8)]
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xlabels[::2], rotation=45, ha='right')
+    ax.set_xlabel('Tuple of (Freq, Wave Number)')
+
+    fig.suptitle('3D FFT PCA Weighted Convolutional Kernel', fontsize='x-large')
+
+    plt.tight_layout()
+    plt.show()
+    # from plots import plot_voxels
+    # plot_voxels(kernel.reshape((8, -1, 1)))
