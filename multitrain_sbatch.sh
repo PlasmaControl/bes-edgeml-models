@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --tasks=8
+#SBATCH --tasks=10
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2
 #SBATCH --mem=80G
@@ -19,9 +19,9 @@ conda activate torch
 
 echo $(which python)
 
-srun --exclusive -n 1 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 30 --signal_window_size 8 --label_look_ahead 0 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
-srun --exclusive -n 1 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 8 --label_look_ahead 50 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
-srun --exclusive -n 1 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 8 --label_look_ahead 100 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
-srun --exclusive -n 1 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 8 --label_look_ahead 150 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
-srun --exclusive -n 1 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 8 --label_look_ahead 200 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
+srun --exclusive -n 2 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 30 --signal_window_size 16 --label_look_ahead 0 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
+srun --exclusive -n 2 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 16 --label_look_ahead 50 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
+srun --exclusive -n 2 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 16 --label_look_ahead 100 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
+srun --exclusive -n 2 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 16 --label_look_ahead 150 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
+srun --exclusive -n 2 -c 4 python train.py --device cuda --model_name feature --data_preproc wavelet --normalize_data --truncate_inputs --train_print_every 5000 --valid_print_every 1000 --n_epochs 20 --signal_window_size 16 --label_look_ahead 200 --num_workers 0 --lr 0.002 --weight_decay 0.05 --filename_suffix _wavelet &
 wait
