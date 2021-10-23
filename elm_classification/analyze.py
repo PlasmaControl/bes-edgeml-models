@@ -14,19 +14,19 @@ from sklearn import metrics
 from tqdm import tqdm
 
 from data_preprocessing import *
-from src import data, utils, dataset
+from src import utils, dataset
 from options.test_arguments import TestArguments
 
-plt.style.use("/home/lakshya/plt_custom.mplstyle")
-# sns.set_style("white")
+sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
+palette = list(sns.color_palette("muted").as_hex())
+LABELS = ["no ELM", "ELM"]
 
 
 def get_test_dataset(
     args: argparse.Namespace,
     file_name: str,
     logger: logging.getLogger = None,
-    transforms=None,
-) -> Tuple[tuple, data.ELMDataset]:
+) -> Tuple[tuple, dataset.ELMDataset]:
     """Read the pickle file containing the test data and return PyTorch dataset
     and data attributes such as signals, labels, sample_indices, and
     window_start_indices.
@@ -50,7 +50,7 @@ def get_test_dataset(
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
     test_dataset = dataset.ELMDataset(
-        args, *data_attrs, logger=logger, transform=transforms, phase="testing"
+        args, *data_attrs, logger=logger, phase="testing"
     )
 
     return data_attrs, test_dataset
@@ -192,33 +192,33 @@ def plot(
             plt.subplot(n_rows, n_cols, i + 1)
         else:
             plt.subplot(args.num_rows, args.num_cols, i + 1)
-        if args.use_gradients:
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6, 0] / np.max(signals),
-                label="BES ch. 22",
-                lw=1.25,
-                # c=colors[0],
-            )
-        else:
-            # plt.plot(
-            #     elm_time,
-            #     signals[:, 0, 0] / signal_max,
-            #     label="Ch. 1",  # c=colors[0]
-            #     lw=1.25,
-            # )
-            plt.plot(
-                elm_time,
-                signals[:, 2, 6] / np.max(signals),  # / signal_max,
-                label="Ch. 22",  # c=colors[0]
-                lw=1.25,
-            )
-            # plt.plot(
-            #     elm_time,
-            #     signals[:, 7, 7],  # / signal_max,
-            #     label="Ch. 64",  # c=colors[0]
-            #     lw=1.25,
-            # )
+        # if args.use_gradients:
+        #     plt.plot(
+        #         elm_time,
+        #         signals[:, 2, 6, 0] / np.max(signals),
+        #         label="BES ch. 22",
+        #         lw=1.25,
+        #         # c=colors[0],
+        #     )
+        # else:
+        #     # plt.plot(
+        #     #     elm_time,
+        #     #     signals[:, 0, 0] / signal_max,
+        #     #     label="Ch. 1",  # c=colors[0]
+        #     #     lw=1.25,
+        #     # )
+        plt.plot(
+            elm_time,
+            signals[:, 2, 6] / np.max(signals),  # / signal_max,
+            label="Ch. 22",  # c=colors[0]
+            lw=1.25,
+        )
+        # plt.plot(
+        #     elm_time,
+        #     signals[:, 7, 7],  # / signal_max,
+        #     label="Ch. 64",  # c=colors[0]
+        #     lw=1.25,
+        # )
         plt.plot(
             elm_time,
             labels + 0.02,
@@ -286,6 +286,8 @@ def plot(
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
         flag = False
+        if i == 36:
+            break
     plt.suptitle(
         f"Model output, ELM index: {elm_range}",
         fontsize=20,
@@ -295,7 +297,7 @@ def plot(
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series{args.filename_suffix}_{elm_range}.png",
+                f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series_{elm_range}.png",
             ),
             dpi=200,
         )
@@ -313,7 +315,7 @@ def plot_all(
     i_elms_1_12 = elm_id[:12]
     i_elms_12_24 = elm_id[12:24]
     i_elms_24_36 = elm_id[24:36]
-    i_elms_36_42 = elm_id[36:]
+    # i_elms_36_42 = elm_id[36:]
 
     # plot 1-12
     plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
@@ -322,16 +324,16 @@ def plot_all(
     # plot 24-36
     plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
     # plot 36-42
-    plot(
-        args,
-        elm_predictions,
-        plot_dir,
-        i_elms_36_42,
-        elm_range="36-42",
-        n_rows=2,
-        n_cols=3,
-        figsize=(14, 6),
-    )
+    # plot(
+    #     args,
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_36_42,
+    #     elm_range="36-42",
+    #     n_rows=2,
+    #     n_cols=3,
+    #     figsize=(14, 6),
+    # )
 
 
 def show_details(test_data: tuple) -> None:
@@ -371,7 +373,7 @@ def show_metrics(
         x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
         coords = tuple(zip(x, y))
         total_error = np.sum(cm[coords])
-        cm = cm / total_error
+        cm_scaled = cm / total_error
 
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
         df = pd.DataFrame(cr).transpose()
@@ -384,14 +386,17 @@ def show_metrics(
         roc_details["tpr"] = tpr
         roc_details["threshold"] = thresh
 
-        fig = plt.figure(figsize=(8, 6))
+        fig = plt.figure(figsize=(8, 6), dpi=100)
         ax = fig.add_subplot()
         sns.heatmap(
             cm,
+            xticklabels=LABELS,
+            yticklabels=LABELS,
             annot=True,
             ax=ax,
             annot_kws={"size": 14},
-            fmt=".3f",
+            # fmt=".3f",
+            fmt="d",
             norm=LogNorm(),
         )
         plt.setp(ax.get_yticklabels(), rotation=0)
@@ -416,25 +421,26 @@ def show_metrics(
             va="bottom",
             transform=ax.transAxes,
         )
+        plt.tight_layout()
         if not args.dry_run:
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.png",
                 ),
                 dpi=100,
             )
@@ -460,7 +466,15 @@ def show_metrics(
 
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot()
-        sns.heatmap(cm, annot=True, ax=ax, annot_kws={"size": 14}, fmt="d")
+        sns.heatmap(
+            cm,
+            annot=True,
+            xticklabels=LABELS,
+            yticklabels=LABELS,
+            ax=ax,
+            annot_kws={"size": 14},
+            fmt="d",
+        )
         plt.setp(ax.get_yticklabels(), rotation=0)
         ax.set_xlabel("Predicted Label", fontsize=14)
         ax.set_ylabel("True Label", fontsize=14)
@@ -483,25 +497,26 @@ def show_metrics(
             va="bottom",
             transform=ax.transAxes,
         )
+        plt.tight_layout()
         if not args.dry_run:
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
+                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
+                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.png",
                 ),
                 dpi=100,
             )
@@ -582,7 +597,7 @@ def main(
     ) = output_paths
     model_ckpt_path = os.path.join(
         model_ckpt_dir,
-        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
+        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
@@ -595,7 +610,7 @@ def main(
     # get the test data and dataloader
     test_fname = os.path.join(
         test_data_dir,
-        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl",
     )
 
     print(f"Using test data file: {test_fname}")
