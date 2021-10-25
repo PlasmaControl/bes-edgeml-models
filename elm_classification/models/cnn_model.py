@@ -57,6 +57,10 @@ class CNNModel(nn.Module):
             input_features = 3200
         elif self.args.signal_window_size == 64:
             input_features = 7296
+        elif self.args.signal_window_size == 128:
+            input_features = 15488
+        elif self.args.signal_window_size == 256:
+            input_features = 31872
         else:
             raise ValueError(
                 "Input features for given signal window size are not parsed!"
@@ -91,10 +95,10 @@ if __name__ == "__main__":
     args = parser.parse_args(
         [
             "--signal_window_size",
-            "64",
+            "256",
         ],  # ["--device", "cpu"]
     )
-    shape = (16, 1, 64, 8, 8)
+    shape = (16, 1, 256, 8, 8)
     x = torch.ones(*shape)
     device = torch.device(
         "cpu"
