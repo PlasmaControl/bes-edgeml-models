@@ -337,10 +337,10 @@ def train_loop(
                     torch.onnx.export(
                         model,
                         dummy_input,
-                        f"{args.model_name}_sws_{args.signal_window_size}.onnx",
+                        f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx",
                     )
                     wandb.save(
-                        f"{args.model_name}_sws_{args.signal_window_size}.onnx"
+                        f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx"
                     )
 
             if avg_val_loss < best_loss:
