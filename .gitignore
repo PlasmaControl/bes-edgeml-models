@@ -7,6 +7,7 @@ processed_data/
 jobs/
 figures/
 model_checkpoints/
+wandb/
 
 # tensorboard/
 train_features_df_*.csv
