@@ -12,6 +12,7 @@ model_checkpoints/
 train_features_df_*.csv
 valid_features_df_*.csv
 
+*.onnx
 slurm*
 *.db
 *.log
