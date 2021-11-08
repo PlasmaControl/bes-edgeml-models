@@ -62,43 +62,49 @@ class WaveletData(BaseData):
                 )
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
+            if len(_labels) < 1500:
+                continue
+            else:
+                coeffs = pywt.wavedec(
+                    _signals, wavelet="db2", mode="symmetric", axis=0
+                )
+                uthresh = 1
+                coeffs[1:] = (
+                    pywt.threshold(i, value=uthresh, mode="hard")
+                    for i in coeffs[1:]
+                )
+                _signals = pywt.waverec(
+                    coeffs, wavelet="db2", mode="symmetric", axis=0
+                )
+                if self.args.normalize_data:
+                    _signals = _signals.reshape(-1, 64)
+                    _signals[:, :32] = _signals[:, :32] / np.max(
+                        _signals[:, :32]
+                    )
+                    _signals[:, 32:] = _signals[:, 32:] / np.max(
+                        _signals[:, 32:]
+                    )
+                    _signals = _signals.reshape(-1, 8, 8)
 
-            coeffs = pywt.wavedec(
-                _signals, wavelet="db2", mode="symmetric", axis=0
-            )
-            uthresh = 1
-            coeffs[1:] = (
-                pywt.threshold(i, value=uthresh, mode="hard")
-                for i in coeffs[1:]
-            )
-            _signals = pywt.waverec(
-                coeffs, wavelet="db2", mode="symmetric", axis=0
-            )
-            if self.args.normalize_data:
-                _signals = _signals.reshape(-1, 64)
-                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
-                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
-                _signals = _signals.reshape(-1, 8, 8)
-
-            # get all the allowed indices till current time step
-            indices_data = self._get_valid_indices(
-                _signals=_signals,
-                _labels=_labels,
-                window_start_indices=window_start,
-                elm_start_indices=elm_start,
-                elm_stop_indices=elm_stop,
-                valid_t0=valid_t0,
-                labels=labels,
-                signals=signals,
-            )
-            (
-                signals,
-                labels,
-                valid_t0,
-                window_start,
-                elm_start,
-                elm_stop,
-            ) = indices_data
+                # get all the allowed indices till current time step
+                indices_data = self._get_valid_indices(
+                    _signals=_signals,
+                    _labels=_labels,
+                    window_start_indices=window_start,
+                    elm_start_indices=elm_start,
+                    elm_stop_indices=elm_stop,
+                    valid_t0=valid_t0,
+                    labels=labels,
+                    signals=signals,
+                )
+                (
+                    signals,
+                    labels,
+                    valid_t0,
+                    window_start,
+                    elm_start,
+                    elm_stop,
+                ) = indices_data
 
         _labels = np.array(labels)
 
