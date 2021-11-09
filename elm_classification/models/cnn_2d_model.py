@@ -9,24 +9,34 @@ class CNN2DModel(nn.Module):
         super(CNN2DModel, self).__init__()
         self.args = args
         in_channels = 6 if self.args.data_preproc == "gradient" else 1
-        projection_size = int(
-            in_channels * (512 if self.args.signal_window_size == 8 else 1024)
-        )
+        if self.args.signal_window_size == 8:
+            input_size = 512
+        elif self.args.signal_window_size == 16:
+            input_size = 1024
+        elif self.args.signal_window_size == 32:
+            input_size = 2048
+        elif self.args.signal_window_size == 64:
+            input_size = 4096
+        elif self.args.signal_window_size == 128:
+            input_size = 8192
+        else:
+            raise ValueError(
+                "Input features for given signal window size are not parsed!"
+            )
+        projection_size = int(in_channels * input_size)
         self.project2d = torch.empty(
             projection_size,
             dtype=torch.float32,
             device=args.device,
         ).view(in_channels, -1, 8, 8)
         nn.init.normal_(self.project2d)
-        self.project2d = nn.Parameter(self.project2d)
-        # self.project2d = nn.Parameter(torch.randn(16, 8, 8, device=device))
-        self.project2d.requires_grad = True
+        self.project2d = nn.Parameter(self.project2d, requires_grad=True)
         self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=8, kernel_size=3
         )
         self.conv2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3)
         self.conv3 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3)
-        self.act = nn.GELU()
+        self.act = nn.LeakyReLU(negative_slope=0.05)
         self.dropout2d = nn.Dropout2d(p=0.4)
         self.fc1 = nn.Linear(in_features=128, out_features=64)
         self.fc2 = nn.Linear(in_features=64, out_features=32)
@@ -36,9 +46,8 @@ class CNN2DModel(nn.Module):
     def forward(self, x):
         # create the projection of the 3D tensor on a 2D tensor
         x = x[:, :, ...] * self.project2d
-        x = torch.sum(x, axis=1)
-        # add dimension for input channels
-        x.unsqueeze_(1)
+        # sum it across the temporal dimension
+        x = torch.sum(x, axis=2)
         x = self.act(self.conv1(x))
         x = self.dropout2d(x)
         x = self.act(self.conv2(x))
@@ -64,12 +73,12 @@ if __name__ == "__main__":
     args = parser.parse_args(
         [
             "--data_preproc",
-            "gradient",
+            "wavelet",
             "--signal_window_size",
-            "16",
+            "128",
         ],  # ["--device", "cpu"]
     )
-    shape = (16, 6, 16, 8, 8)
+    shape = (16, 1, 128, 8, 8)
     x = torch.ones(*shape)
     device = torch.device(
         "cpu"
