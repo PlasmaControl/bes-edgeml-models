@@ -62,7 +62,7 @@ class WaveletData(BaseData):
                 )
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
-            if len(_labels) < 1500:
+            if len(_labels) < 2000:
                 continue
             else:
                 coeffs = pywt.wavedec(
