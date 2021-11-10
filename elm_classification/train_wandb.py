@@ -163,7 +163,8 @@ def train_loop(
     #     )
     #     fold = None
     with wandb.init(
-        project=f"{args.model_name}_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
+        # project=f"{args.model_name}_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
+        project=f"cross_model_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
         wandb.run.name = f"lookahead_{args.label_look_ahead}"
