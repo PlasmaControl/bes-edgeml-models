@@ -4,9 +4,9 @@ import torch
 import torch.nn as nn
 
 
-class CNNGradientModel(nn.Module):
+class CNNGradientsModel(nn.Module):
     def __init__(self, args: argparse.Namespace):
-        super(CNNGradientModel, self).__init__()
+        super(CNNGradientsModel, self).__init__()
         self.args = args
         in_channels = 3
         self.conv1 = nn.Conv2d(
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         "cpu"
     )  # "cuda" if torch.cuda.is_available() else "cpu")
     x = x.to(device)
-    model = CNNGradientModel(args)
+    model = CNNGradientsModel(args)
     print(summary(model, input_size=shape, device="cpu"))
 
     for param in list(model.named_parameters()):

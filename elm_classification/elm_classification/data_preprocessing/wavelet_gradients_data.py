@@ -13,7 +13,7 @@ except ImportError:
     from base_data import BaseData
 
 
-class WaveletData(BaseData):
+class WaveletGradientsData(BaseData):
     def _preprocess_data(
         self,
         elm_indices: np.ndarray = None,
