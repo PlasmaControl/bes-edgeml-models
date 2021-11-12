@@ -35,6 +35,12 @@ class Data:
             datafile (str, optional): Path to the input datafile. Defaults to None.
 
         """
+        self.fraction_test = args.fraction_test
+        self.fraction_validate = args.fraction_valid
+        self.signal_dtype = args.signal_dtype
+        self.data_mode = args.data_mode
+        self.kfold = args.kfold
+
         self.args = args
         self.datafile = datafile
         self.normalize = normalize
@@ -554,7 +560,7 @@ class ELMDataset(torch.utils.data.Dataset):
             signal_window = signal_window.squeeze()
             signal_window = torch.flatten(signal_window, -2)
 
-        if self.args.interpolate:
+        if self.args.data_preproc == 'interpolate':
             interp_size = (
                 self.args.interpolate_size,
                 self.args.interpolate_size,

@@ -80,6 +80,12 @@ class BaseArguments:
             help="Save figure to pdf. Specify file location."
         )
         parser.add_argument(
+            '--generated',
+            action='store_true',
+            default=False,
+            help='Use generated option if using generated data.'
+        )
+        parser.add_argument(
             "--device",
             type=str,
             default="cpu",

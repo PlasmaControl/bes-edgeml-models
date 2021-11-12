@@ -3,16 +3,24 @@ import torch
 from torch.utils.data import DataLoader
 import argparse
 import os
+import re
 
-import src.utils
-import src.data
+try:
+    import src.utils
+    import src.data
+except:
+    pass
 
 
 def get_dataloader(args: argparse.Namespace,
                    logger: logging.Logger,
                    use_saved=True):
     # Name file to store dataloader from args
-    dl_fname = f'dataloader_{args.data_mode}_lookahead_{args.label_look_ahead}_batchsize_{args.batch_size}.pt'
+    if args.generated:
+        data_name_ = args.data_mode + '_' + re.split('[_.]', args.input_file)[-2]
+    else:
+        data_name_ = args.data_mode
+    dl_fname = f'dataloader_{data_name_}_lookahead_{args.label_look_ahead}_batchsize_{args.batch_size}.pt'
 
     try:
         # if the file already exists
@@ -51,14 +59,50 @@ def get_dataloader(args: argparse.Namespace,
 def get_model(args: argparse.Namespace,
               logger: logging.Logger):
     _, model_cpt_path = src.utils.create_output_paths(args)
+    if args.generated:
+        model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
+    else:
+        model_name_ = args.model_name
     model_cpt_file = os.path.join(model_cpt_path,
-                                  f'{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth')
+                                  f'{model_name_}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth')
 
-    logger.info(f'Found {args.model_name} state dict at {model_cpt_file}.')
+    logger.info(f'Found {model_name_} state dict at {model_cpt_file}.')
     model_cls = src.utils.create_model(args.model_name)
     model = model_cls(args)
     state_dict = torch.load(model_cpt_file)['model']
     model.load_state_dict(state_dict)
-    logger.info(f'Loaded {args.model_name} state dict.')
+    logger.info(f'Loaded {model_name_} state dict.')
 
     return model
+
+
+def generate_data():
+    import numpy as np
+    from scipy.signal import square
+    gen_signals = np.ones((2000, 64))
+    gen_labels = np.empty((2000,))
+    gen_time = np.arange(0, 2000)
+    gen_signals[:1500] = gen_signals[:1500] * np.cos(np.linspace(0, 2 * np.pi * 15, 1500, endpoint=False))[:,
+                                              np.newaxis]
+    gen_signals[1500:] = gen_signals[1500:] * (square(np.linspace(0, 2 * np.pi * 5, 500, endpoint=False)))[:,
+                                              np.newaxis]
+    gen_labels[:1500] = 0
+    gen_labels[1500:] = 1
+
+    return gen_labels, gen_signals.T, gen_time
+
+
+if __name__ == '__main__':
+    import h5py as hf
+
+    num_shots = 200
+    data_path = '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-models/data/'
+    f = hf.File(data_path + 'generated_data_square.hdf5', 'w-')
+    for x in range(num_shots):
+        labels, signals, time = generate_data()
+
+        shot_grp = f.create_group(f'{x:05}')
+        labels_subgrp = shot_grp.create_dataset('labels', labels.shape, data=labels)
+        signals_subgrp = shot_grp.create_dataset('signals', signals.shape, data=signals)
+        time_subgrp = shot_grp.create_dataset('time', time.shape, data=time)
+    f.close()
