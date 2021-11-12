@@ -7,6 +7,7 @@ Under supervision of Dr. David Smith, U. Wisconsin for the ELM prediction and cl
 import argparse
 import logging
 import os
+import re
 import numpy as np
 import shap
 import matplotlib.pyplot as plt
@@ -271,7 +272,11 @@ class PCA():
         self.device = viz.device
         self.layer = layer
         self.usr_elm_index = np.array([elm_index]).reshape(-1, ) if elm_index is not None else elm_index
-
+        if self.args.generated:
+            self.model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
+        else:
+            self.model_name_ = args.model_name
+            
         self.n_components = 5
         self.batch_num = 1
 
@@ -294,7 +299,7 @@ class PCA():
 
         model_ckpt_path = os.path.join(
             model_ckpt_dir,
-            f"{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
+            f"{self.model_name_}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
         )
         print(f"Using elm_model checkpoint: {model_ckpt_path}")
         self.model.load_state_dict(
@@ -458,7 +463,7 @@ class PCA():
             fig.legend(handles=legend_elements)
 
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-            fig.suptitle(f'PCA of Layer {self.layer} in feature model', fontsize='x-large')
+            fig.suptitle(f'PCA of Layer {self.layer} in {self.args.model_name} model', fontsize='x-large')
             plt.show()
 
         if plot_type == 'compare':
@@ -786,7 +791,9 @@ if __name__ == "__main__":
     )
 
     viz = Visualizations(args=args, logger=LOGGER)
-    # PCA(viz, layer='fc2', elm_index=[0]).plot_pca(plot_type='grid')
+    pca = PCA(viz, layer='fc2', elm_index=[0])
+    pca.plot_pca(plot_type='compare')
+    exit(0)
     pca = PCA(viz, layer='conv')
     kernels = pca.decompose_kernel()
 
@@ -815,5 +822,3 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
-    # from plots import plot_voxels
-    # plot_voxels(kernel.reshape((8, -1, 1)))

@@ -66,7 +66,7 @@ def get_logger(
         f_handler = logging.FileHandler(os.path.join(log_file), mode="w+")
         # create formatters and add it to the handlers
         f_format = logging.Formatter(
-            "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
+            "%(asctime)s:%(name)s %(levelname)s:%(message)s"
         )
         f_handler.setFormatter(f_format)
         # add handlers to the logger
@@ -75,7 +75,7 @@ def get_logger(
     # display the logs in console
     if stream_handler:
         s_handler = logging.StreamHandler()
-        s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
+        s_format = logging.Formatter("%(filename)s->%(funcName)s: %(levelname)s:%(message)s")
         s_handler.setFormatter(s_format)
         logger.addHandler(s_handler)
 
