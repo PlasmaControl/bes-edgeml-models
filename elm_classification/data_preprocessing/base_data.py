@@ -34,8 +34,8 @@ class BaseData:
         self.datafile = datafile
         if self.datafile is None:
             self.datafile = os.path.join("data", self.args.input_file)
-        self.logger = logger
 
+        self.logger = logger
         self.df = pd.DataFrame()
         self.elm_indices, self.hf = self._read_file()
         self.logger.info(
@@ -232,20 +232,21 @@ class BaseData:
         elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
 
-    def _kfold_cross_val(self, training_elms: np.ndarray) -> None:
-        """Helper function to perform K-fold cross-validation.
+    # TODO: implement K-fold cross validation
+    # def _kfold_cross_val(self, training_elms: np.ndarray) -> None:
+    #     """Helper function to perform K-fold cross-validation.
 
-        Args:
-        -----
-            training_elms (np.ndarray): Indices for training ELM events.
-        """
-        kf = model_selection.KFold(
-            n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
-        )
-        self.df["elm_events"] = training_elms
-        self.df["fold"] = -1
-        for f_, (_, valid_idx) in enumerate(kf.split(X=training_elms)):
-            self.df.loc[valid_idx, "fold"] = f_
+    #     Args:
+    #     -----
+    #         training_elms (np.ndarray): Indices for training ELM events.
+    #     """
+    #     kf = model_selection.KFold(
+    #         n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
+    #     )
+    #     self.df["elm_events"] = training_elms
+    #     self.df["fold"] = -1
+    #     for f_, (_, valid_idx) in enumerate(kf.split(X=training_elms)):
+    #         self.df.loc[valid_idx, "fold"] = f_
 
     def _get_valid_indices(
         self,
