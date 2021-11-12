@@ -79,6 +79,7 @@ def get_model(args: argparse.Namespace,
 def generate_data():
     import numpy as np
     from scipy.signal import square
+    # test
     gen_signals = np.ones((2000, 64))
     gen_labels = np.empty((2000,))
     gen_time = np.arange(0, 2000)
