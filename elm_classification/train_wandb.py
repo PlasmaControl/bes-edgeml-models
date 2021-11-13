@@ -12,10 +12,11 @@ import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
 
 from options.train_arguments import TrainArguments
 from src import utils, run, dataset
+from models.feature_gradients_model import SpatialFeatures, TemporalFeatures
 
 
 def make(
@@ -79,7 +80,12 @@ def make(
 
 def get_model(args: argparse.Namespace) -> object:
     model_cls = utils.create_model(args.model_name)
-    model = model_cls(args)
+    if args.model_name == "feature_gradients":
+        spatial = SpatialFeatures(args)
+        temporal = TemporalFeatures()
+        model = model_cls(args, spatial, temporal)
+    else:
+        model = model_cls(args)
 
     return model
 
@@ -120,16 +126,20 @@ def display_model_details(args: argparse.Namespace, model: object) -> None:
 
 
 def training_log(
-    loss: float, epoch: int, roc: float = None, mode: str = "Training"
+    loss: float,
+    epoch: int,
+    roc: float = None,
+    f1: float = None,
+    mode: str = "Training",
 ):
     if mode == "Validation":
-        if roc is not None:
+        if roc is not None and f1 is not None:
             wandb.log(
-                {"epoch": epoch, "validation loss": loss, "roc": roc},
+                {"epoch": epoch, "validation loss": loss, "roc": roc, "f1": f1},
                 step=epoch,
             )
         else:
-            raise ValueError("ROC values are not passed.")
+            raise ValueError("ROC and f1 values are not passed.")
     else:
         wandb.log({"epoch": epoch, "training loss": loss}, step=epoch)
     print(f"{mode} loss after epoch {epoch}: {loss:.4f}")
@@ -167,7 +177,9 @@ def train_loop(
         project=f"cross_model_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
-        wandb.run.name = f"lookahead_{args.label_look_ahead}"
+        wandb.run.name = (
+            f"improved_{args.model_name}_lookahead_{args.label_look_ahead}"
+        )
         # containers to hold train and validation losses
         train_loss = []
         valid_loss = []
@@ -305,9 +317,11 @@ def train_loop(
                 writer.close()
             # scoring
             roc_score = roc_auc_score(valid_labels, preds)
+            thresh = 0.35
+            f1 = f1_score(valid_labels, (preds > thresh).astype(int))
 
             # log the parameters in wandb
-            training_log(avg_val_loss, epoch, roc_score, mode="Validation")
+            training_log(avg_val_loss, epoch, roc_score, f1, mode="Validation")
             elapsed = time.time() - start_time
 
             LOGGER.info(
