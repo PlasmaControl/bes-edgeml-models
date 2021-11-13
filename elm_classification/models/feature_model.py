@@ -47,7 +47,6 @@ class FeatureModel(nn.Module):
         )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        input_features = 10 if self.args.signal_window_size == 8 else 90
         if self.args.signal_window_size == 8:
             input_features = 10
         elif self.args.signal_window_size == 16:
