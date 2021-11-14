@@ -9,19 +9,22 @@ class SpatialFeatures(nn.Module):
     def __init__(
         self,
         args: argparse.Namespace,
-        num_filters: int = 16,
+        num_filters: int = 10,
+        maxpool_size: int = 2,
     ):
         super(SpatialFeatures, self).__init__()
+        pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        self.filter_size = (self.args.signal_window_size, 8, 8)
+        self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
+        self.filter_size = (8, 4, 4)
         self.conv_spatial = nn.Conv3d(
             in_channels=1,
             out_channels=num_filters,
             kernel_size=self.filter_size,
         )
-        # self.relu = nn.LeakyReLU(negative_slope=negative_slope)
 
     def forward(self, x):
+        x = self.maxpool(x)
         x = self.conv_spatial(x)
         return torch.flatten(x, 1)
 
@@ -53,7 +56,7 @@ class FeatureGradientsModel(nn.Module):
         self.spatial = spatial
         self.temporal = temporal
         if self.args.signal_window_size == 16:
-            input_features = 528
+            input_features = 602
         # elif self.args.signal_window_size == 32:
         #     input_features = 250
         # elif self.args.signal_window_size == 64:
