@@ -276,7 +276,7 @@ class PCA():
             self.model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
         else:
             self.model_name_ = args.model_name
-            
+
         self.n_components = 5
         self.batch_num = 1
 
