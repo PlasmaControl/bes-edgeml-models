@@ -178,7 +178,7 @@ def train_loop(
         utils.model_details(model, x, input_size)
 
     # optimizer
-    optimizer = optimizer = torch.optim.Adam(
+    optimizer = torch.optim.Adam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
 
