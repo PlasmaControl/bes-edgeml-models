@@ -12,7 +12,6 @@ class FeatureModel(nn.Module):
         fc_units: Union[int, Tuple[int, int]] = (40, 20),
         dropout_rate: float = 0.4,
         negative_slope: float = 0.02,
-        filter_size: tuple = (8, 4, 4),
         maxpool_size: int = 2,
         num_filters: int = 10,
     ):
@@ -41,30 +40,14 @@ class FeatureModel(nn.Module):
         super(FeatureModel, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
+        filter_size = (self.args.signal_window_size, 4, 4)
         self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
-        if self.args.signal_window_size == 8:
-            input_features = 10
-        elif self.args.signal_window_size == 16:
-            input_features = 90
-        elif self.args.signal_window_size == 32:
-            input_features = 250
-        elif self.args.signal_window_size == 64:
-            input_features = 570
-        elif self.args.signal_window_size == 128:
-            input_features = 1210
-        elif self.args.signal_window_size == 256:
-            input_features = 2490
-        elif self.args.signal_window_size == 512:
-            input_features = 5050
-        else:
-            raise ValueError(
-                "Input features for given signal window size are not parsed!"
-            )
+        input_features = 10
         self.fc1 = nn.Linear(
             in_features=input_features, out_features=fc_units[0]
         )

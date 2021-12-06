@@ -84,6 +84,14 @@ def get_model(args: argparse.Namespace) -> object:
         spatial = SpatialFeatures(args)
         temporal = TemporalFeatures()
         model = model_cls(args, spatial, temporal)
+    elif args.model_name == "mts_cnn":
+        model = model_cls(
+            args,
+            in_channels=1,
+            out_channels=[4, 8],
+            diag_fc_units=[16, 16, 64],
+            detect_fc_units=[64, 32, 1],
+        )
     else:
         model = model_cls(args)
 
@@ -173,13 +181,10 @@ def train_loop(
     #     )
     #     fold = None
     with wandb.init(
-        # project=f"{args.model_name}_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
-        project=f"cross_model_sws_{args.signal_window_size}_{time.strftime('%m%d%Y')}",
+        project=f"{args.model_name}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
-        wandb.run.name = (
-            f"improved_{args.model_name}_lookahead_{args.label_look_ahead}"
-        )
+        wandb.run.name = f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}"
         # containers to hold train and validation losses
         train_loss = []
         valid_loss = []
@@ -234,6 +239,7 @@ def train_loop(
             (args.model_name.startswith("feature"))
             or (args.model_name.startswith("cnn"))
             or (args.model_name.startswith("rnn"))
+            # or (args.model_name.startswith("mts_cnn"))
         ):
             transforms = None
         else:
