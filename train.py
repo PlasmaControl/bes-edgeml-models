@@ -51,11 +51,9 @@ def train_loop(
     test_data_path, model_ckpt_path = utils.create_output_paths(
         args, infer_mode=False
     )
+    # Assign generated type to variables, if generated
+    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
     test_data_file = os.path.join(test_data_path, test_datafile_name)
-    if args.generated:
-        model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
-    else:
-        model_name_ = args.model_name
 
     # add loss values to tensorboard
     if args.add_tensorboard:
@@ -63,7 +61,7 @@ def train_loop(
             log_dir=os.path.join(
                 args.log_dir,
                 "tensorboard",
-                f"{model_name_}_{args.data_mode}{args.filename_suffix}",
+                f"{args.model_name}_{args.data_mode}{fname_suffix}",
             )
         )
 
@@ -152,7 +150,7 @@ def train_loop(
     )  # "cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     LOGGER.info("-" * 50)
-    LOGGER.info(f"       Training with model: {model_name_}       ")
+    LOGGER.info(f"       Training with model: {args.model_name} ({gen_type_suffix[1:]})     ")
     LOGGER.info("-" * 50)
 
     # display model details
@@ -269,7 +267,7 @@ def train_loop(
         # print(f"Valid losses: {valid_loss}")
         if args.add_tensorboard:
             writer.add_scalars(
-                f"{model_name_}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
+                f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}{gen_type_suffix}",
                 {
                     "train_loss": avg_loss,
                     "valid_loss": avg_val_loss,
@@ -297,7 +295,7 @@ def train_loop(
                 # save the model if best ROC is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
-                    f'{model_name_}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth',
+                    f'{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{fname_suffix}.pth',
                 )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
@@ -325,15 +323,15 @@ def train_loop(
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
-    if args.generated:
-        model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
-    else:
-        model_name_ = args.model_name
+
+    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
+    fname_suffix = args.filename_suffix + gen_type_suffix
+
     LOGGER = utils.get_logger(
         script_name=__name__,
         log_file=os.path.join(
             args.log_dir,
-            f"output_logs_{model_name_}_{args.data_mode}{args.filename_suffix}.log",
+            f"output_logs_{args.model_name}_{args.data_mode}{fname_suffix}.log",
         ),
     )
     data_cls = utils.create_data(args.data_preproc)
@@ -341,5 +339,5 @@ if __name__ == "__main__":
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pkl",
+        test_datafile_name=f"test_data_{args.data_mode}_lookahead_{args.label_look_ahead}{fname_suffix}.pkl",
     )

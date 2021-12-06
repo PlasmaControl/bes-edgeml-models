@@ -18,13 +18,55 @@ import sklearn.preprocessing
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn import decomposition as comp
 import torch
-from torch import device
+from torch import device, nn
+from torch.optim import SGD
+from flashtorch.activmax import GradientAscent
 
-from options.test_arguments import TestArguments
 from src.utils import get_logger, create_output_paths
 from analyze import *
 
 from visualizations.utils.utils import get_dataloader, get_model
+
+
+class GradientAscent3D(GradientAscent):
+
+    def __init__(self, model, cl_args):
+        super().__init__(model, img_size=8)
+        self.args = cl_args
+
+    def optimize3D(self, layer, filter_idx, input_=None, num_iter=30):
+
+        # if type(layer) != nn.modules.conv.Conv3d:
+        #     raise TypeError('The layer must be nn.modules.conv.Conv3d.')
+        #
+        # num_total_filters = layer.out_channels
+        # self._validate_filter_idx(num_total_filters, filter_idx)
+
+        if input_ is None:
+            input_ = np.random.uniform(0, 10, size=(self.args.signal_window_size, 8, 8))
+            input_[:, 2:, :] /= 2
+            input_ = torch.tensor(input_, requires_grad=True, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+
+        # remove previous hooks
+        while len(self.handlers) > 0:
+            self.handlers.pop().remove()
+
+        # register new hooks for activations and gradients
+        self.handlers.append(self._register_forward_hooks(layer, filter_idx))
+        self.handlers.append(self._register_backward_hooks())
+
+        self.gradients = torch.zeros(input_.shape)
+
+        return np.array([ascent.squeeze().detach().numpy() for ascent in self._ascent(input_, num_iter)])
+
+    def _register_backward_hooks(self):
+        def _record_gradients(module, grad_in, grad_out):
+            if self.gradients.shape == grad_in[0].shape:
+                self.gradients = grad_in[0]
+
+        for _, module in self.model.named_modules():
+            if isinstance(module, nn.modules.conv.Conv3d):
+                return module.register_backward_hook(_record_gradients)
 
 
 class Visualizations:
@@ -32,10 +74,41 @@ class Visualizations:
     def __init__(self, args: argparse.Namespace, logger: logging.Logger) -> object:
         self.args = args
         self.logger = logger
-        self.train_set = get_dataloader(self.args, self.logger, use_saved=True)
+        self.gen_suffix_type = '_' + re.split('[_.]', args.input_file)[-2] if 'generated' in args.input_file else ''
+        self.filename_suffix = args.filename_suffix + self.gen_suffix_type
+        self.test_data, self.test_set = self._get_test_dataset()
         self.model = get_model(self.args, self.logger)
         self.device: torch.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.fm_signal_window, labels = next(iter(self.train_set))
+        self.fm_signal_window, labels = next(iter(self.test_set))
+
+    def _get_test_dataset(self):
+
+        (
+            test_data_dir,
+            model_ckpt_dir,
+            clf_report_dir,
+            plot_dir,
+            roc_dir,
+        ) = create_output_paths(self.args, infer_mode=True)
+
+        # get the test data and dataloader
+        test_fname = os.path.join(
+            test_data_dir,
+            f"test_data_{self.args.data_mode}_lookahead_{self.args.label_look_ahead}{self.filename_suffix}.pkl",
+        )
+
+        print(f"Using test data file: {test_fname}")
+        test_data, test_dataset = get_test_dataset(
+            args, file_name=test_fname, logger=self.logger
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            drop_last=True,
+        )
+
+        return test_data, test_loader
 
     def feature_map(self, layer: str):
 
@@ -69,7 +142,7 @@ class Visualizations:
         #     self.plot_(i, n)
 
     def shap(self):
-        batch = next(iter(self.train_set))
+        batch = next(iter(self.test_set))
         signal_windows, labels = batch
 
         pred_dict = predict_v2(args=self.args,
@@ -258,6 +331,75 @@ class Visualizations:
         plt.title(title)
         plt.show()
 
+    def max_activation(self, layer, filter_idx, num_iter=30):
+
+        layer = self.model.layers[layer]
+        g_ascent = GradientAscent3D(self.model, self.args)
+        output = g_ascent.optimize3D(layer, filter_idx=filter_idx, num_iter=num_iter)
+        return output
+
+    def generate_csi(self, target_class, iterations=150, **kwargs):
+        """
+
+        @param target_class: Options: ['ELM' | 'pre-ELM']
+        @param iterations: number of times to update input.
+        @return: np.array of every 10th iteration of optimizer
+        """
+        # set up keys from arguments
+        target_class = str(target_class)
+        try:
+            label = {'ELM': torch.tensor([1], device=self.device, dtype=torch.float32),
+                     'PRE-ELM': torch.tensor([0], device=self.device, dtype=torch.float32),
+                     '1': torch.tensor([1], device=self.device, dtype=torch.float32),
+                     '0': torch.tensor([0], device=self.device, dtype=torch.float32)}[target_class.upper()]
+            print(f'Target class: {target_class}; Label: {label.item()}')
+        except KeyError:
+            raise ('Target classes are "ELM" or "pre-ELM"')
+
+        initial_lr = kwargs.pop('initial_lr', 6)
+        random_state = kwargs.pop('random_state', None)
+
+        self.model.eval()
+
+        # generate initial random input
+        np.random.seed(random_state)
+        generated = np.random.uniform(0, 10, size=(self.args.signal_window_size, 8, 8))
+        # Top two rows of BES are capped at 10, bottom 6 are capped at 5
+        generated[:, 2:, :] /= 2
+        generated = torch.tensor(generated,
+                                 dtype=torch.float32,
+                                 device=self.device
+                                 ).unsqueeze(0).unsqueeze(0).requires_grad_()
+
+        generated_inputs = []
+        model_outs = []
+        for i in range(1, iterations):
+            # Define optimizer for the image
+            optimizer = SGD([generated], lr=initial_lr)
+            # Forward pass
+            output = self.model(generated)
+
+            # Target specific class
+            loss_fn = nn.BCEWithLogitsLoss()
+            class_loss = loss_fn(output.view(-1), label)
+
+            if i + 1 % 10 == 0 or i == iterations - 1:
+                print(f'Iteration: {i + 1}, Loss {class_loss.item():.2f}')
+            # Zero grads
+            self.model.zero_grad()
+            # Backward
+            class_loss.backward()
+            # Update image
+            optimizer.step()
+
+            if (i + 1) % 10 == 0 or i == (iterations - 1):
+                # append image to list
+                generated_inputs.append(generated)
+                model_outs.append(output)
+
+        return tuple((im.detach().numpy().squeeze(), torch.sigmoid(model_out_).item()) for im, model_out_ in
+                     zip(generated_inputs, model_outs))
+
 
 class PCA():
 
@@ -270,12 +412,12 @@ class PCA():
         self.logger = viz.logger
         self.model = viz.model
         self.device = viz.device
+        self.test_data = viz.test_data
+        self.test_set = viz.test_set
+        self.gen_suffix_type = viz.gen_suffix_type
         self.layer = layer
         self.usr_elm_index = np.array([elm_index]).reshape(-1, ) if elm_index is not None else elm_index
-        if self.args.generated:
-            self.model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
-        else:
-            self.model_name_ = args.model_name
+        self.filename_suffix = self.args.filename_suffix + self.gen_suffix_type
 
         self.n_components = 5
         self.batch_num = 1
@@ -283,61 +425,23 @@ class PCA():
         self.elm_predictions = self.get_predictions()
         self.num_elms = len(self.elm_predictions)
         self.elm_id = list(self.elm_predictions.keys())
-        self.pca_dict = self.perform_PCA()
+        self.pca_dict = None
 
     def get_predictions(self) -> dict:
 
-        # load the model checkpoint and other paths
-        # noinspection PyTupleAssignmentBalance
-        (
-            test_data_dir,
-            model_ckpt_dir,
-            clf_report_dir,
-            plot_dir,
-            roc_dir,
-        ) = create_output_paths(self.args, infer_mode=True)
-
-        model_ckpt_path = os.path.join(
-            model_ckpt_dir,
-            f"{self.model_name_}_{args.data_mode}_lookahead_{args.label_look_ahead}{args.filename_suffix}.pth",
-        )
-        print(f"Using elm_model checkpoint: {model_ckpt_path}")
-        self.model.load_state_dict(
-            torch.load(
-                model_ckpt_path,
-                map_location=self.device,
-            )["model"]
-        )
-
-        # get the test data and dataloader
-        test_fname = os.path.join(
-            test_data_dir,
-            f"test_data_{self.args.data_mode}_lookahead_{self.args.label_look_ahead}{self.args.filename_suffix}.pkl",
-        )
-
-        print(f"Using test data file: {test_fname}")
-        test_data, test_dataset = get_test_dataset(
-            args, file_name=test_fname, logger=self.logger
-        )
-        test_loader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            drop_last=True,
-        )
-        inputs, _ = next(iter(test_loader))
+        inputs, _ = next(iter(self.test_set))
 
         print(f"Input size: {inputs.shape}")
 
         if self.args.test_data_info:
-            show_details(test_data)
+            show_details(self.test_data)
 
-        model_predict(self.model, self.device, test_loader)
+        model_predict(self.model, self.device, self.test_set)
 
         # get prediction dictionary containing truncated signals, labels,
         # micro-/macro-predictions and elm_time
         pred_dict = predict_v2(args=self.args,
-                               test_data=test_data,
+                               test_data=self.test_data,
                                model=self.model,
                                device=self.device,
                                hook_layer=self.layer)
@@ -469,24 +573,37 @@ class PCA():
         if plot_type == 'compare':
 
             elm_predictions = self.make_arrays(self.elm_predictions, 'micro_predictions')['micro_predictions']
+            ch_22 = self.make_arrays(self.elm_predictions, 'signals')['signals'][:, 2, 5]
 
-            d_lst = []
+            # make lists for dataframe
+            ch_22_lst = []
             l_lst = []
             p_lst = []
-            for (start, end), elm_id in zip(start_end, self.usr_elm_index):
+            for start, end in start_end:
                 labels = elm_labels[start:end]
                 pred = elm_predictions[start:end]
+                sig = ch_22[start:end]
 
                 l_lst.append(labels.tolist())
-                p_lst += pred.tolist()
+                p_lst.extend(pred.tolist())
+                ch_22_lst.extend(sig.tolist())
 
+            # convert everything to appropriately sized arrays for pandas
             pc_arr = decomposed_t[:, :3]
             l_arr = np.array([(1 - int(j)) * 'pre-' + 'ELM' for i in l_lst for j in i])
             id_arr = np.array([self.usr_elm_index[i] for i, k in enumerate(l_lst) for _ in k])
             p_arr = np.array(p_lst)
+            ch_22_arr = np.array(ch_22_lst)
+
+            # normalize arrays to 1
+            # pc_arr /= pc_arr.max()
+            # p_arr /= p_arr.max()
+            ch_22_arr /= ch_22_arr.max()
+
             df = pd.DataFrame({'ELM_ID': id_arr,
                                'Time': pc_arr[:, 0],
                                'Label': l_arr.astype(str),
+                               'BES_CH_22': ch_22_arr,
                                'Predictions': p_arr,
                                'PC_1': pc_arr[:, 1],
                                'PC_2': pc_arr[:, 2]})
@@ -503,6 +620,10 @@ class PCA():
             fig.add_trace(go.Scatter(x=df['Time'], y=df['Predictions'],
                                      mode='lines',
                                      name='Model Prediction'))
+
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['BES_CH_22'],
+                                     mode='lines',
+                                     name='BES Channel 22'))
 
             last = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').last()['Time'].tolist()
             first = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').first()['Time'].tolist()
@@ -707,7 +828,6 @@ class PCA():
 
         return {key: arr, 'labels': label_arr, 'elm_start_idx': starts, 'elm_end_idx': ends}
 
-
 def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     layers = list(viz.model.layers.keys())[:-1]
     d_lst = []
@@ -739,7 +859,6 @@ def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     fig2.show()
     fig3.show()
 
-
 def plot_signal(pca: PCA):
     import matplotlib.transforms as mtransforms
 
@@ -755,11 +874,11 @@ def plot_signal(pca: PCA):
     ax.set_xlabel('Time (ns)')
     plt.show()
 
-
 def plot_corr_layers(viz_obj):
     fig, (ax1, ax2) = plt.subplots(2, 1)
     for layer in ['conv', 'fc1', 'fc2']:
         pca = PCA(viz_obj, layer=layer)
+        pca.perform_PCA()
         df = pca.correlate_pca(plot_type='line')
         ax1.plot(df['PC_1'], label=layer)
         ax2.plot(df['PC_2'], label=layer)
@@ -780,21 +899,9 @@ def plot_corr_layers(viz_obj):
     return None
 
 
-if __name__ == "__main__":
-    args, parser = TestArguments().parse(verbose=True)
-    LOGGER = get_logger(
-        script_name=__name__,
-        log_file=os.path.join(
-            args.log_dir,
-            f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
-        ),
-    )
-
-    viz = Visualizations(args=args, logger=LOGGER)
-    pca = PCA(viz, layer='fc2', elm_index=[0])
-    pca.plot_pca(plot_type='compare')
-    exit(0)
+def make_fft(pca: PCA):
     pca = PCA(viz, layer='conv')
+    pca.perform_PCA()
     kernels = pca.decompose_kernel()
 
     fft = []
@@ -822,3 +929,84 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
+
+
+def make_max_act(viz: Visualizations, num_filters=32, plots_per_page=4):
+    layer = 'conv'
+    # TODO: make work for fc layers
+    for x in range(num_filters // plots_per_page):
+        start = x * plots_per_page
+        end = x * plots_per_page + plots_per_page
+        filters = np.arange(start, end)
+        fig, axs = plt.subplots(plots_per_page, 1)
+        for filt, ax in zip(filters, axs):
+            out = viz.max_activation(layer, filt, num_iter=40)[-1]
+            ax.imshow(out.reshape(8, 8 * out.shape[0]))
+            ax.set_ylabel(f'Filter {filt}')
+            ax.set_xticks(np.arange(-.5, 8 * out.shape[0] + 0.5, 8), minor=True)
+            ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
+            ax.grid(visible=None, which='major', axis='both')
+
+        fig.suptitle(f'Iterations of Activation Maximizing Inputs for {args.model_name} Model')
+        plt.savefig(f'/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-models/'
+                    f'visualizations/max_act/all_filters_conv/filt{filters[0]}-{filters[-1]}.png')
+    plt.show()
+
+
+def make_gen_csi(viz: Visualizations):
+    cls_lst = ['pre-ELM', 'ELM']
+
+    fig, axs = plt.subplots(2, 1)
+    for cls, ax in zip(cls_lst, axs):
+        gen_outs = []
+        gen_model_outs = []
+        for x in range(150):
+            out, model_out = viz.generate_csi(target_class=cls, iterations=10, random_state=x)[-1]
+            gen_outs.append(out)
+            gen_model_outs.append(model_out)
+
+        out = np.array(gen_outs).mean(axis=0)
+        model_out = np.array(gen_model_outs).mean(axis=0)
+
+        im = ax.imshow(out.transpose((1, 2, 0)).reshape(8, 8 * out.shape[0]))
+        ax.set_xticks(np.arange(-.5, 8 * out.shape[0] + 0.5, 8), minor=True)
+        ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
+        ax.grid(visible=None, which='major', axis='both')
+        ax.set_title(cls)
+        ax.set_ylabel(f'Model Output:\n{model_out.item():0.2f}', rotation=0, labelpad=35)
+
+    fig.suptitle(f'Class Maximizing Inputs for {args.model_name} Model')
+    fig.colorbar(im, ax=axs.ravel().tolist(), orientation='horizontal')
+    plt.show()
+
+
+if __name__ == "__main__":
+    args, parser = TestArguments().parse(verbose=True)
+    LOGGER = get_logger(
+        script_name=__name__,
+        log_file=os.path.join(
+            args.log_dir,
+            f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
+        ),
+    )
+
+    viz = Visualizations(args=args, logger=LOGGER)
+    elm_idx = [0]
+    pca = PCA(viz, layer='fc2', elm_index=elm_idx)
+    for i, idx in enumerate(elm_idx):
+        elm = pca.elm_predictions[idx]
+        signals = elm['signals']
+        labels = elm['labels']
+        stop = 0
+        for start in range(0, len(signals), pca.args.signal_window_size):
+            stop += pca.args.signal_window_size
+            if stop <= len(labels):
+                model_out = viz.generate_csi(target_class=int(labels[stop]), iterations=30)
+                signals[start:stop] = model_out[-1][0]
+            else:
+                model_out = viz.generate_csi(target_class=int(labels[-1]), iterations=30)
+                signals[start:] = model_out[-1][0][:len(labels) - start]
+        elm['micro_predictions'] = labels
+    pca.perform_PCA()
+    pca.plot_pca(plot_type='grid')
+    exit()
