@@ -560,14 +560,17 @@ class ELMDataset(torch.utils.data.Dataset):
             signal_window = signal_window.squeeze()
             signal_window = torch.flatten(signal_window, -2)
 
-        if self.args.data_preproc == 'interpolate':
-            interp_size = (
-                self.args.interpolate_size,
-                self.args.interpolate_size,
-            )
-            signal_window = torch.nn.functional.interpolate(
-                signal_window, size=interp_size
-            )
+        try:
+            if self.args.data_preproc == 'interpolate':
+                interp_size = (
+                    self.args.interpolate_size,
+                    self.args.interpolate_size,
+                )
+                signal_window = torch.nn.functional.interpolate(
+                    signal_window, size=interp_size
+                )
+        except AttributeError:
+            pass
         label = torch.as_tensor(label, dtype=torch.long)
         return signal_window, label
 

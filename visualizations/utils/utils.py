@@ -20,7 +20,7 @@ def get_dataloader(args: argparse.Namespace,
         data_name_ = args.data_mode + '_' + re.split('[_.]', args.input_file)[-2]
     else:
         data_name_ = args.data_mode
-    dl_fname = f'dataloader_{data_name_}_lookahead_{args.label_look_ahead}_batchsize_{args.batch_size}.pt'
+    dl_fname = f'dataloader_{data_name}_lookahead_{args.label_look_ahead}_batchsize_{args.batch_size}.pt'
 
     try:
         # if the file already exists
@@ -59,19 +59,18 @@ def get_dataloader(args: argparse.Namespace,
 def get_model(args: argparse.Namespace,
               logger: logging.Logger):
     _, model_cpt_path = src.utils.create_output_paths(args)
-    if args.generated:
-        model_name_ = args.model_name + '_' + re.split('[_.]', args.input_file)[-2]
-    else:
-        model_name_ = args.model_name
-    model_cpt_file = os.path.join(model_cpt_path,
-                                  f'{model_name_}_{args.data_mode}_lookahead_{args.label_look_ahead}.pth')
+    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
+    model_name = args.model_name + gen_type_suffix
 
-    logger.info(f'Found {model_name_} state dict at {model_cpt_file}.')
+    model_cpt_file = os.path.join(model_cpt_path,
+                                  f'{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{gen_type_suffix}.pth')
+
+    logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
     model_cls = src.utils.create_model(args.model_name)
     model = model_cls(args)
     state_dict = torch.load(model_cpt_file)['model']
     model.load_state_dict(state_dict)
-    logger.info(f'Loaded {model_name_} state dict.')
+    logger.info(f'Loaded {model_name} state dict.')
 
     return model
 
