@@ -161,23 +161,24 @@ class CWT(nn.Module):
             (1 / self.dj)
             * np.log2(self.signal_length * self.dt / self._scale_minimum)
         )
+        print(f"Number of scales used: {J}")
         scales = np.array(
-            self._scale_minimum * 2 ** (self.dj * np.arange(0, J + 1))
+            self._scale_minimum * 2 ** (self.dj * np.arange(0, J))
         )
 
-        # get frequencies from the scales
-        frequencies = np.array(
-            [1 / self.wavelet.fourier_wavelength(s) for s in scales]
-        )
+        # # get frequencies from the scales
+        # frequencies = np.array(
+        #     [1 / self.wavelet.fourier_wavelength(s) for s in scales]
+        # )
 
-        # filter frequencies between [fmin, fmax]
-        if self.fmin:
-            frequencies = frequencies[frequencies >= self.fmin]
+        # # filter frequencies between [fmin, fmax]
+        # if self.fmin:
+        #     frequencies = frequencies[frequencies >= self.fmin]
 
-        if self.fmax:
-            frequencies = frequencies[frequencies <= self.fmax]
+        # if self.fmax:
+        #     frequencies = frequencies[frequencies <= self.fmax]
 
-        return scales, frequencies
+        return scales
 
     def compute_minimum_scale(self):
         dt = self.dt
@@ -189,7 +190,7 @@ class CWT(nn.Module):
 
     def _build_filters(self):
         self._scale_minimum = self.compute_minimum_scale()
-        self._scales, _ = self.compute_optimal_scales()
+        self._scales = self.compute_optimal_scales()
 
         self._filters = []
 
@@ -331,9 +332,6 @@ class CWT(nn.Module):
 
 
 if __name__ == "__main__":
-    t = np.linspace(-1, 1, 200, endpoint=False)
-    sig = np.cos(2 * np.pi * 7 * t) + signal.gausspulse(t - 0.4, fc=2)
-    # x = torch.randn(4, 16, 64)
     x = np.load("single_elm_event.npy")
     x = torch.tensor(x)
     x = torch.unsqueeze(x, 0)
