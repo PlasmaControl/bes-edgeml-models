@@ -42,6 +42,12 @@ class BaseArguments:
             "sets.",
         )
         parser.add_argument(
+            "--multi_features",
+            action="store_true",
+            default=False,
+            help="if true, create additional features based on FFT and CWT",
+        )
+        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
