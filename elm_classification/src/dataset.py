@@ -79,18 +79,14 @@ class ELMDataset(torch.utils.data.Dataset):
 
 class ConcatDatasets(torch.utils.data.Dataset):
     def __init__(self, *datasets):
-        """PyTorch dataset to concat different datasets and feed them through 
-        dataloader. It can be used to concatenate different features from 
+        """PyTorch dataset to concat different datasets and feed them through
+        dataloader. It can be used to concatenate different features from
         different datasets.
         """
         self.datasets = datasets
-    
+
     def __len__(self):
         return min(len(d) for d in self.datasets)
-    
+
     def __getitem__(self, i):
         return tuple(d[i] for d in self.datasets)
-
-
-def get_transforms(args):
-    return A.Compose([A.Resize(args.size, args.size)])

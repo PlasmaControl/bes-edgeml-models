@@ -90,16 +90,6 @@ def train_loop(
                 f,
             )
 
-    # create image transforms
-    if (
-        (args.model_name.startswith("feature"))
-        or (args.model_name.startswith("cnn"))
-        or (args.model_name.startswith("rnn"))
-    ):
-        transforms = None
-    else:
-        transforms = dataset.get_transforms(args)
-
     # create datasets
     train_dataset = dataset.ELMDataset(
         args, *train_data, logger=LOGGER, phase="training"
@@ -121,6 +111,9 @@ def train_loop(
         pin_memory=True,
         drop_last=True,
     )
+
+    input, target = next(iter(train_loader))
+    print(input.shape)
 
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
