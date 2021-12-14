@@ -8,11 +8,46 @@ import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
+import pywt
 
 from data_preprocessing import *
 from options.train_arguments import TrainArguments
-from src import utils, run, dataset
+from src import utils, trainer, dataset
+from models import multi_features_model
+
+
+def get_multi_features(args, train_data, valid_data):
+    print(f"Train data shape: {train_data[0].shape}")
+    print(f"Valid data shape: {valid_data[0].shape}")
+    train_data_cwt = list(train_data)
+    valid_data_cwt = list(valid_data)
+    widths = np.arange(1, args.signal_window_size + 1)
+    train_data_cwt[0], _ = pywt.cwt(
+        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
+    valid_data_cwt[0], _ = pywt.cwt(
+        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
+    train_data_cwt = tuple(train_data_cwt)
+    valid_data_cwt = tuple(valid_data_cwt)
+    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
+    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
+
+    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
+    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
+
+    assert (
+        train_data[0].shape[0] == train_data_cwt[0].shape[0]
+    ), "CWT train data leading dimension does not match with the raw data!"
+    assert (
+        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
+    ), "CWT valid data leading dimension does not match with the raw data!"
+
+    return train_data_cwt, valid_data_cwt
+
 
 # TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(
@@ -20,7 +55,7 @@ def train_loop(
     data_obj: object,
     test_datafile_name: str,
     fold: Union[int, None] = None,
-    desc: bool = True,
+    desc: bool = False,
 ) -> None:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
@@ -48,6 +83,10 @@ def train_loop(
         args, infer_mode=False
     )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
+    if args.multi_features:
+        test_data_file_cwt = os.path.join(
+            test_data_path, "cwt_" + test_datafile_name
+        )
 
     # add loss values to tensorboard
     if args.add_tensorboard:
@@ -77,7 +116,12 @@ def train_loop(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
 
-    # dump test data into to a file
+    if args.multi_features:
+        train_data_cwt, valid_data_cwt = get_multi_features(
+            args, train_data, valid_data
+        )
+
+    # dump test data into a file
     if not args.dry_run:
         with open(test_data_file, "wb") as f:
             pickle.dump(
@@ -89,18 +133,40 @@ def train_loop(
                 },
                 f,
             )
+        if args.multi_features:
+            with open(test_data_file_cwt, "wb") as f:
+                pickle.dump(
+                    {
+                        "signals": valid_data_cwt[0],
+                        "labels": valid_data_cwt[1],
+                        "sample_indices": valid_data_cwt[2],
+                        "window_start": valid_data_cwt[3],
+                    },
+                    f,
+                )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
         args, *train_data, logger=LOGGER, phase="training"
     )
-
     valid_dataset = dataset.ELMDataset(
-        args,
-        *valid_data,
-        logger=LOGGER,
-        phase="validation",
+        args, *valid_data, logger=LOGGER, phase="validation"
     )
+
+    if args.multi_features:
+        train_dataset_cwt = dataset.ELMDataset(
+            args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
+        )
+        valid_dataset_cwt = dataset.ELMDataset(
+            args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
+        )
+
+        # create a combined dataset
+        train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
+        valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
+        x1, x2 = train_dataset.__getitem__(0)
+        print(x1[0].shape, x1[1].shape)
+        print(x2[0].shape, x2[1].shape)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -113,7 +179,8 @@ def train_loop(
     )
 
     input, target = next(iter(train_loader))
-    print(input.shape)
+    print(input[0].shape, input[1].shape)
+    print(target[0].shape, target[1].shape)
 
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
@@ -125,8 +192,20 @@ def train_loop(
     )
 
     # model
-    model_cls = utils.create_model(args.model_name)
-    model = model_cls(args)
+    if args.multi_features:
+        # if not isinstance(model, multi_features_model.MultiFeaturesModel):
+        #     raise ValueError(
+        #         "Multi features are passed but multi features model is not used."
+        #     )
+        raw_model = multi_features_model.RawFeatureModel(args)
+        fft_model = multi_features_model.FFTFeatureModel(args)
+        cwt_model = multi_features_model.CWTFeatureModel(args)
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args)
+
     device = torch.device(
         args.device
     )  # "cuda" if torch.cuda.is_available() else "cpu")
@@ -193,13 +272,14 @@ def train_loop(
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
-    engine = run.Run(
+    engine = trainer.Run(
         model,
         device=device,
         criterion=criterion,
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
+        multi_features=args.multi_features,
     )
 
     # iterate through all the epochs

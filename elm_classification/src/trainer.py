@@ -17,6 +17,7 @@ class Run:
         optimizer: torch.optim.Optimizer,
         use_focal_loss: bool = False,
         use_rnn: bool = False,
+        multi_features: bool = False,
     ):
         self.model = model
         self.criterion = criterion
@@ -24,6 +25,7 @@ class Run:
         self.device = device
         self.use_focal_loss = use_focal_loss
         self.use_rnn = use_rnn
+        self.multi_features = multi_features
 
     def train(
         self,
@@ -31,7 +33,6 @@ class Run:
         epoch: int,
         scheduler: Union[Callable, None] = None,
         print_every: int = 100,
-        multi_features: bool = False,
     ) -> float:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -42,7 +43,7 @@ class Run:
 
         start = end = time.time()
 
-        if multi_features:
+        if self.multi_features:
             for batch_idx, (raw, cwt) in enumerate(data_loader):
                 # data loading time
                 data_time.update(time.time() - end)
@@ -60,7 +61,7 @@ class Run:
                 cwt_input = cwt_input.to(self.device)
 
                 # forward pass
-                y_preds = self.model((raw_input, cwt_input))
+                y_preds = self.model(raw_input, cwt_input)
                 if self.use_rnn:
                     y_preds = y_preds.squeeze()[:, -1]
 
@@ -156,7 +157,6 @@ class Run:
         self,
         data_loader: torch.utils.data.DataLoader,
         print_every: int = 50,
-        multi_features: bool = False,
     ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -167,7 +167,7 @@ class Run:
         preds = []
         valid_labels = []
         start = end = time.time()
-        if multi_features:
+        if self.multi_features:
             for batch_idx, (raw, cwt) in enumerate(data_loader):
                 # measure data loading time
                 data_time.update(time.time() - end)
@@ -183,7 +183,7 @@ class Run:
 
                 # compute loss with no backprop
                 with torch.no_grad():
-                    y_preds = self.model((raw_input, cwt_input))
+                    y_preds = self.model(raw_input, cwt_input)
 
                 if self.use_rnn:
                     y_preds = y_preds.squeeze()[:, -1]
