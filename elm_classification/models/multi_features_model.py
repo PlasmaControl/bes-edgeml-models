@@ -99,6 +99,7 @@ class FFTFeatureModel(nn.Module):
 
     def forward(self, x):
         # apply FFT to the input along the time dimension
+        x = x.to(self.args.device)  # needed for PowerPC architecture
         x = torch.abs(torch.fft.rfft(x, dim=2))
         x = self.dropout3d(self.conv(x))
         x = self.relu(x)
