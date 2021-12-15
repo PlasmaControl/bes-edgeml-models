@@ -248,11 +248,15 @@ def train_loop(
         test_data_path, model_ckpt_path = utils.create_output_paths(
             args, infer_mode=False
         )
-        test_data_file = os.path.join(test_data_path, test_datafile_name)
         if args.multi_features:
-            test_data_file_cwt = os.path.join(
-                test_data_path, "cwt_" + test_datafile_name
+            test_data_file = os.path.join(
+                test_data_path, "multi_features_" + test_datafile_name
             )
+            test_data_file_cwt = os.path.join(
+                test_data_path, "multi_features_cwt_" + test_datafile_name
+            )
+        else:
+            test_data_file = os.path.join(test_data_path, test_datafile_name)
 
         # add loss values to tensorboard
         if args.add_tensorboard:
