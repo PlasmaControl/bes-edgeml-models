@@ -9,8 +9,8 @@
 #SBATCH --mail-type=fail
 #SBATCH --mail-type=end
 #SBATCH --mail-user=lmalhotra@wisc.edu
-#SBATCH --output=logs/slurm_out_%j-%2t.log
-#SBATCH --error=logs/slurm_err_%j-%2t.log
+#SBATCH --output=logs/slurm_out_%j.log
+#SBATCH --error=logs/slurm_err_%j.log
 module list
 
 source "/scratch/gpfs/lm9679/miniconda3/etc/profile.d/conda.sh"
