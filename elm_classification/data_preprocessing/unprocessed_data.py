@@ -53,6 +53,7 @@ class UnprocessedData(BaseData):
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
             _labels = np.array(elm_event["labels"], dtype=np.float32)
+
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -67,25 +68,28 @@ class UnprocessedData(BaseData):
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
 
-            # get all the allowed indices till current time step
-            indices_data = self._get_valid_indices(
-                _signals=_signals,
-                _labels=_labels,
-                window_start_indices=window_start,
-                elm_start_indices=elm_start,
-                elm_stop_indices=elm_stop,
-                valid_t0=valid_t0,
-                labels=labels,
-                signals=signals,
-            )
-            (
-                signals,
-                labels,
-                valid_t0,
-                window_start,
-                elm_start,
-                elm_stop,
-            ) = indices_data
+            if len(_labels) < 2000:
+                continue
+            else:
+                # get all the allowed indices till current time step
+                indices_data = self._get_valid_indices(
+                    _signals=_signals,
+                    _labels=_labels,
+                    window_start_indices=window_start,
+                    elm_start_indices=elm_start,
+                    elm_stop_indices=elm_stop,
+                    valid_t0=valid_t0,
+                    labels=labels,
+                    signals=signals,
+                )
+                (
+                    signals,
+                    labels,
+                    valid_t0,
+                    window_start,
+                    elm_start,
+                    elm_stop,
+                ) = indices_data
 
         _labels = np.array(labels)
 
