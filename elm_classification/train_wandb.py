@@ -9,18 +9,55 @@ import wandb
 wandb.login()
 
 import torch
+import pywt
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 
 from options.train_arguments import TrainArguments
-from src import utils, run, dataset
-from models.feature_gradients_model import SpatialFeatures, TemporalFeatures
+from src import utils, trainer, dataset
+from models import feature_gradients_model, multi_features_model
+
+
+def get_multi_features(args, train_data, valid_data):
+    print(f"Train data shape: {train_data[0].shape}")
+    print(f"Valid data shape: {valid_data[0].shape}")
+    train_data_cwt = list(train_data)
+    valid_data_cwt = list(valid_data)
+    widths = np.arange(1, args.signal_window_size + 1)
+    train_data_cwt[0], _ = pywt.cwt(
+        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
+    valid_data_cwt[0], _ = pywt.cwt(
+        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
+    train_data_cwt = tuple(train_data_cwt)
+    valid_data_cwt = tuple(valid_data_cwt)
+    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
+    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
+
+    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
+    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
+
+    assert (
+        train_data[0].shape[0] == train_data_cwt[0].shape[0]
+    ), "CWT train data leading dimension does not match with the raw data!"
+    assert (
+        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
+    ), "CWT valid data leading dimension does not match with the raw data!"
+
+    return train_data_cwt, valid_data_cwt
 
 
 def make(
-    args: argparse.Namespace, train_data: tuple, valid_data: tuple
+    args: argparse.Namespace,
+    train_data: tuple,
+    valid_data: tuple,
+    train_data_cwt: Union[None, tuple] = None,
+    valid_data_cwt: Union[None, tuple] = None,
 ) -> tuple:
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -33,6 +70,19 @@ def make(
         logger=LOGGER,
         phase="validation",
     )
+
+    if args.multi_features and (
+        train_data_cwt is not None and valid_data_cwt is not None
+    ):
+        train_dataset_cwt = dataset.ELMDataset(
+            args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
+        )
+        valid_dataset_cwt = dataset.ELMDataset(
+            args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
+        )
+        # create a combined dataset
+        train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
+        valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -81,8 +131,8 @@ def make(
 def get_model(args: argparse.Namespace) -> object:
     model_cls = utils.create_model(args.model_name)
     if args.model_name == "feature_gradients":
-        spatial = SpatialFeatures(args)
-        temporal = TemporalFeatures()
+        spatial = feature_gradients_model.SpatialFeatures(args)
+        temporal = feature_gradients_model.TemporalFeatures()
         model = model_cls(args, spatial, temporal)
     elif args.model_name == "mts_cnn":
         model = model_cls(
@@ -92,6 +142,11 @@ def get_model(args: argparse.Namespace) -> object:
             diag_fc_units=[16, 16, 64],
             detect_fc_units=[64, 32, 1],
         )
+    elif args.model_name == "multi_features":
+        raw_model = multi_features_model.RawFeatureModel(args)
+        fft_model = multi_features_model.FFTFeatureModel(args)
+        cwt_model = multi_features_model.CWTFeatureModel(args)
+        model = model_cls(args, raw_model, fft_model, cwt_model)
     else:
         model = model_cls(args)
 
@@ -181,17 +236,23 @@ def train_loop(
     #     )
     #     fold = None
     with wandb.init(
-        project=f"{args.model_name}_{time.strftime('%m%d%Y')}",
+        project=f"multi_features_{time.strftime('%m%d%Y')}",  # f"{args.model_name}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
         wandb.run.name = f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}"
         # containers to hold train and validation losses
         train_loss = []
         valid_loss = []
+        train_data_cwt = None
+        valid_data_cwt = None
         test_data_path, model_ckpt_path = utils.create_output_paths(
             args, infer_mode=False
         )
         test_data_file = os.path.join(test_data_path, test_datafile_name)
+        if args.multi_features:
+            test_data_file_cwt = os.path.join(
+                test_data_path, "cwt_" + test_datafile_name
+            )
 
         # add loss values to tensorboard
         if args.add_tensorboard:
@@ -221,6 +282,11 @@ def train_loop(
             shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
         )
 
+        if args.multi_features:
+            train_data_cwt, valid_data_cwt = get_multi_features(
+                args, train_data, valid_data
+            )
+
         # dump test data into to a file
         if not args.dry_run:
             with open(test_data_file, "wb") as f:
@@ -233,17 +299,17 @@ def train_loop(
                     },
                     f,
                 )
-
-        # create image transforms
-        if (
-            (args.model_name.startswith("feature"))
-            or (args.model_name.startswith("cnn"))
-            or (args.model_name.startswith("rnn"))
-            # or (args.model_name.startswith("mts_cnn"))
-        ):
-            transforms = None
-        else:
-            transforms = dataset.get_transforms(args)
+            if args.multi_features:
+                with open(test_data_file_cwt, "wb") as f:
+                    pickle.dump(
+                        {
+                            "signals": valid_data_cwt[0],
+                            "labels": valid_data_cwt[1],
+                            "sample_indices": valid_data_cwt[2],
+                            "window_start": valid_data_cwt[3],
+                        },
+                        f,
+                    )
 
         LOGGER.info("-" * 50)
         LOGGER.info(f"       Training with model: {args.model_name}       ")
@@ -257,11 +323,11 @@ def train_loop(
             optimizer,
             scheduler,
             criterion,
-        ) = make(args, train_data, valid_data)
+        ) = make(args, train_data, valid_data, train_data_cwt, valid_data_cwt)
 
         # display model details
-        if desc:
-            display_model_details(args, model)
+        # if desc:
+        #     display_model_details(args, model)
 
         # define variables for ROC and loss
         best_score = 0
@@ -269,13 +335,14 @@ def train_loop(
 
         # instantiate training object
         use_rnn = True if args.data_preproc == "rnn" else False
-        trainer = run.Run(
+        engine = trainer.Run(
             model,
             device=args.device,
             criterion=criterion,
             optimizer=optimizer,
             use_focal_loss=args.focal_loss,
             use_rnn=use_rnn,
+            multi_features=args.multi_features,
         )
 
         # dummy input, need it for saving the model to ONNX format
@@ -286,8 +353,18 @@ def train_loop(
             8,
             8,
         )
+        input_size_cwt = (
+            args.batch_size,
+            1,
+            args.signal_window_size,
+            args.signal_window_size,
+            8,
+            8,
+        )
         dummy_input = torch.rand(*input_size)
+        dummy_input_cwt = torch.rand(*input_size_cwt)
         dummy_input = dummy_input.to(args.device)
+        dummy_input_cwt = dummy_input_cwt.to(args.device)
 
         # tell wandb to watch what the model gets up to: gradients, weights, etc.
         wandb.watch(model, criterion, log="all", log_freq=10)
@@ -295,14 +372,14 @@ def train_loop(
         for epoch in range(args.n_epochs):
             start_time = time.time()
             # train
-            avg_loss = trainer.train(
+            avg_loss = engine.train(
                 train_loader, epoch, print_every=args.train_print_every
             )
             train_loss.append(avg_loss)
             training_log(avg_loss, epoch, mode="Training")
 
             # evaluate
-            avg_val_loss, preds, valid_labels = trainer.evaluate(
+            avg_val_loss, preds, valid_labels = engine.evaluate(
                 valid_loader, print_every=args.valid_print_every
             )
             valid_loss.append(avg_val_loss)
@@ -334,7 +411,7 @@ def train_loop(
                 f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}"
             )
             LOGGER.info(
-                f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}"
+                f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed:.3f}"
             )
 
             if roc_score > best_score:
@@ -354,15 +431,16 @@ def train_loop(
                     )
                     LOGGER.info(f"Model saved to: {model_save_path}")
 
-                    # export the model to ONNX to visualize the graph in netron
-                    torch.onnx.export(
-                        model,
-                        dummy_input,
-                        f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx",
-                    )
-                    wandb.save(
-                        f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx"
-                    )
+                    ## PyTorch ONNX does not support FFT
+                    # # export the model to ONNX to visualize the graph in netron
+                    # torch.onnx.export(
+                    #     model,
+                    #     (dummy_input, dummy_input_cwt),
+                    #     f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx",
+                    # )
+                    # wandb.save(
+                    #     f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}.onnx"
+                    # )
 
             if avg_val_loss < best_loss:
                 best_loss = avg_val_loss
