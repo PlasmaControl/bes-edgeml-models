@@ -205,7 +205,7 @@ def training_log(
             raise ValueError("ROC and f1 values are not passed.")
     else:
         wandb.log({"epoch": epoch, "training loss": loss}, step=epoch)
-    print(f"{mode} loss after epoch {epoch}: {loss:.4f}")
+    print(f"{mode} loss after epoch {epoch+1}: {loss:.4f}")
 
 
 def train_loop(

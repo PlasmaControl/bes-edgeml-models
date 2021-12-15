@@ -190,7 +190,8 @@ class MultiFeaturesModel(nn.Module):
         self.raw_features_model = raw_features_model
         self.fft_features_model = fft_features_model
         self.cwt_features_model = cwt_features_model
-        self.fc1 = nn.Linear(in_features=144, out_features=128)
+        input_features = 144 if self.args.use_fft else 96
+        self.fc1 = nn.Linear(in_features=input_features, out_features=128)
         self.fc2 = nn.Linear(in_features=128, out_features=32)
         self.fc3 = nn.Linear(in_features=32, out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
@@ -198,10 +199,16 @@ class MultiFeaturesModel(nn.Module):
 
     def forward(self, x_raw, x_cwt):
         # extract raw and cwt processed signals
-        raw_features = self.raw_features_model(x_raw)
-        fft_features = self.fft_features_model(x_raw)
-        cwt_features = self.cwt_features_model(x_cwt)
-        x = torch.cat([raw_features, fft_features, cwt_features], dim=1)
+        if self.args.use_fft:
+            raw_features = self.raw_features_model(x_raw)
+            fft_features = self.fft_features_model(x_raw)
+            cwt_features = self.cwt_features_model(x_cwt)
+            x = torch.cat([raw_features, fft_features, cwt_features], dim=1)
+        else:
+            raw_features = self.raw_features_model(x_raw)
+            cwt_features = self.cwt_features_model(x_cwt)
+            x = torch.cat([raw_features, cwt_features], dim=1)
+
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)
