@@ -6,7 +6,8 @@ from typing import Union
 
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
+
+# from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 import pywt
@@ -90,15 +91,15 @@ def train_loop(
             test_data_path, "cwt_" + test_datafile_name
         )
 
-    # add loss values to tensorboard
-    if args.add_tensorboard:
-        writer = SummaryWriter(
-            log_dir=os.path.join(
-                args.log_dir,
-                "tensorboard",
-                f"{args.model_name}{args.filename_suffix}",
-            )
-        )
+    # # add loss values to tensorboard
+    # if args.add_tensorboard:
+    #     writer = SummaryWriter(
+    #         log_dir=os.path.join(
+    #             args.log_dir,
+    #             "tensorboard",
+    #             f"{args.model_name}{args.filename_suffix}",
+    #         )
+    #     )
 
     LOGGER.info("-" * 30)
 
