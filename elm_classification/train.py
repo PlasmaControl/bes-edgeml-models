@@ -79,6 +79,8 @@ def train_loop(
     # containers to hold train and validation losses
     train_loss = []
     valid_loss = []
+    roc_scores = []
+    f1_scores = []
     test_data_path, model_ckpt_path = utils.create_output_paths(
         args, infer_mode=False
     )
@@ -313,6 +315,10 @@ def train_loop(
             writer.close()
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
+        roc_scores.append(roc_score)
+        thresh = 0.35
+        f1 = f1_score(valid_labels, (preds > thresh).astype(int))
+        f1_scores.append(f1)
         elapsed = time.time() - start_time
 
         LOGGER.info(
@@ -344,7 +350,28 @@ def train_loop(
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
-
+    train_loss = np.array(train_loss)
+    valid_loss = np.array(valid_loss)
+    roc_scores = np.array(roc_scores)
+    f1_scores = np.array(f1_scores)
+    with open(
+        os.path.join(
+            "outputs",
+            f"signal_window_{args.signal_window_size}",
+            f"label_look_ahead_{args.label_look_ahead}",
+            "training_metrics" f"{args.model_name}.pkl",
+        ),
+        "wb",
+    ) as f:
+        pickle.dump(
+            {
+                "train_loss": train_loss,
+                "valid_loss": valid_loss,
+                "roc_scores": roc_scores,
+                "f1_scores": f1_scores,
+            },
+            f,
+        )
     # # save the predictions in the valid dataframe
     # valid_folds["preds"] = torch.load(
     #     os.path.join(
