@@ -326,7 +326,7 @@ def train_loop(
             f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}"
         )
         LOGGER.info(
-            f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}"
+                f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed}"
         )
 
         if roc_score > best_score:
