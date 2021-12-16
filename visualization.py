@@ -8,12 +8,14 @@ import argparse
 import logging
 import os
 import re
+
+from matplotlib.cm import Set1
 import numpy as np
-import shap
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
+from scipy.ndimage import gaussian_filter
 import sklearn.preprocessing
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn import decomposition as comp
@@ -23,8 +25,8 @@ from torch.optim import SGD
 from flashtorch.activmax import GradientAscent
 
 from src.utils import get_logger, create_output_paths
+from options.test_arguments import TestArguments
 from analyze import *
-
 from visualizations.utils.utils import get_dataloader, get_model
 
 
@@ -83,30 +85,19 @@ class Visualizations:
 
     def _get_test_dataset(self):
 
-        (
-            test_data_dir,
-            model_ckpt_dir,
-            clf_report_dir,
-            plot_dir,
-            roc_dir,
-        ) = create_output_paths(self.args, infer_mode=True)
+        (test_data_dir, model_ckpt_dir, clf_report_dir, plot_dir, roc_dir,) = create_output_paths(self.args,
+                                                                                                  infer_mode=True)
 
         # get the test data and dataloader
-        test_fname = os.path.join(
-            test_data_dir,
-            f"test_data_{self.args.data_mode}_lookahead_{self.args.label_look_ahead}{self.filename_suffix}.pkl",
-        )
+        accepted_preproc = ['wavelet']
+        test_fname = os.path.join(test_data_dir,
+                                  f'test_data_lookahead_{self.args.label_look_ahead}{self.filename_suffix}'
+                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}.pkl', )
 
         print(f"Using test data file: {test_fname}")
-        test_data, test_dataset = get_test_dataset(
-            args, file_name=test_fname, logger=self.logger
-        )
-        test_loader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            drop_last=True,
-        )
+        test_data, test_dataset = get_test_dataset(args, file_name=test_fname, logger=self.logger)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
+                                                  drop_last=True)
 
         return test_data, test_loader
 
@@ -133,35 +124,9 @@ class Visualizations:
 
         self.plot_feature_map(layer, n, num_filters, act)
 
-        # for idx in range(act.size(0)):
-        #     axarr[idx].imshow(act[idx])
-        #
-        # plt.show()
+        # for idx in range(act.size(0)):  #     axarr[idx].imshow(act[idx])  #  # plt.show()
 
-        # for i in range (38000, 39000, 100):
-        #     self.plot_(i, n)
-
-    def shap(self):
-        batch = next(iter(self.test_set))
-        signal_windows, labels = batch
-
-        pred_dict = predict_v2(args=self.args,
-                               model=self.model,
-                               test_data=(signal_windows, labels),
-                               hook_layer='conv')
-
-        activations = torch.tensor(pred_dict['activations'])
-
-        background = activations[:30]
-        to_explain = activations[30:]
-
-        e = shap.DeepExplainer(self.model, background)
-        shap_values = e.shap_values(to_explain)
-
-        shap_numpy = [np.swapaxes(np.swapaxes(s, 1, -1), 1, 2) for s in shap_values]
-        test_numpy = np.swapaxes(np.swapaxes(to_explain.numpy(), 1, -1), 1, 2)
-
-        shap.image_plot(shap_numpy, -test_numpy)
+        # for i in range (38000, 39000, 100):  #     self.plot_(i, n)
 
     def plot_feature_map(self, layer: str, n: int, num_filters: int, activation):
 
@@ -338,9 +303,13 @@ class Visualizations:
         output = g_ascent.optimize3D(layer, filter_idx=filter_idx, num_iter=num_iter)
         return output
 
-    def generate_csi(self, target_class, iterations=150, **kwargs):
+    def generate_csi(self, target_class, iterations=150, initial_lr=6, random_state=None, blur=None,
+                     l2_weight: float = 0):
         """
 
+        @param initial_lr: Learning rate of optimizer
+        @param random_state: State for seed input
+        @param blur: Apply Gaussian Blur after each iteration with sigma specified by blur
         @param target_class: Options: ['ELM' | 'pre-ELM']
         @param iterations: number of times to update input.
         @return: np.array of every 10th iteration of optimizer
@@ -354,28 +323,48 @@ class Visualizations:
                      '0': torch.tensor([0], device=self.device, dtype=torch.float32)}[target_class.upper()]
             print(f'Target class: {target_class}; Label: {label.item()}')
         except KeyError:
-            raise ('Target classes are "ELM" or "pre-ELM"')
-
-        initial_lr = kwargs.pop('initial_lr', 6)
-        random_state = kwargs.pop('random_state', None)
+            raise 'Target classes are "ELM" or "pre-ELM"'
 
         self.model.eval()
 
         # generate initial random input
         np.random.seed(random_state)
-        generated = np.random.uniform(0, 10, size=(self.args.signal_window_size, 8, 8))
-        # Top two rows of BES are capped at 10, bottom 6 are capped at 5
-        generated[:, 2:, :] /= 2
-        generated = torch.tensor(generated,
-                                 dtype=torch.float32,
-                                 device=self.device
-                                 ).unsqueeze(0).unsqueeze(0).requires_grad_()
+        # generated = np.random.uniform(0, 10, size=(self.args.signal_window_size, 8, 8))
+        # # Top two rows of BES are capped at 10, bottom 6 are capped at 5
+        # generated[:, 4:, :] /= 2
+        # generated = torch.tensor(generated, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)\
+        #     .requires_grad_()
+        # generated_i = generated
+
+        # get test batch with elm or pre elm
+
+        for batch in iter(self.test_set):
+            if label in batch[1]:
+
+                offset = np.random.randint(0, len(batch[1]))
+                g_idx = np.argmax(batch[1] == label)
+                if batch[1][g_idx - offset] != label:
+                    continue
+
+                generated = batch[0][g_idx - offset].unsqueeze(0)
+                generated_i = generated
+
+                # check if model prediction is true positive/negative
+                model_output = self.model(generated)
+                if model_output >= self.args.threshold and label == 1:
+                    break
+                elif model_output < self.args.threshold and label == 1:
+                    continue
+                elif model_output < self.args.threshold and label == 0:
+                    break
+                elif model_output >= self.args.threshold and label == 0:
+                    continue
 
         generated_inputs = []
         model_outs = []
         for i in range(1, iterations):
             # Define optimizer for the image
-            optimizer = SGD([generated], lr=initial_lr)
+            optimizer = SGD([generated], lr=initial_lr, weight_decay=l2_weight)
             # Forward pass
             output = self.model(generated)
 
@@ -383,8 +372,8 @@ class Visualizations:
             loss_fn = nn.BCEWithLogitsLoss()
             class_loss = loss_fn(output.view(-1), label)
 
-            if i + 1 % 10 == 0 or i == iterations - 1:
-                print(f'Iteration: {i + 1}, Loss {class_loss.item():.2f}')
+            if i % 10 == 0 or i == iterations - 1:
+                print(f'Iteration: {i}, Loss {class_loss.item():.2f}')
             # Zero grads
             self.model.zero_grad()
             # Backward
@@ -392,13 +381,17 @@ class Visualizations:
             # Update image
             optimizer.step()
 
-            if (i + 1) % 10 == 0 or i == (iterations - 1):
+            if i % 10 == 0 or i == (iterations - 1):
                 # append image to list
                 generated_inputs.append(generated)
                 model_outs.append(output)
 
-        return tuple((im.detach().numpy().squeeze(), torch.sigmoid(model_out_).item()) for im, model_out_ in
-                     zip(generated_inputs, model_outs))
+            if blur:
+                generated = torch.tensor(gaussian_filter(generated.squeeze().detach().numpy(), blur)).unsqueeze(
+                    0).unsqueeze(0).requires_grad_()
+
+        return tuple((im.detach().numpy().squeeze(), torch.sigmoid(model_out_).item(),
+                      generated_i.detach().numpy().squeeze()) for im, model_out_ in zip(generated_inputs, model_outs))
 
 
 class PCA():
@@ -440,11 +433,8 @@ class PCA():
 
         # get prediction dictionary containing truncated signals, labels,
         # micro-/macro-predictions and elm_time
-        pred_dict = predict_v2(args=self.args,
-                               test_data=self.test_data,
-                               model=self.model,
-                               device=self.device,
-                               hook_layer=self.layer)
+        pred_dict = predict(args=self.args, test_data=self.test_data, model=self.model, device=self.device,
+                            hook_layer=self.layer)
 
         return pred_dict
 
@@ -536,6 +526,9 @@ class PCA():
             fig.show()
 
         if plot_type == 'grid':
+
+            from matplotlib.lines import Line2D
+
             fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(16, 9))
             for ax in axs.flat:
                 ax.set_axis_off()
@@ -546,7 +539,7 @@ class PCA():
                     pc_x = decomposed_t[:, pc_col - pc_row]
                     pc_y = decomposed_t[:, pc_col + 1]
                     for start, end in start_end:
-                        colors = matplotlib.cm.Set1((1 - elm_labels[start:end]) / 9)
+                        colors = Set1((1 - elm_labels[start:end]) / 9)
                         if pc_row == pc_col:
                             x = np.arange(end - start)
                             y = pc_y[start:end]
@@ -560,7 +553,6 @@ class PCA():
                                    s=4)
                     ax.set_ylabel(f'PC_{pc_col + 1}', fontsize='large')
                     ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_col - pc_row}', fontsize='large')
-            from matplotlib.lines import Line2D
             legend_elements = [Line2D([0], [0], marker='o', color=colors[0], label='pre-ELM'),
                                Line2D([0], [0], marker='o', color=colors[-1], label='ELM')]
 
@@ -600,13 +592,9 @@ class PCA():
             # p_arr /= p_arr.max()
             ch_22_arr /= ch_22_arr.max()
 
-            df = pd.DataFrame({'ELM_ID': id_arr,
-                               'Time': pc_arr[:, 0],
-                               'Label': l_arr.astype(str),
-                               'BES_CH_22': ch_22_arr,
-                               'Predictions': p_arr,
-                               'PC_1': pc_arr[:, 1],
-                               'PC_2': pc_arr[:, 2]})
+            df = pd.DataFrame(
+                    {'ELM_ID': id_arr, 'Time': pc_arr[:, 0], 'Label': l_arr.astype(str), 'BES_CH_22': ch_22_arr,
+                     'Predictions': p_arr, 'PC_1': pc_arr[:, 1], 'PC_2': pc_arr[:, 2]})
 
             df_melt = pd.melt(df, id_vars=['Time', 'Label'], value_vars=['PC_1', 'PC_2'],
                               var_name='PC', value_name='Activation')
@@ -734,16 +722,14 @@ class PCA():
         kernels = self.elm_predictions[self.elm_id[0]]['weights']
         pca_weights = self.pca_dict['components']
 
-        K_w = np.multiply(
-            kernels,
-            pca_weights[0].repeat(np.prod(kernels.shape[1:])).reshape(kernels.shape)
-        )
+        K_w = np.multiply(kernels, pca_weights[0].repeat(np.prod(kernels.shape[1:])).reshape(kernels.shape))
 
         K_ws = np.sum(K_w, axis=0)
 
         return K_w
 
-    def FFT(self, kernel, show_plot: bool = False):
+    @staticmethod
+    def FFT(kernel, show_plot: bool = False):
 
         fft = np.fft.rfftn(kernel, axes=(1, 2, 0))
         if show_plot:
@@ -805,7 +791,7 @@ class PCA():
     def make_arrays(dic: dict, key: str):
 
         """
-        Helper function to return value from predict_v2 elm_prediction dict key
+        Helper function to return value from predict elm_prediction dict key
         as numpy array along with start and stop indices of ELM.
         ----------------------------------------------------
         :return:   {
@@ -868,8 +854,7 @@ def plot_signal(pca: PCA):
     fig, ax = plt.subplots(1, 1)
     trans = mtransforms.blended_transform_factory(ax.transData, ax.transAxes)
     ax.plot(time, signal)
-    ax.fill_between(time, 0, 1, where=pca.elm_predictions[0]['labels'],
-                    facecolor='red', alpha=0.5, transform=trans)
+    ax.fill_between(time, 0, 1, where=pca.elm_predictions[0]['labels'], facecolor='red', alpha=0.5, transform=trans)
     ax.set_ylabel('Channel Activation (V)')
     ax.set_xlabel('Time (ns)')
     plt.show()
@@ -899,7 +884,7 @@ def plot_corr_layers(viz_obj):
     return None
 
 
-def make_fft(pca: PCA):
+def make_fft(in_block):
     pca = PCA(viz, layer='conv')
     pca.perform_PCA()
     kernels = pca.decompose_kernel()
@@ -953,60 +938,64 @@ def make_max_act(viz: Visualizations, num_filters=32, plots_per_page=4):
     plt.show()
 
 
-def make_gen_csi(viz: Visualizations):
+def make_gen_csi(viz: Visualizations, num_iterations: int = 25, use_fft: bool = False, blur: float = None,
+                 l2_weight: float = 0):
     cls_lst = ['pre-ELM', 'ELM']
-
-    fig, axs = plt.subplots(2, 1)
-    for cls, ax in zip(cls_lst, axs):
+    out_lst = []
+    model_out_lst = []
+    for cls in cls_lst:
         gen_outs = []
         gen_model_outs = []
-        for x in range(150):
-            out, model_out = viz.generate_csi(target_class=cls, iterations=10, random_state=x)[-1]
-            gen_outs.append(out)
-            gen_model_outs.append(model_out)
+        if use_fft:
+            for x in range(num_iterations):
+                out, model_out, gen_i = \
+                viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[-1]
+                frame = np.fft.rfftn(out, axes=(1, 2, 0))
+                gen_outs.append((np.log(np.abs(np.fft.fftshift(frame)) ** 2)))
+                gen_model_outs.append(model_out)
+        else:
+            for x in range(num_iterations):
+                out, model_out, gen_i = \
+                viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[-1]
+                gen_outs.append(out)
+                gen_model_outs.append(model_out)
 
         out = np.array(gen_outs).mean(axis=0)
         model_out = np.array(gen_model_outs).mean(axis=0)
 
-        im = ax.imshow(out.transpose((1, 2, 0)).reshape(8, 8 * out.shape[0]))
+        # out = gen_i
+        # model_out_lst.append(torch.sigmoid(viz.model(torch.tensor(gen_i).unsqueeze(0).unsqueeze(0))).item())
+
+        out_lst.append(out)
+        model_out_lst.append(model_out)
+
+    _min, _max = np.amin(out_lst), np.amax(out_lst)
+    fig, axs = plt.subplots(2, 1)
+    for i in range(2):
+        ax = axs[i]
+        # model_output = torch.sigmoid(viz.model(torch.tensor(out_lst[i][np.newaxis, np.newaxis]))).item()
+        im = ax.imshow(out_lst[i].transpose((1, 2, 0)).reshape(8, 8 * out.shape[0]), vmin=_min, vmax=_max)
         ax.set_xticks(np.arange(-.5, 8 * out.shape[0] + 0.5, 8), minor=True)
+        ax.set_xticklabels([])
         ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
         ax.grid(visible=None, which='major', axis='both')
-        ax.set_title(cls)
-        ax.set_ylabel(f'Model Output:\n{model_out.item():0.2f}', rotation=0, labelpad=35)
+        ax.set_title(cls_lst[i])
+        ax.set_ylabel(f'Model Output:\n{model_out_lst[i]:0.2f}', rotation=0, labelpad=35)
 
-    fig.suptitle(f'Class Maximizing Inputs for {args.model_name} Model')
+    fig.suptitle(f'Fourier Transformed Generated Inputs for {args.model_name} Model')
     fig.colorbar(im, ax=axs.ravel().tolist(), orientation='horizontal')
     plt.show()
+
+    return {cls_lst[0]: (model_out_lst[0], out_lst[0]), cls_lst[1]: (model_out_lst[1], out_lst[1])}
 
 
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
-    LOGGER = get_logger(
-        script_name=__name__,
-        log_file=os.path.join(
-            args.log_dir,
-            f"output_logs_{args.model_name}_{args.data_mode}{args.filename_suffix}.log",
-        ),
-    )
+    LOGGER = get_logger(script_name=__name__,
+            log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_{args.filename_suffix}.log", ), )
 
     viz = Visualizations(args=args, logger=LOGGER)
-    elm_idx = [0]
-    pca = PCA(viz, layer='fc2', elm_index=elm_idx)
-    for i, idx in enumerate(elm_idx):
-        elm = pca.elm_predictions[idx]
-        signals = elm['signals']
-        labels = elm['labels']
-        stop = 0
-        for start in range(0, len(signals), pca.args.signal_window_size):
-            stop += pca.args.signal_window_size
-            if stop <= len(labels):
-                model_out = viz.generate_csi(target_class=int(labels[stop]), iterations=30)
-                signals[start:stop] = model_out[-1][0]
-            else:
-                model_out = viz.generate_csi(target_class=int(labels[-1]), iterations=30)
-                signals[start:] = model_out[-1][0][:len(labels) - start]
-        elm['micro_predictions'] = labels
-    pca.perform_PCA()
-    pca.plot_pca(plot_type='grid')
-    exit()
+    out = make_gen_csi(viz, use_fft=True, blur=0.1)
+    pelm = torch.tensor(out['pre-ELM'][1]).unsqueeze(0).unsqueeze(0)
+    elm = torch.tensor(out['ELM'][1]).unsqueeze(0).unsqueeze(0)
+    print(torch.sigmoid(viz.model(pelm)).item(), torch.sigmoid(viz.model(elm)).item())

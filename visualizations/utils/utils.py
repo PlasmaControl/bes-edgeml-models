@@ -61,14 +61,16 @@ def get_model(args: argparse.Namespace,
     _, model_cpt_path = src.utils.create_output_paths(args)
     gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
     model_name = args.model_name + gen_type_suffix
+    accepted_preproc = ['wavelet']
 
-    model_cpt_file = os.path.join(model_cpt_path,
-                                  f'{args.model_name}_{args.data_mode}_lookahead_{args.label_look_ahead}{gen_type_suffix}.pth')
+    model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
+                                                  f'{gen_type_suffix}'
+                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}.pth')
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
     model_cls = src.utils.create_model(args.model_name)
     model = model_cls(args)
-    state_dict = torch.load(model_cpt_file)['model']
+    state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
     model.load_state_dict(state_dict)
     logger.info(f'Loaded {model_name} state dict.')
 
