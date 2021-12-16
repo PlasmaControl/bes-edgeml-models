@@ -153,10 +153,8 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-/visualizations/feature_maps/
-/visualizations/node_outputs/
-/visualizations/PCA/
-/visualizations/torchviz_diagrams/
+/visualizations/outputs/
+/visualizations/PATH/
 /logs/
 /visualizations/notes/
 /src/outputs
@@ -176,4 +174,4 @@ outputs/signal_window_16/label_look_ahead_200/roc/roc_details_lr_manual_lookahea
 outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead_50.csv
 *.pth
 *.pkl
-/visualizations/PATH/
+
