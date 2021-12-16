@@ -329,13 +329,13 @@ def train_loop(
                 f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed}"
         )
 
-        if roc_score > best_score:
-            best_score = roc_score
+        if f1 > best_score:
+            best_score = f1 
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
             )
             if not args.dry_run:
-                # save the model if best ROC is found
+                # save the model if best f1 score is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
                     f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
@@ -360,7 +360,8 @@ def train_loop(
             "outputs",
             f"signal_window_{args.signal_window_size}",
             f"label_look_ahead_{args.label_look_ahead}",
-            "training_metrics" f"{args.model_name}.pkl",
+            "training_metrics", 
+            f"{args.model_name}.pkl"
         ),
         "wb",
     ) as f:

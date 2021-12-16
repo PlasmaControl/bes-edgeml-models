@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=20
 #SBATCH --gres=gpu:1
 #SBATCH --mem=48G
 #SBATCH --time=0-5
@@ -15,8 +15,8 @@ module list
 
 source "/scratch/gpfs/lm9679/miniconda3/etc/profile.d/conda.sh"
 
-conda activate torch
+conda activate pt
 
 echo $(which python)
 
-python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 0 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features --use_fft
+python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 400 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features
