@@ -66,7 +66,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # dump test data into to a file
     if not args.dry_run:
-        with open(test_data_file, "wb+") as f:
+        with open(test_data_file, "w+b") as f:
             pickle.dump({"signals": valid_data[0], "labels": valid_data[1], "sample_indices": valid_data[2],
                     "window_start": valid_data[3], }, f, )
 

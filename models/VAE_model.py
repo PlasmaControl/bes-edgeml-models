@@ -47,14 +47,21 @@ class VAEModel(nn.Module):
         pool_size = [1, maxpool_size, maxpool_size]
         filter_size = (int(self.args.signal_window_size), 4, 4)
 
-        self.encoder = nn.Sequential(OrderedDict([('maxpool', nn.MaxPool3d(kernel_size=pool_size)),
-                ('conv', nn.Conv3d(in_channels=1, out_channels=num_filters, kernel_size=filter_size)),
-                ('dropout3d', nn.Dropout3d(p=dropout_rate)), ('relu3d', nn.LeakyReLU(negative_slope=negative_slope)),
-                ('flatten', nn.Flatten()), ('fc1', nn.Linear(in_features=num_filters, out_features=fc_units[0])),
-                ('dropout1', nn.Dropout(p=dropout_rate)), ('relu1', nn.LeakyReLU(negative_slope=negative_slope)),
-                ('fc2', nn.Linear(in_features=fc_units[0], out_features=fc_units[1])),
-                ('dropout2', nn.Dropout(p=dropout_rate)), ('relu2', nn.LeakyReLU(negative_slope=negative_slope)),
-                ('fc3', nn.Linear(in_features=fc_units[1], out_features=self.latent_dim * 2))])
+        self.encoder = nn.Sequential(
+            OrderedDict(
+                [
+                    ('maxpool', nn.MaxPool3d(kernel_size=pool_size)),
+                    ('conv', nn.Conv3d(in_channels=1, out_channels=num_filters, kernel_size=filter_size)),
+                    ('dropout3d', nn.Dropout3d(p=dropout_rate)),
+                    ('relu3d', nn.LeakyReLU(negative_slope=negative_slope)),
+                    ('flatten', nn.Flatten()),
+                    ('fc1', nn.Linear(in_features=num_filters, out_features=fc_units[0])),
+                    ('dropout1', nn.Dropout(p=dropout_rate)),
+                    ('relu1', nn.LeakyReLU(negative_slope=negative_slope)),
+                    ('fc2', nn.Linear(in_features=fc_units[0], out_features=fc_units[1])),
+                    ('dropout2', nn.Dropout(p=dropout_rate)),
+                    ('relu2', nn.LeakyReLU(negative_slope=negative_slope)),
+                    ('fc3', nn.Linear(in_features=fc_units[1], out_features=self.latent_dim * 2))])
 
         )
 
@@ -67,8 +74,9 @@ class VAEModel(nn.Module):
                         ('relu2_decoder', nn.LeakyReLU(negative_slope=negative_slope)),
                         ('fc3_decoder', nn.Linear(in_features=fc_units[0], out_features=num_filters)),
                         ('dropout3_decoder', nn.Dropout(p=dropout_rate)),
-                        ('relu3_decoder', nn.LeakyReLU(negative_slope=negative_slope)), (
-                'tconv_decoder', nn.ConvTranspose3d(in_channels=num_filters, out_channels=1, kernel_size=filter_size)),
+                        ('relu3_decoder', nn.LeakyReLU(negative_slope=negative_slope)),
+                 ('tconv_decoder',
+                  nn.Linear(in_features=num_filters, out_features=self.args.signal_window_size * 8 * 8)),
                         ('sigmoid_decoder', nn.Sigmoid())]))
 
     def encode(self, x):
@@ -87,7 +95,7 @@ class VAEModel(nn.Module):
             return mu
 
     def decode(self, z):
-        return self.decoder(z.T)
+        return self.decoder(*z).view(-1, 1, self.args.signal_window_size, 8, 8)
 
     def forward(self, x):
         mu, logvar = self.encode(x)

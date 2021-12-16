@@ -92,11 +92,11 @@ class Visualizations:
         accepted_preproc = ['wavelet']
         test_fname = os.path.join(test_data_dir,
                                   f'test_data_lookahead_{self.args.label_look_ahead}{self.filename_suffix}'
-                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}.pkl', )
+                                  f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
 
         print(f"Using test data file: {test_fname}")
-        test_data, test_dataset = get_test_dataset(args, file_name=test_fname, logger=self.logger)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
+        test_data, test_dataset = get_test_dataset(self.args, file_name=test_fname, logger=self.logger)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.args.batch_size, shuffle=False,
                                                   drop_last=True)
 
         return test_data, test_loader

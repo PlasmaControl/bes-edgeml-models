@@ -313,7 +313,7 @@ class Data:
         --------
             Tuple[np.ndarray, h5py.File]: Tuple containing ELM indices and file object.
         """
-        assert os.path.exists(self.datafile)
+        assert os.path.exists(self.datafile), f'{self.datafile} does not exist.'
         self.logger.info(f"Found datafile: {self.datafile}")
 
         # get ELM indices from datafile
