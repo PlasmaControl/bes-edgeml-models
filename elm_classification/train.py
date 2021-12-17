@@ -32,6 +32,7 @@ def get_multi_features(args, train_data, valid_data):
         valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
     valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
+
     train_data_cwt = tuple(train_data_cwt)
     valid_data_cwt = tuple(valid_data_cwt)
     print(f"CWT Train data shape: {train_data_cwt[0].shape}")
@@ -304,16 +305,16 @@ def train_loop(
         scheduler.step(avg_val_loss)
         # print(f"Train losses: {train_loss}")
         # print(f"Valid losses: {valid_loss}")
-        if args.add_tensorboard:
-            writer.add_scalars(
-                f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-                {
-                    "train_loss": avg_loss,
-                    "valid_loss": avg_val_loss,
-                },
-                epoch + 1,
-            )
-            writer.close()
+        # if args.add_tensorboard:
+        #     writer.add_scalars(
+        #         f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
+        #         {
+        #             "train_loss": avg_loss,
+        #             "valid_loss": avg_val_loss,
+        #         },
+        #         epoch + 1,
+        #     )
+        #     writer.close()
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores.append(roc_score)
@@ -326,11 +327,11 @@ def train_loop(
             f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}"
         )
         LOGGER.info(
-                f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed}"
+            f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed}"
         )
 
         if f1 > best_score:
-            best_score = f1 
+            best_score = f1
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
             )
@@ -360,8 +361,8 @@ def train_loop(
             "outputs",
             f"signal_window_{args.signal_window_size}",
             f"label_look_ahead_{args.label_look_ahead}",
-            "training_metrics", 
-            f"{args.model_name}.pkl"
+            "training_metrics",
+            f"{args.model_name}.pkl",
         ),
         "wb",
     ) as f:
