@@ -4,7 +4,6 @@ from typing import Callable
 
 import torch
 import numpy as np
-import albumentations as A
 
 
 class ELMDataset(torch.utils.data.Dataset):

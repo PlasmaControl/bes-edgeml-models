@@ -1,14 +1,10 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
+#SBATCH --ntasks=3
+#SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --mem=48G
-#SBATCH --time=0-5
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=fail
-#SBATCH --mail-type=end
-#SBATCH --mail-user=lmalhotra@wisc.edu
+#SBATCH --mem-per-cpu=4G
+#SBATCH --time=0-14
 #SBATCH --output=logs/slurm_out_%j.log
 #SBATCH --error=logs/slurm_err_%j.log
 module list
@@ -19,4 +15,7 @@ conda activate pt
 
 echo $(which python)
 
-python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 400 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features
+srun --exclusive -n 1 -c 8 python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 0 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features --use_fft &
+srun --exclusive -n 1 -c 8 python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 200 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features --use_fft &
+srun --exclusive -n 1 -c 8 python train.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 128 --label_look_ahead 400 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features --use_fft &
+wait
