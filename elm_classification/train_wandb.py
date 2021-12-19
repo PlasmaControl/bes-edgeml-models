@@ -25,7 +25,11 @@ def get_multi_features(args, train_data, valid_data):
     print(f"Valid data shape: {valid_data[0].shape}")
     train_data_cwt = list(train_data)
     valid_data_cwt = list(valid_data)
-    widths = np.arange(1, args.signal_window_size + 1)
+    widths = (
+        np.arange(1, args.signal_window_size + 1)
+        if args.signal_window_size <= 64
+        else np.arange(2, args.signal_window_size + 1, 2)
+    )
     train_data_cwt[0], _ = pywt.cwt(
         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
@@ -418,8 +422,8 @@ def train_loop(
                 f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed:.3f}"
             )
 
-            if roc_score > best_score:
-                best_score = roc_score
+            if f1 > best_score:
+                best_score = f1
                 LOGGER.info(
                     f"Epoch: {epoch + 1}, \tSave Best Score: {best_score:.4f} Model"
                 )
@@ -427,7 +431,7 @@ def train_loop(
                     # save the model if best ROC is found
                     model_save_path = os.path.join(
                         model_ckpt_path,
-                        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
+                        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
                     )
                     torch.save(
                         {"model": model.state_dict(), "preds": preds},
@@ -478,6 +482,6 @@ if __name__ == "__main__":
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl",
+        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
         config=config,
     )

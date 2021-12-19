@@ -23,7 +23,11 @@ def get_multi_features(args, train_data, valid_data):
     print(f"Valid data shape: {valid_data[0].shape}")
     train_data_cwt = list(train_data)
     valid_data_cwt = list(valid_data)
-    widths = np.arange(1, args.signal_window_size + 1)
+    widths = (
+        np.arange(1, args.signal_window_size + 1)
+        if args.signal_window_size <= 64
+        else np.arange(2, args.signal_window_size + 1, 2)
+    )
     train_data_cwt[0], _ = pywt.cwt(
         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
