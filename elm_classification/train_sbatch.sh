@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --mem-per-cpu=4G
-#SBATCH --time=0-14
+#SBATCH --time=0-12
 #SBATCH --output=logs/slurm_out_%j.log
 #SBATCH --error=logs/slurm_err_%j.log
 module list
