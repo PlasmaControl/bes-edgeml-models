@@ -343,7 +343,7 @@ def train_loop(
                 # save the model if best f1 score is found
                 model_save_path = os.path.join(
                     model_ckpt_path,
-                    f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
+                    f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
                 )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
@@ -366,7 +366,7 @@ def train_loop(
             f"signal_window_{args.signal_window_size}",
             f"label_look_ahead_{args.label_look_ahead}",
             "training_metrics",
-            f"{args.model_name}.pkl",
+            f"{args.model_name}{args.filename_suffix}.pkl",
         ),
         "wb",
     ) as f:
@@ -404,5 +404,5 @@ if __name__ == "__main__":
     train_loop(
         args,
         data_obj,
-        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl",
+        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
