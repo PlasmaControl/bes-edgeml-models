@@ -25,11 +25,13 @@ def get_multi_features(args, train_data, valid_data):
     print(f"Valid data shape: {valid_data[0].shape}")
     train_data_cwt = list(train_data)
     valid_data_cwt = list(valid_data)
-    widths = (
-        np.arange(1, args.signal_window_size + 1)
-        if args.signal_window_size <= 64
-        else np.arange(2, args.signal_window_size + 1, 2)
-    )
+    # widths = (
+    #     np.arange(1, args.signal_window_size + 1)
+    #     if args.signal_window_size <= 64
+    #     else np.arange(2, args.signal_window_size + 1, 2)
+    # )
+    num = int(np.log2(args.signal_window_size)) + 1
+    widths = np.geomspace(1, args.signal_window_size, num=num, endpoint=True)
     train_data_cwt[0], _ = pywt.cwt(
         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
@@ -243,7 +245,7 @@ def train_loop(
         project=f"multi_features_{time.strftime('%m%d%Y')}",  # f"{args.model_name}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
-        wandb.run.name = f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}"
+        wandb.run.name = f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}"
         # containers to hold train and validation losses
         train_loss = []
         valid_loss = []
