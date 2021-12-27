@@ -3,6 +3,7 @@ import time
 import pickle
 import argparse
 from typing import Union
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -106,6 +107,7 @@ def train_loop(
     #         )
     #     )
 
+    LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
 
     if not args.dry_run:
@@ -360,16 +362,15 @@ def train_loop(
     valid_loss = np.array(valid_loss)
     roc_scores = np.array(roc_scores)
     f1_scores = np.array(f1_scores)
-    with open(
-        os.path.join(
-            "outputs",
-            f"signal_window_{args.signal_window_size}",
-            f"label_look_ahead_{args.label_look_ahead}",
-            "training_metrics",
-            f"{args.model_name}{args.filename_suffix}.pkl",
-        ),
-        "wb",
-    ) as f:
+
+    outputs_file = Path('outputs') / \
+        f"signal_window_{args.signal_window_size}" / \
+        f"label_look_ahead_{args.label_look_ahead}" / \
+        "training_metrics" / \
+        f"{args.model_name}{args.filename_suffix}.pkl"
+    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
+
+    with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
             {
                 "train_loss": train_loss,
