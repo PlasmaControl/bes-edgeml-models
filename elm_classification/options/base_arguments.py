@@ -235,7 +235,7 @@ class BaseArguments:
 
         return parser
 
-    def _gather_args(self):
+    def _gather_args(self, arg_list: list = []):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
@@ -245,7 +245,7 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        args = parser.parse_args()
+        args = parser.parse_args(arg_list)
 
         return args, parser
 
@@ -265,9 +265,9 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self, verbose: bool = False):
+    def parse(self, verbose: bool = False, arg_list: list = []):  # implement `arg_list`
         """Parse the arguments."""
-        args, parser = self._gather_args()
+        args, parser = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)
 
