@@ -40,7 +40,8 @@ class RawFeatureModel(nn.Module):
         super(RawFeatureModel, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        filter_size = (self.args.signal_window_size, 4, 4)
+        spatial_dim = int(8 // maxpool_size)
+        filter_size = (self.args.signal_window_size, spatial_dim, spatial_dim)
         self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
