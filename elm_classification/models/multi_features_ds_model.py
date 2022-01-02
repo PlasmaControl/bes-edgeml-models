@@ -9,7 +9,6 @@ from pytorch_wavelets import DWT1DForward
 
 
 class _FeatureBase(nn.Module):
-
     def __init__(
         self,
         args: argparse.Namespace,
@@ -20,7 +19,7 @@ class _FeatureBase(nn.Module):
 
         # spatial maxpool
         self.maxpool_size = self.args.mf_maxpool_size
-        assert(self.maxpool_size in [1,2,4])
+        assert self.maxpool_size in [1, 2, 4]
         if self.maxpool_size > 1:
             self.maxpool = nn.MaxPool3d(
                 kernel_size=[1, self.maxpool_size, self.maxpool_size],
@@ -30,9 +29,11 @@ class _FeatureBase(nn.Module):
 
         # time slice interval (i.e. data[::interval])
         self.time_slice_interval = self.args.mf_time_slice_interval
-        assert(np.log2(self.time_slice_interval) % 1 == 0)  # ensure power of 2
-        assert(self.time_slice_interval < self.args.signal_window_size)
-        self.time_points = self.args.signal_window_size // self.time_slice_interval
+        assert np.log2(self.time_slice_interval) % 1 == 0  # ensure power of 2
+        assert self.time_slice_interval < self.args.signal_window_size
+        self.time_points = (
+            self.args.signal_window_size // self.time_slice_interval
+        )
 
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
         self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
@@ -42,7 +43,7 @@ class _FeatureBase(nn.Module):
 
     def _time_interval_and_maxpool(self, x: torch.Tensor) -> torch.Tensor:
         if self.time_slice_interval > 1:
-            x = x[:, :, ::self.time_slice_interval, :, :]
+            x = x[:, :, :: self.time_slice_interval, :, :]
         if self.maxpool:
             x = self.maxpool(x)
         return x
@@ -81,12 +82,14 @@ class RawFeatureModel(_FeatureBase):
 
         self.num_filters = self.args.raw_num_filters
         filter_size = (
-            self.time_points, 
-            8 // self.maxpool_size, 
+            self.time_points,
+            8 // self.maxpool_size,
             8 // self.maxpool_size,
         )
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
+            in_channels=1,
+            out_channels=self.num_filters,
+            kernel_size=filter_size,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -125,15 +128,21 @@ class FFTFeatureModel(_FeatureBase):
         self.nfft = self.args.fft_nfft
         if self.nfft == 0:
             self.nfft = self.time_points
-        assert(self.nfft <= self.time_points)
-        assert(np.log2(self.nfft) % 1 == 0)  # ensure power of 2
-        self.nfreqs = self.nfft//2 + 1
+        assert self.nfft <= self.time_points
+        assert np.log2(self.nfft) % 1 == 0  # ensure power of 2
+        self.nfreqs = self.nfft // 2 + 1
         self.nbins = self.time_points // self.nfft
 
         self.num_filters = self.args.fft_num_filters
-        filter_size = (self.nfreqs, 8//self.maxpool_size, 8//self.maxpool_size)
+        filter_size = (
+            self.nfreqs,
+            8 // self.maxpool_size,
+            8 // self.maxpool_size,
+        )
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
+            in_channels=1,
+            out_channels=self.num_filters,
+            kernel_size=filter_size,
         )
 
     def forward(self, x):
@@ -145,11 +154,19 @@ class FFTFeatureModel(_FeatureBase):
             x = torch.abs(torch.fft.rfft(x, dim=2))
         else:
             # calc binned FFTs, then average
-            fft_bins_size = [self.args.batch_size, self.nbins, self.nfreqs, 8//self.maxpool_size, 8//self.maxpool_size]
+            fft_bins_size = [
+                self.args.batch_size,
+                self.nbins,
+                self.nfreqs,
+                8 // self.maxpool_size,
+                8 // self.maxpool_size,
+            ]
             ffts = torch.empty(size=fft_bins_size, dtype=x.dtype)
             for i in torch.arange(self.nbins):
-                bin_data = x[:,:,i*self.nfft:(i+1)*self.nfft,:,:]
-                ffts[:,i:i+1,:,:,:] = torch.abs(torch.fft.rfft(bin_data, dim=2))
+                bin_data = x[:, :, i * self.nfft : (i + 1) * self.nfft, :, :]
+                ffts[:, i : i + 1, :, :, :] = torch.abs(
+                    torch.fft.rfft(bin_data, dim=2)
+                )
             x = torch.mean(ffts, dim=1, keepdim=True)
 
         x = self._conv_dropout_relu_flatten(x)
@@ -189,20 +206,26 @@ class DWTFeatureModel(_FeatureBase):
 
         # DWT and sample calculation to get new time domain size
         self.dwt = DWT1DForward(
-            wave=self.args.dwt_wavelet, 
-            J=self.args.dwt_level, 
-            mode='reflect',
-            )
-        x_tmp = torch.empty(1,1,self.time_points)
+            wave=self.args.dwt_wavelet,
+            J=self.args.dwt_level,
+            mode="reflect",
+        )
+        x_tmp = torch.empty(1, 1, self.time_points)
         x_lo, x_hi = self.dwt(x_tmp)
         self.dwt_output_length = x_lo.shape[2]
         for hi in x_hi:
             self.dwt_output_length += hi.shape[2]
 
         self.num_filters = self.args.dwt_num_filters
-        filter_size = (self.dwt_output_length, 8//self.maxpool_size, 8//self.maxpool_size)
+        filter_size = (
+            self.dwt_output_length,
+            8 // self.maxpool_size,
+            8 // self.maxpool_size,
+        )
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
+            in_channels=1,
+            out_channels=self.num_filters,
+            kernel_size=filter_size,
         )
 
     def forward(self, x):
@@ -212,12 +235,18 @@ class DWTFeatureModel(_FeatureBase):
         dwt_output_shape[2] = self.dwt_output_length
         x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype)
         for ibatch in torch.arange(x.shape[0]):  # loop over batch members
-            x_tmp = x[ibatch,0,:,:,:].permute(1,2,0)  # make 3D and move time dim. to last
+            x_tmp = x[ibatch, 0, :, :, :].permute(
+                1, 2, 0
+            )  # make 3D and move time dim. to last
             x_lo, x_hi = self.dwt(x_tmp)  # multi-level DWT on last dim.
             coeff = [x_lo] + [hi for hi in x_hi]  # make list of coeff.
-            concat_coeff = torch.cat(coeff, dim=2)  # concat list in time dim. (last dim.)
-            concat_coeff = concat_coeff.permute(2,0,1).unsqueeze(0).unsqueeze(0) # unpermute and expand
-            x_dwt[ibatch,0,:,:,:] = concat_coeff
+            concat_coeff = torch.cat(
+                coeff, dim=2
+            )  # concat list in time dim. (last dim.)
+            concat_coeff = (
+                concat_coeff.permute(2, 0, 1).unsqueeze(0).unsqueeze(0)
+            )  # unpermute and expand
+            x_dwt[ibatch, 0, :, :, :] = concat_coeff
 
         x = self._conv_dropout_relu_flatten(x_dwt)
 
@@ -254,9 +283,11 @@ class MultiFeaturesDsModel(nn.Module):
         self.fft_features_model = fft_features_model
         self.dwt_features_model = dwt_features_model
         input_features = 0
-        for model in [self.raw_features_model,
-                      self.fft_features_model,
-                      self.dwt_features_model]:
+        for model in [
+            self.raw_features_model,
+            self.fft_features_model,
+            self.dwt_features_model,
+        ]:
             if model is not None:
                 input_features += model.num_filters
         self.fc1 = nn.Linear(in_features=input_features, out_features=128)
@@ -266,12 +297,20 @@ class MultiFeaturesDsModel(nn.Module):
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
 
     def forward(self, x):
-        raw_features = self.raw_features_model(x) if self.raw_features_model else None
-        fft_features = self.fft_features_model(x) if self.fft_features_model else None
-        dwt_features = self.dwt_features_model(x) if self.dwt_features_model else None
+        raw_features = (
+            self.raw_features_model(x) if self.raw_features_model else None
+        )
+        fft_features = (
+            self.fft_features_model(x) if self.fft_features_model else None
+        )
+        dwt_features = (
+            self.dwt_features_model(x) if self.dwt_features_model else None
+        )
 
         active_features_list = [
-            features for features in [raw_features, fft_features, dwt_features] if features is not None
+            features
+            for features in [raw_features, fft_features, dwt_features]
+            if features is not None
         ]
         x = torch.cat(active_features_list, dim=1)
 
@@ -288,6 +327,61 @@ if __name__ == "__main__":
     parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--mf_maxpool_size", type=int, default=2)
+    parser.add_argument(
+        "--mf_time_slice_interval",
+        type=int,
+        default=1,
+        help="Time slice interval (data[::interval]): power of 2: 1(default)|2|4|8 ...",
+    )
+    parser.add_argument(
+        "--mf_dropout_rate",
+        type=float,
+        default=0.4,
+        help="Dropout rate",
+    )
+    parser.add_argument(
+        "--mf_negative_slope",
+        type=float,
+        default=0.02,
+        help="RELU negative slope",
+    )
+    parser.add_argument(
+        "--raw_num_filters",
+        type=int,
+        default=16,
+        help="Number of features for RawFeatureModel: int >= 0",
+    )
+    parser.add_argument(
+        "--fft_num_filters",
+        type=int,
+        default=16,
+        help="Number of features for FFTFeatureModel: int >= 0",
+    )
+    parser.add_argument(
+        "--fft_nfft",
+        type=int,
+        default=0,
+        help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
+    )
+    parser.add_argument(
+        "--dwt_num_filters",
+        type=int,
+        default=16,
+        help="Number of features for DWTFeatureModel: int >= 0",
+    )
+    parser.add_argument(
+        "--dwt_wavelet",
+        type=str,
+        default="db4",
+        help="Wavelet string for DWTFeatureModel: default `db4`",
+    )
+    parser.add_argument(
+        "--dwt_level",
+        type=int,
+        default=3,
+        help="Wavelet decomposition level: int >= 1; default=3",
+    )
     args = parser.parse_args(
         [
             "--signal_window_size",
@@ -295,20 +389,17 @@ if __name__ == "__main__":
         ],  # ["--device", "cpu"]
     )
     shape_raw = (16, 1, 16, 8, 8)
-    shape_cwt = (16, 1, 16, 16, 8, 8)
     x_raw = torch.randn(*shape_raw)
-    x_cwt = torch.randn(*shape_cwt)
 
     device = torch.device(
         "cpu"
     )  # "cuda" if torch.cuda.is_available() else "cpu")
     x_raw = x_raw.to(device)
-    x_cwt = x_cwt.to(device)
     raw_model = RawFeatureModel(args)
     fft_model = FFTFeatureModel(args)
     cwt_model = DWTFeatureModel(args)
     model = MultiFeaturesDsModel(args, raw_model, fft_model, cwt_model)
-    print(summary(model, input_size=(shape_raw, shape_cwt), device="cpu"))
+    print(summary(model, input_size=shape_raw, device="cpu"))
 
     for param in list(model.named_parameters()):
         print(
@@ -317,6 +408,6 @@ if __name__ == "__main__":
     print(
         f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )
-    y = model(x_raw, x_cwt)
+    y = model(x_raw)
     print(y)
     print(y.shape)

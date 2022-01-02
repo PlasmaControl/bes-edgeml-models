@@ -11,6 +11,7 @@ import torch.nn as nn
 # from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
+
 # import pywt
 
 from data_preprocessing import *
@@ -202,9 +203,21 @@ def train_loop(
 
     # model
     # set raw, FFT, and DWT features on/off (default is all on)
-    raw_model = multi_features_ds_model.RawFeatureModel(args) if args.raw_num_filters>0 else None
-    fft_model = multi_features_ds_model.FFTFeatureModel(args) if args.fft_num_filters>0 else None
-    dwt_model = multi_features_ds_model.DWTFeatureModel(args) if args.dwt_num_filters>0 else None
+    raw_model = (
+        multi_features_ds_model.RawFeatureModel(args)
+        if args.raw_num_filters > 0
+        else None
+    )
+    fft_model = (
+        multi_features_ds_model.FFTFeatureModel(args)
+        if args.fft_num_filters > 0
+        else None
+    )
+    dwt_model = (
+        multi_features_ds_model.DWTFeatureModel(args)
+        if args.dwt_num_filters > 0
+        else None
+    )
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args, raw_model, fft_model, dwt_model)
 
@@ -212,7 +225,7 @@ def train_loop(
         args.device
     )  # "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
-    
+
     LOGGER.info("-" * 50)
     LOGGER.info(f"       Training with model: {args.model_name}       ")
     LOGGER.info("-" * 50)
@@ -356,12 +369,16 @@ def train_loop(
     roc_scores = np.array(roc_scores)
     f1_scores = np.array(f1_scores)
 
-    outputs_file = Path('outputs') / \
-        f"signal_window_{args.signal_window_size}" / \
-        f"label_look_ahead_{args.label_look_ahead}" / \
-        "training_metrics" / \
-        f"{args.model_name}{args.filename_suffix}.pkl"
-    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
+    outputs_file = (
+        Path("outputs")
+        / f"signal_window_{args.signal_window_size}"
+        / f"label_look_ahead_{args.label_look_ahead}"
+        / "training_metrics"
+        / f"{args.model_name}{args.filename_suffix}.pkl"
+    )
+    outputs_file.parent.mkdir(
+        parents=True, exist_ok=True
+    )  # make dir. for output file
 
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
@@ -400,18 +417,27 @@ if __name__ == "__main__":
     #     data_obj,
     #     test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     # )
-    arg_list=[
-        '--model_name', 'multi_features_ds',
-        '--data_preproc', 'unprocessed',
-        '--data_dir', (Path.home()/'Documents/Projects/data').as_posix(),
-        '--input_file', 'labeled-elm-events-small.hdf5',
-        '--test_data_dir', Path('test_data').as_posix(),
-        '--signal_window_size', '128',
-        '--label_look_ahead', '50',
-        '--max_elms', '5',
-        '--n_epochs', '2',
-        '--dry_run',
-        ]
+    arg_list = [
+        "--model_name",
+        "multi_features_ds",
+        "--data_preproc",
+        "unprocessed",
+        "--data_dir",
+        (Path.home() / "Documents/Projects/data").as_posix(),
+        "--input_file",
+        "labeled-elm-events.hdf5",
+        "--test_data_dir",
+        Path("test_data").as_posix(),
+        "--signal_window_size",
+        "64",
+        "--label_look_ahead",
+        "0",
+        "--max_elms",
+        "5",
+        "--n_epochs",
+        "2",
+        "--dry_run",
+    ]
     args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
     LOGGER = utils.get_logger(
         script_name=__name__,
@@ -427,4 +453,3 @@ if __name__ == "__main__":
         data_obj,
         test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
-
