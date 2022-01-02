@@ -363,12 +363,16 @@ def train_loop(
     roc_scores = np.array(roc_scores)
     f1_scores = np.array(f1_scores)
 
-    outputs_file = Path('outputs') / \
-        f"signal_window_{args.signal_window_size}" / \
-        f"label_look_ahead_{args.label_look_ahead}" / \
-        "training_metrics" / \
-        f"{args.model_name}{args.filename_suffix}.pkl"
-    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
+    outputs_file = (
+        Path("outputs")
+        / f"signal_window_{args.signal_window_size}"
+        / f"label_look_ahead_{args.label_look_ahead}"
+        / "training_metrics"
+        / f"{args.model_name}{args.filename_suffix}.pkl"
+    )
+    outputs_file.parent.mkdir(
+        parents=True, exist_ok=True
+    )  # make dir. for output file
 
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
