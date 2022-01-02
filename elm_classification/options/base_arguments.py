@@ -1,5 +1,6 @@
 import sys
 import argparse
+from typing import Union
 
 
 class BaseArguments:
@@ -231,7 +232,7 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
-        
+
         # arguments for `train_ds.py` and `multi_features_ds_model.py`
         parser.add_argument(
             "--mf_maxpool_size",
@@ -284,7 +285,7 @@ class BaseArguments:
         parser.add_argument(
             "--dwt_wavelet",
             type=str,
-            default='db4',
+            default="db4",
             help="Wavelet string for DWTFeatureModel: default `db4`",
         )
         parser.add_argument(
@@ -298,7 +299,9 @@ class BaseArguments:
 
         return parser
 
-    def _gather_args(self, arg_list: list = []):  # implement `arg_list`
+    def _gather_args(
+        self, arg_list: Union[list, None] = None
+    ):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
@@ -308,7 +311,10 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        args = parser.parse_args(arg_list)
+        if arg_list is None:
+            args = parser.parse_args()
+        else:
+            args = parser.parse_args(arg_list)
 
         return args, parser
 
@@ -328,9 +334,14 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self, verbose: bool = False, arg_list: list = []):  # implement `arg_list`
+    def parse(
+        self, verbose: bool = False, arg_list: Union[list, None] = None
+    ):  # implement `arg_list`
         """Parse the arguments."""
-        args, parser = self._gather_args(arg_list)
+        if arg_list is None:
+            args, parser = self._gather_args()
+        else:
+            args, parser = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)
 
