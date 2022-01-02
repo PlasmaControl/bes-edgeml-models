@@ -41,20 +41,20 @@ class BaseArguments:
             help="if true, don't split the data into training, testing and validation "
             "sets.",
         )
-        parser.add_argument(
-            "--multi_features",
-            action="store_true",
-            default=False,
-            help="if true, create additional features based on FFT and CWT",
-        )
-        parser.add_argument(
-            "--use_fft",
-            action="store_true",
-            default=False,
-            help="if true, create additional features from FFT. As of version 1.7.0, "
-            "PyTorch FFT function does not work on systems that do not support "
-            "Intel MKL library(like PPC systems).",
-        )
+        # parser.add_argument(
+        #     "--multi_features",
+        #     action="store_true",
+        #     default=False,
+        #     help="if true, create additional features based on FFT and CWT",
+        # )
+        # parser.add_argument(
+        #     "--use_fft",
+        #     action="store_true",
+        #     default=False,
+        #     help="if true, create additional features from FFT. As of version 1.7.0, "
+        #     "PyTorch FFT function does not work on systems that do not support "
+        #     "Intel MKL library(like PPC systems).",
+        # )
         parser.add_argument(
             "--data_dir",
             type=str,
@@ -231,11 +231,74 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
+        
+        # arguments for `train_ds.py` and `multi_features_ds_model.py`
+        parser.add_argument(
+            "--mf_maxpool_size",
+            type=int,
+            default=2,
+            help="spatial maxpool: 1|2(default)|4",
+        )
+        parser.add_argument(
+            "--mf_time_slice_interval",
+            type=int,
+            default=1,
+            help="Time slice interval (data[::interval]): power of 2: 1(default)|2|4|8 ...",
+        )
+        parser.add_argument(
+            "--mf_dropout_rate",
+            type=float,
+            default=0.4,
+            help="Dropout rate",
+        )
+        parser.add_argument(
+            "--mf_negative_slope",
+            type=float,
+            default=0.02,
+            help="RELU negative slope",
+        )
+        parser.add_argument(
+            "--raw_num_filters",
+            type=int,
+            default=16,
+            help="Number of features for RawFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--fft_num_filters",
+            type=int,
+            default=16,
+            help="Number of features for FFTFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--fft_nfft",
+            type=int,
+            default=0,
+            help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
+        )
+        parser.add_argument(
+            "--dwt_num_filters",
+            type=int,
+            default=16,
+            help="Number of features for DWTFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--dwt_wavelet",
+            type=str,
+            default='db4',
+            help="Wavelet string for DWTFeatureModel: default `db4`",
+        )
+        parser.add_argument(
+            "--dwt_level",
+            type=int,
+            default=3,
+            help="Wavelet decomposition level: int >= 1; default=3",
+        )
+
         self.initialized = True
 
         return parser
 
-    def _gather_args(self):
+    def _gather_args(self, arg_list: list = []):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
@@ -245,7 +308,7 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        args = parser.parse_args()
+        args = parser.parse_args(arg_list)
 
         return args, parser
 
@@ -265,9 +328,9 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self, verbose: bool = False):
+    def parse(self, verbose: bool = False, arg_list: list = []):  # implement `arg_list`
         """Parse the arguments."""
-        args, parser = self._gather_args()
+        args, parser = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)
 
