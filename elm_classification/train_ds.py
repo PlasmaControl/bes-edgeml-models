@@ -423,9 +423,12 @@ if __name__ == "__main__":
         "--data_preproc",
         "unprocessed",
         "--data_dir",
-        (Path.home() / "Documents/Projects/data").as_posix(),
+        # (Path.home() / "Documents/Projects/data").as_posix(),
+        (
+            Path.home() / "research/bes_edgeml_models/elm_classification/data"
+        ).as_posix(),
         "--input_file",
-        "labeled-elm-events.hdf5",
+        "labeled-elm-events-large.hdf5",
         "--test_data_dir",
         Path("test_data").as_posix(),
         "--signal_window_size",
@@ -433,9 +436,9 @@ if __name__ == "__main__":
         "--label_look_ahead",
         "0",
         "--max_elms",
-        "5",
+        "-1",
         "--n_epochs",
-        "2",
+        "20",
         "--dry_run",
     ]
     args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
