@@ -36,6 +36,12 @@ class BaseArguments:
             help="path to the pretrained weights of the saved models.",
         )
         parser.add_argument(
+            "--output_dir",
+            type=str,
+            default="outputs",
+            help="path to the inference outputs.",
+        )
+        parser.add_argument(
             "--use_all_data",
             action="store_true",
             default=False,
