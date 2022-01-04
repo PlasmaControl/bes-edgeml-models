@@ -149,54 +149,27 @@ def create_output_paths(
     model_ckpt_path = os.path.join(
         args.model_ckpts, f"signal_window_{args.signal_window_size}"
     )
-    os.makedirs(test_data_path, exist_ok=True)
-    os.makedirs(model_ckpt_path, exist_ok=True)
+    if not os.path.exists(test_data_path):  # moved outside of previous `else` clause
+        os.makedirs(test_data_path, exist_ok=True)
+    if not os.path.exists(model_ckpt_path):  # moved outside of previous `else` clause
+        os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
-        if args.signal_window_size == 8:
-            base_path = os.path.join(args.output_dir, "signal_window_8")
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
-        elif args.signal_window_size == 16:
-            base_path = os.path.join(args.output_dir, "signal_window_16")
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
-        else:
-            base_path = os.path.join(
-                args.output_dir,
-                f"signal_window_{args.signal_window_size}",
-            )
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
+        base_path = os.path.join(
+            args.output_dir,
+            f"signal_window_{args.signal_window_size}",
+        )
+        look_ahead_path = os.path.join(
+            base_path, f"label_look_ahead_{args.label_look_ahead}"
+        )
+        clf_report_path = os.path.join(
+            look_ahead_path, "classification_reports"
+        )
+        plot_path = os.path.join(look_ahead_path, "plots")
+        roc_path = os.path.join(look_ahead_path, "roc")
+        paths = [clf_report_path, plot_path, roc_path]
+        for p in paths:
+            if not os.path.exists(p):
+                os.makedirs(p, exist_ok=True)
         return (
             test_data_path,
             model_ckpt_path,
