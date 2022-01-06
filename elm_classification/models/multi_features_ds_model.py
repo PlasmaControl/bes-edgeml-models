@@ -349,13 +349,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--raw_num_filters",
         type=int,
-        default=16,
+        default=48,
         help="Number of features for RawFeatureModel: int >= 0",
     )
     parser.add_argument(
         "--fft_num_filters",
         type=int,
-        default=16,
+        default=48,
         help="Number of features for FFTFeatureModel: int >= 0",
     )
     parser.add_argument(
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dwt_num_filters",
         type=int,
-        default=16,
+        default=48,
         help="Number of features for DWTFeatureModel: int >= 0",
     )
     parser.add_argument(
