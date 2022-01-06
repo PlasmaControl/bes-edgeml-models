@@ -418,6 +418,8 @@ if __name__ == "__main__":
     #     test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     # )
     arg_list = [
+        "--device",
+        "cuda",
         "--model_name",
         "multi_features_ds",
         "--data_preproc",
@@ -435,11 +437,21 @@ if __name__ == "__main__":
         "64",
         "--label_look_ahead",
         "0",
+        "--raw_num_filters",
+        "48",
+        "--fft_num_filters",
+        "48",
+        "--dwt_num_filters",
+        "48",
         "--max_elms",
         "-1",
         "--n_epochs",
         "20",
-        "--dry_run",
+        "--filename_suffix",
+        "_dwt",
+        "--normalize_data",
+        "--truncate_inputs",
+        # "--dry_run",
     ]
     args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
     LOGGER = utils.get_logger(
