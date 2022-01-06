@@ -230,7 +230,6 @@ class DWTFeatureModel(_FeatureBase):
 
     def forward(self, x):
         x = self._time_interval_and_maxpool(x)
-
         dwt_output_shape = list(x.shape)
         dwt_output_shape[2] = self.dwt_output_length
         x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype)
@@ -248,8 +247,8 @@ class DWTFeatureModel(_FeatureBase):
             )  # unpermute and expand
             x_dwt[ibatch, 0, :, :, :] = concat_coeff
 
+        x_dwt = x_dwt.to(self.args.device)
         x = self._conv_dropout_relu_flatten(x_dwt)
-
         return x
 
 
@@ -324,9 +323,9 @@ if __name__ == "__main__":
     from torchinfo import summary
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
-    parser.add_argument("--device", default="cpu")
     parser.add_argument("--mf_maxpool_size", type=int, default=2)
     parser.add_argument(
         "--mf_time_slice_interval",
@@ -382,24 +381,17 @@ if __name__ == "__main__":
         default=3,
         help="Wavelet decomposition level: int >= 1; default=3",
     )
-    args = parser.parse_args(
-        [
-            "--signal_window_size",
-            "16",
-        ],  # ["--device", "cpu"]
-    )
+    args = parser.parse_args(["--signal_window_size", "16", "--device", "cuda"])
     shape_raw = (16, 1, 16, 8, 8)
     x_raw = torch.randn(*shape_raw)
 
-    device = torch.device(
-        "cpu"
-    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    device = args.device
     x_raw = x_raw.to(device)
     raw_model = RawFeatureModel(args)
     fft_model = FFTFeatureModel(args)
     cwt_model = DWTFeatureModel(args)
     model = MultiFeaturesDsModel(args, raw_model, fft_model, cwt_model)
-    print(summary(model, input_size=shape_raw, device="cpu"))
+    print(summary(model, input_size=shape_raw, device=args.device))
 
     for param in list(model.named_parameters()):
         print(
