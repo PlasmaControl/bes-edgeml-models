@@ -33,6 +33,6 @@ if __name__ == "__main__":
     main(
         sws=64,
         la=0,
-        pkl_fname="multi_features_ds.pkl",
-        suffix="_dwt",
+        pkl_fname="multi_features_ds_dwt_no_pooling.pkl",
+        suffix="_dwt_no_pooling",
     )
