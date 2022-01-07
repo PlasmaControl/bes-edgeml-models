@@ -48,20 +48,20 @@ class BaseArguments:
             help="if true, don't split the data into training, testing and validation "
             "sets.",
         )
-        # parser.add_argument(
-        #     "--multi_features",
-        #     action="store_true",
-        #     default=False,
-        #     help="if true, create additional features based on FFT and CWT",
-        # )
-        # parser.add_argument(
-        #     "--use_fft",
-        #     action="store_true",
-        #     default=False,
-        #     help="if true, create additional features from FFT. As of version 1.7.0, "
-        #     "PyTorch FFT function does not work on systems that do not support "
-        #     "Intel MKL library(like PPC systems).",
-        # )
+        parser.add_argument(
+            "--multi_features",
+            action="store_true",
+            default=False,
+            help="if true, create additional features based on FFT and CWT",
+        )
+        parser.add_argument(
+            "--use_fft",
+            action="store_true",
+            default=False,
+            help="if true, create additional features from FFT. As of version 1.7.0, "
+            "PyTorch FFT function does not work on systems that do not support "
+            "Intel MKL library(like PPC systems).",
+        )
         parser.add_argument(
             "--data_dir",
             type=str,
