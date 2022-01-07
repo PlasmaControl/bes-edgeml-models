@@ -1,6 +1,7 @@
 import argparse
 from typing import Tuple, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -39,7 +40,8 @@ class RawFeatureModel(nn.Module):
         super(RawFeatureModel, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        filter_size = (self.args.signal_window_size, 4, 4)
+        spatial_dim = int(8 // maxpool_size)
+        filter_size = (self.args.signal_window_size, spatial_dim, spatial_dim)
         self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
@@ -144,11 +146,12 @@ class CWTFeatureModel(nn.Module):
         """
         super(CWTFeatureModel, self).__init__()
         self.args = args
-        filter_size = (
-                (self.args.signal_window_size, 8, 8) 
-                if self.args.signal_window_size <= 64 
-                else (int(self.args.signal_window_size / 2), 8, 8)
-        )
+        # filter_size = (
+        #     (self.args.signal_window_size, 8, 8)
+        #     if self.args.signal_window_size <= 64
+        #     else (int(self.args.signal_window_size / 2), 8, 8)
+        # )
+        filter_size = (int(np.log2(self.args.signal_window_size)) + 1, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )

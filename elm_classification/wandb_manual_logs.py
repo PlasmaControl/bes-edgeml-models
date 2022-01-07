@@ -14,7 +14,7 @@ def main(
     with open(os.path.join(path, pkl_fname), "rb") as f:
         metrics = pickle.load(f)
 
-    with wandb.init(project="multi_features_12142021"):
+    with wandb.init(project="multi_features_12202021"):
         wandb.run.name = f"multi_features_sws_{sws}_la_{la}{suffix}"
         for i in range(n_epochs):
             wandb.log(
@@ -31,5 +31,8 @@ def main(
 
 if __name__ == "__main__":
     main(
-        sws=512, la=400, pkl_fname="multi_features_hop_10.pkl", suffix="_hop_10"
+        sws=64,
+        la=0,
+        pkl_fname="multi_features_ds.pkl",
+        suffix="_dwt",
     )

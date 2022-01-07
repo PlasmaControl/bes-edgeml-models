@@ -5,6 +5,7 @@ import math
 import argparse
 import importlib
 from typing import Union, Tuple
+from pathlib import Path
 
 import torch
 from torchinfo import summary
@@ -60,8 +61,10 @@ def get_logger(
     logger.setLevel(logging.INFO)
 
     if log_file is not None:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
         # create handlers
-        f_handler = logging.FileHandler(os.path.join(log_file), mode="w")
+        f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
         # create formatters and add it to the handlers
         f_format = logging.Formatter(
             "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
@@ -140,69 +143,33 @@ def create_data(data_name: str):
 def create_output_paths(
     args: argparse.Namespace, infer_mode: bool = False
 ) -> Tuple[str]:
-    if args.signal_window_size == 8:
-        test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
-        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
-    elif args.signal_window_size == 16:
-        test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
-        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
-    else:
-        test_data_path = os.path.join(
-            args.test_data_dir, f"signal_window_{args.signal_window_size}"
-        )
-        model_ckpt_path = os.path.join(
-            args.model_ckpts, f"signal_window_{args.signal_window_size}"
-        )
-        if not os.path.exists(test_data_path):
-            os.makedirs(test_data_path, exist_ok=True)
-        if not os.path.exists(model_ckpt_path):
-            os.makedirs(model_ckpt_path, exist_ok=True)
+    test_data_path = os.path.join(
+        args.test_data_dir, f"signal_window_{args.signal_window_size}"
+    )
+    model_ckpt_path = os.path.join(
+        args.model_ckpts, f"signal_window_{args.signal_window_size}"
+    )
+    if not os.path.exists(test_data_path):  # moved outside of previous `else` clause
+        os.makedirs(test_data_path, exist_ok=True)
+    if not os.path.exists(model_ckpt_path):  # moved outside of previous `else` clause
+        os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
-        if args.signal_window_size == 8:
-            base_path = os.path.join(args.output_dir, "signal_window_8")
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
-        elif args.signal_window_size == 16:
-            base_path = os.path.join(args.output_dir, "signal_window_16")
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
-        else:
-            base_path = os.path.join(
-                args.output_dir,
-                f"signal_window_{args.signal_window_size}",
-            )
-            look_ahead_path = os.path.join(
-                base_path, f"label_look_ahead_{args.label_look_ahead}"
-            )
-            clf_report_path = os.path.join(
-                look_ahead_path, "classification_reports"
-            )
-            plot_path = os.path.join(look_ahead_path, "plots")
-            roc_path = os.path.join(look_ahead_path, "roc")
-            paths = [clf_report_path, plot_path, roc_path]
-            for p in paths:
-                if not os.path.exists(p):
-                    os.makedirs(p, exist_ok=True)
+        base_path = os.path.join(
+            args.output_dir,
+            f"signal_window_{args.signal_window_size}",
+        )
+        look_ahead_path = os.path.join(
+            base_path, f"label_look_ahead_{args.label_look_ahead}"
+        )
+        clf_report_path = os.path.join(
+            look_ahead_path, "classification_reports"
+        )
+        plot_path = os.path.join(look_ahead_path, "plots")
+        roc_path = os.path.join(look_ahead_path, "roc")
+        paths = [clf_report_path, plot_path, roc_path]
+        for p in paths:
+            if not os.path.exists(p):
+                os.makedirs(p, exist_ok=True)
         return (
             test_data_path,
             model_ckpt_path,
