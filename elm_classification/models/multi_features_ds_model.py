@@ -134,11 +134,7 @@ class FFTFeatureModel(_FeatureBase):
         self.nbins = self.time_points // self.nfft
 
         self.num_filters = self.args.fft_num_filters
-        filter_size = (
-            self.nfreqs,
-            8 // self.maxpool_size,
-            8 // self.maxpool_size,
-        )
+        filter_size = (self.nfreqs, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1,
             out_channels=self.num_filters,
@@ -147,7 +143,7 @@ class FFTFeatureModel(_FeatureBase):
 
     def forward(self, x):
         x = x.to(self.args.device)  # needed for PowerPC architecture
-        x = self._time_interval_and_maxpool(x)
+        # x = self._time_interval_and_maxpool(x)
 
         if self.nbins == 1:
             # FFT for full time domain
@@ -217,11 +213,7 @@ class DWTFeatureModel(_FeatureBase):
             self.dwt_output_length += hi.shape[2]
 
         self.num_filters = self.args.dwt_num_filters
-        filter_size = (
-            self.dwt_output_length,
-            8 // self.maxpool_size,
-            8 // self.maxpool_size,
-        )
+        filter_size = (self.dwt_output_length, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1,
             out_channels=self.num_filters,
@@ -229,7 +221,7 @@ class DWTFeatureModel(_FeatureBase):
         )
 
     def forward(self, x):
-        x = self._time_interval_and_maxpool(x)
+        # x = self._time_interval_and_maxpool(x)
         dwt_output_shape = list(x.shape)
         dwt_output_shape[2] = self.dwt_output_length
         x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype)
