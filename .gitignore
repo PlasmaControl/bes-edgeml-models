@@ -170,4 +170,4 @@ outputs/signal_window_16/label_look_ahead_100/roc/roc_details_lr_manual_lookahea
 outputs/signal_window_16/label_look_ahead_200/roc/roc_details_lr_manual_lookahead_200.csv
 outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead_50.csv
 *.pth
-*.pkl
+*.hdf5
