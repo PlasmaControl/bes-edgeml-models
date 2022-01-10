@@ -11,7 +11,6 @@ import torch.nn as nn
 # from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
-
 # import pywt
 
 from data_preprocessing import *
@@ -89,10 +88,12 @@ def train_loop(
     valid_loss = []
     roc_scores = []
     f1_scores = []
-    test_data_path, model_ckpt_path = utils.create_output_paths(
-        args, infer_mode=False
-    )
-    test_data_file = os.path.join(test_data_path, test_datafile_name)
+
+    if not args.dry_run:
+        test_data_path, model_ckpt_path = utils.create_output_paths(
+            args, infer_mode=False
+        )
+        test_data_file = os.path.join(test_data_path, test_datafile_name)
     # if args.multi_features:
     #     test_data_file_cwt = os.path.join(
     #         test_data_path, "cwt_" + test_datafile_name
@@ -364,13 +365,21 @@ def train_loop(
             LOGGER.info(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
+
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)
     roc_scores = np.array(roc_scores)
     f1_scores = np.array(f1_scores)
 
+    outputs = {
+        "train_loss": train_loss,
+        "valid_loss": valid_loss,
+        "roc_scores": roc_scores,
+        "f1_scores": f1_scores,
+    }
+
     outputs_file = (
-        Path("outputs")
+        Path(args.output_dir)
         / f"signal_window_{args.signal_window_size}"
         / f"label_look_ahead_{args.label_look_ahead}"
         / "training_metrics"
@@ -381,15 +390,9 @@ def train_loop(
     )  # make dir. for output file
 
     with open(outputs_file.as_posix(), "wb") as f:
-        pickle.dump(
-            {
-                "train_loss": train_loss,
-                "valid_loss": valid_loss,
-                "roc_scores": roc_scores,
-                "f1_scores": f1_scores,
-            },
-            f,
-        )
+        pickle.dump(outputs, f,)
+    
+    return outputs
     # # save the predictions in the valid dataframe
     # valid_folds["preds"] = torch.load(
     #     os.path.join(
