@@ -34,6 +34,7 @@ class BaseData:
         self.df = pd.DataFrame()
         self.elm_indices, self.hf = self._read_file()
         self.logger.info(f"Total frames in the whole data: {self._get_total_frames()}")
+        self.shuffle_ = True
         if self.args.data_preproc == "automatic_labels":
             try:
                 csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
@@ -134,7 +135,9 @@ class BaseData:
 
         # split the data into train, validation and test sets
         training_elms, test_elms = model_selection.train_test_split(self.elm_indices[:n_elms],
-                test_size=self.args.fraction_test, shuffle=True, random_state=self.args.seed, )
+                                                                    test_size=self.args.fraction_test,
+                                                                    shuffle=self.shuffle_,
+                                                                    random_state=self.args.seed, )
 
         # kfold cross validation
         # if self.args.kfold and fold is None:
@@ -150,7 +153,9 @@ class BaseData:
         # else:
         self.logger.info("Creating training and validation datasets by simple splitting")
         training_elms, validation_elms = model_selection.train_test_split(training_elms,
-                test_size=self.args.fraction_valid, shuffle=True, random_state=self.args.seed, )
+                                                                          test_size=self.args.fraction_valid,
+                                                                          shuffle=self.shuffle_,
+                                                                          random_state=self.args.seed, )
         self.logger.info(f"Number of training ELM events: {training_elms.size}")
         self.logger.info(f"Number of validation ELM events: {validation_elms.size}")
         self.logger.info(f"Number of test ELM events: {test_elms.size}")
@@ -182,7 +187,7 @@ class BaseData:
     #         training_elms (np.ndarray): Indices for training ELM events.
     #     """
     #     kf = model_selection.KFold(
-    #         n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
+    #         n_splits=self.args.folds, shuffle=self.shuffle_, random_state=self.args.seed
     #     )
     #     self.df["elm_events"] = training_elms
     #     self.df["fold"] = -1

@@ -3,31 +3,25 @@ Created by Jeffrey Zimmerman with funding from the University of Wisconsin and D
 Under supervision of Dr. David Smith, U. Wisconsin for the ELM prediction and classification using ML group.
 2021
 """
-
-import argparse
-import logging
-import os
-import re
-
-from matplotlib.cm import Set1
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import re
 import plotly.express as px
 import plotly.graph_objects as go
-from scipy.ndimage import gaussian_filter
-import sklearn.preprocessing
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn import decomposition as comp
+import plotly.subplots
 import torch
-from torch import device, nn
-from torch.optim import SGD
 from flashtorch.activmax import GradientAscent
+import matplotlib.pyplot as plt
+from matplotlib.cm import Set1
+from scipy.ndimage import gaussian_filter
+from sklearn import decomposition as comp
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from torch import nn
+from torch.optim import SGD
 
-from src.utils import get_logger, create_output_paths
-from options.test_arguments import TestArguments
 from analyze import *
-from visualizations.utils.utils import get_dataloader, get_model
+from src.utils import make_logger, create_output_paths
+from visualizations.utils.utils import get_model
+from src.train_VAE import ELBOLoss
 
 
 class GradientAscent3D(GradientAscent):
@@ -73,15 +67,15 @@ class GradientAscent3D(GradientAscent):
 
 class Visualizations:
 
-    def __init__(self, args: argparse.Namespace, logger: logging.Logger) -> object:
+    def __init__(self) -> object:
         self.args = args
         self.logger = logger
         self.gen_suffix_type = '_' + re.split('[_.]', args.input_file)[-2] if 'generated' in args.input_file else ''
         self.filename_suffix = args.filename_suffix + self.gen_suffix_type
-        self.test_data, self.test_set = self._get_test_dataset()
+        self.test_data, self.test_set, self.test_loader = self._get_test_dataset()
         self.model = get_model(self.args, self.logger)
         self.device: torch.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.fm_signal_window, labels = next(iter(self.test_set))
+        self.fm_signal_window, labels = next(iter(self.test_loader))
 
     def _get_test_dataset(self):
 
@@ -95,11 +89,11 @@ class Visualizations:
                                   f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
 
         print(f"Using test data file: {test_fname}")
-        test_data, test_dataset = get_test_dataset(self.args, file_name=test_fname, logger=self.logger)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.args.batch_size, shuffle=False,
+        test_data, test_set = get_test_dataset(self.args, file_name=test_fname, logger=self.logger)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=self.args.batch_size, shuffle=False,
                                                   drop_last=True)
 
-        return test_data, test_loader
+        return test_data, test_set, test_loader
 
     def feature_map(self, layer: str):
 
@@ -145,7 +139,7 @@ class Visualizations:
         actual = actual_window.squeeze().cpu().detach().numpy()  # (16,8,8)
 
         print(f'actual_min: {np.amin(actual)}')
-        print(f'actual_max: {np.amax(actual)}')
+        print(f'actualmax: {np.amax(actual)}')
 
         actual_min = np.amin(actual)
         actual_max = np.amax(actual)
@@ -280,14 +274,8 @@ class Visualizations:
 
         """Custom function to display the image using matplotlib"""
 
-        # define std correction to be made
-        std_correction = np.asarray([0.229, 0.224, 0.225]).reshape(3, 1, 1)
-
-        # define mean correction to be made
-        mean_correction = np.asarray([0.485, 0.456, 0.406]).reshape(3, 1, 1)
-
         # convert the tensor img to numpy img and de normalize
-        npimg = np.multiply(img.numpy(), std_correction) + mean_correction
+        npimg = img.numpy()
 
         # plot the numpy image
         plt.figure(figsize=(self.args.batch_size * 4, 4))
@@ -303,7 +291,7 @@ class Visualizations:
         output = g_ascent.optimize3D(layer, filter_idx=filter_idx, num_iter=num_iter)
         return output
 
-    def generate_csi(self, target_class, iterations=150, initial_lr=6, random_state=None, blur=None,
+    def generate_csi(self, target_class, input_block=None, iterations=150, initial_lr=6, random_state=None, blur=None,
                      l2_weight: float = 0):
         """
 
@@ -337,28 +325,31 @@ class Visualizations:
         # generated_i = generated
 
         # get test batch with elm or pre elm
+        if input_block is None:
+            for batch in iter(self.test_loader):
+                if label in batch[1]:
 
-        for batch in iter(self.test_set):
-            if label in batch[1]:
+                    offset = np.random.randint(0, len(batch[1]))
+                    g_idx = np.argmax(batch[1] == label)
+                    if batch[1][g_idx - offset] != label:
+                        continue
 
-                offset = np.random.randint(0, len(batch[1]))
-                g_idx = np.argmax(batch[1] == label)
-                if batch[1][g_idx - offset] != label:
-                    continue
+                    generated = batch[0][g_idx - offset].unsqueeze(0)
+                    generated_i = generated
 
-                generated = batch[0][g_idx - offset].unsqueeze(0)
-                generated_i = generated
-
-                # check if model prediction is true positive/negative
-                model_output = self.model(generated)
-                if model_output >= self.args.threshold and label == 1:
-                    break
-                elif model_output < self.args.threshold and label == 1:
-                    continue
-                elif model_output < self.args.threshold and label == 0:
-                    break
-                elif model_output >= self.args.threshold and label == 0:
-                    continue
+                    # check if model prediction is true positive/negative
+                    model_output = self.model(generated)
+                    if model_output >= self.args.threshold and label == 1:
+                        break
+                    elif model_output < self.args.threshold and label == 1:
+                        continue
+                    elif model_output < self.args.threshold and label == 0:
+                        break
+                    elif model_output >= self.args.threshold and label == 0:
+                        continue
+        else:
+            generated = input_block.reshape(-1, 1, self.args.signal_window_size, 8, 8).requires_grad_()
+            generated_i = input_block.view(-1, 1, self.args.signal_window_size, 8, 8)
 
         generated_inputs = []
         model_outs = []
@@ -373,7 +364,7 @@ class Visualizations:
             class_loss = loss_fn(output.view(-1), label)
 
             if i % 10 == 0 or i == iterations - 1:
-                print(f'Iteration: {i}, Loss {class_loss.item():.2f}')
+                print(f'Iteration: {i}, Loss {class_loss.item():.2f} model output {torch.sigmoid(output).item():.2f}')
             # Zero grads
             self.model.zero_grad()
             # Backward
@@ -388,24 +379,214 @@ class Visualizations:
 
             if blur:
                 generated = torch.tensor(gaussian_filter(generated.squeeze().detach().numpy(), blur)).unsqueeze(
-                    0).unsqueeze(0).requires_grad_()
+                        0).unsqueeze(0).requires_grad_()
 
         return tuple((im.detach().numpy().squeeze(), torch.sigmoid(model_out_).item(),
                       generated_i.detach().numpy().squeeze()) for im, model_out_ in zip(generated_inputs, model_outs))
 
 
+class VAEVisualization(Visualizations):
+    """
+    Custom class to visualize VAE properties.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        self._check_model()
+
+        self.model_name = type(self.model).__name__
+        self.criterion = torch.nn.MSELoss()
+        self.wavelet_test_set, self.up_test_set = self._get_data()
+        self.wavelet_test_iter = iter(self.wavelet_test_set)
+        self.up_test_iter = iter(self.up_test_set)
+        self.model.eval()
+
+    def _check_model(self):
+
+        mname = type(self.model).__name__.lower()
+        if not mname.startswith('vae'):
+            raise TypeError(f'Model must be of type VAE, got {mname} instead')
+
+    def _get_data(self):
+
+        wavelet_data_cls = utils.create_data('wavelet')
+        wavelet_data_obj = wavelet_data_cls(args, self.logger)
+        wavelet_data_obj.shuffle_ = False
+        _, wavelet_valid_data, _ = wavelet_data_obj.get_data(shuffle_sample_indices=False)
+        wavelet_data_attrs = (
+        wavelet_valid_data[0], wavelet_valid_data[1], wavelet_valid_data[2], wavelet_valid_data[3])
+
+        up_data_cls = utils.create_data('unprocessed')
+        up_data_obj = up_data_cls(args, self.logger)
+        up_data_obj.shuffle_ = False
+        _, up_valid_data, _ = up_data_obj.get_data(shuffle_sample_indices=False)
+        up_data_attrs = (up_valid_data[0], up_valid_data[1], up_valid_data[2], up_valid_data[3])
+
+        wavelet_test_dataset = dataset.ELMDataset(args, *wavelet_data_attrs, logger=logger, phase="testing")
+        # wavelet_test_loader = torch.utils.data.DataLoader(wavelet_test_dataset, batch_size=args.batch_size, shuffle=False,
+        #                                              drop_last=True)
+
+        up_test_dataset = dataset.ELMDataset(args, *up_data_attrs, logger=logger, phase="testing")
+        # up_test_loader = torch.utils.data.DataLoader(up_test_dataset, batch_size=args.batch_size, shuffle=False,
+        #                                           drop_last=True)
+
+        return wavelet_test_dataset, up_test_dataset
+
+    def show_reconstruction(self):
+        classes = ['pre-ELM ', 'ELM']
+        plt.ion()
+        while (inpt := input('Select class: ')) != '':
+            inpt = float(inpt)
+            if inpt not in [1, 0]:
+                print('Select from classes 1 or 0')
+                continue
+            signal, label = next(self.wavelet_test_iter)
+            up_signal, up_label = next(self.up_test_iter)
+            if up_label != label:
+                raise ValueError('Unprocessed and Processed datasets not identical')
+            label = label.item()
+            while inpt != label:
+                signal, label = next(self.wavelet_test_iter)
+                up_signal, up_label = next(self.up_test_iter)
+                label = label.item()
+
+                if label == 1 and torch.max(signal) < 0.9:
+                    label = ~int(inpt)
+                    continue
+
+            reconstruction, mu, logvar, sample = self.model(signal.reshape(-1, 1, self.args.signal_window_size, 8, 8))
+            loss = self.criterion(signal, reconstruction)
+            # detach and numpy all parameters
+            up_signal = up_signal.squeeze().detach().numpy()
+            signal = signal.squeeze().detach().numpy()
+            reconstruction = reconstruction.squeeze().detach().numpy()
+            mu = mu.squeeze().detach().numpy()
+            std = np.exp(logvar.squeeze().detach().numpy() / 2)
+
+            min_ = np.amin(np.array([up_signal, signal, reconstruction]))
+            max_ = np.amax(np.array([up_signal, signal, reconstruction]))
+            # min_ = 0
+            # max_ = 1
+
+            # <Make Plot>
+            fig, axs = plt.subplots(4, 1)
+            ax1, ax2, ax3, ax4 = axs[0], axs[1], axs[2], axs[3]
+
+            ax1.imshow(up_signal.transpose((1, 2, 0)).reshape(8, 8 * up_signal.shape[0]), vmin=min_, vmax=max_)
+            ax1.set_xticks(np.arange(-.5, 8 * up_signal.shape[0] + 0.5, 8), minor=True)
+            ax1.set_xticklabels([])
+            ax1.grid(which='minor', color='w', linestyle='-', linewidth=2)
+            ax1.grid(visible=None, which='major', axis='both')
+            ax1.set_title('Real BES Signal (Normalized)')
+
+            ax2.imshow(signal.transpose((1, 2, 0)).reshape(8, 8 * signal.shape[0]), vmin=min_, vmax=max_)
+            ax2.set_xticks(np.arange(-.5, 8 * signal.shape[0] + 0.5, 8), minor=True)
+            ax2.set_xticklabels([])
+            ax2.grid(which='minor', color='w', linestyle='-', linewidth=2)
+            ax2.grid(visible=None, which='major', axis='both')
+            ax2.set_title('Processed BES Signal (Normalized)')
+
+            im = ax3.imshow(reconstruction.transpose((1, 2, 0)).reshape(8, 8 * reconstruction.shape[0]), vmin=min_,
+                            vmax=max_)
+            ax3.set_xticks(np.arange(-.5, 8 * signal.shape[0] + 0.5, 8), minor=True)
+            ax3.set_xticklabels([])
+            ax3.grid(which='minor', color='w', linestyle='-', linewidth=2)
+            ax3.grid(visible=None, which='major', axis='both')
+            ax3.set_title(f'Reconstructed BES Signal (MSE: {loss.item():0.2f})')
+
+            fig.colorbar(im, ax=[ax1, ax2, ax3])
+
+            ax4.bar(x=np.arange(len(mu)), height=mu)
+            ax4.set_title('Latent Variable Values')
+
+            fig.suptitle(f'Real and Reconstructed inputs for {classes[label]} Signal Window')
+
+            plt.pause(1)
+            plt.show(block=True)  # </Make Plot>
+
+    def sweep_latent(self):
+        max_lst = []
+        elm_lst = []
+        pelm_lst = []
+        while len(elm_lst) < 256 or len(pelm_lst) < 256:
+            # get good index from of elm event
+            signal, label = next(self.wavelet_test_iter)
+            up_signal, up_label = next(self.up_test_iter)
+            if label == 1 and len(elm_lst) < 256:
+                elm_lst.append(signal)
+            elif label == 0 and len(pelm_lst) < 256:
+                pelm_lst.append(signal)
+
+        elm_tensor = torch.Tensor(256, 1, self.args.signal_window_size, 8 * 8)
+        torch.cat(elm_lst, out=elm_tensor)
+        pelm_tensor = torch.Tensor(256, 1, self.args.signal_window_size, 8 * 8)
+        torch.cat(pelm_lst, out=pelm_tensor)
+        big_list = [pelm_tensor, elm_tensor]
+        for tensor in big_list:
+            reconstruction, mu, logvar, sample = self.model(tensor.reshape(-1, 1, self.args.signal_window_size, 8, 8))
+            mu = mu.squeeze()
+            max_idx_1d = torch.argmax(torch.abs(mu))  # returns index of flattened array
+            max_lst.append(mu.ravel()[max_idx_1d])
+            max_idx = max_idx_1d % mu.size()[1]
+
+        min_, max_ = min(max_lst).item(), max(max_lst).item()
+
+        N = 50
+        sweep = torch.tile(mu[0], (N, 1)).detach()
+        sweep[:, max_idx] = torch.linspace(min_, max_, N)
+        sweep_out = self.model.decode(sweep).squeeze().detach().numpy()
+        so_min, so_max = np.min(sweep_out), np.max(sweep_out)
+
+        data = [go.Heatmap(z=sweep_out[0].transpose((1, 2, 0)).reshape(8, 8 * signal.shape[1]),
+                           x=np.arange(0, 8 * signal.shape[1]), y=np.arange(8)),
+                go.Bar(x=np.arange(0, self.model.latent_dim), y=sweep[0])]
+
+        frames = [go.Frame(name=k, data=[go.Heatmap(z=sweep_out[k].transpose((1, 2, 0)).reshape(8, 8 * signal.shape[1]),
+                                                    x=np.arange(0, 8 * signal.shape[1]), y=np.arange(8)),
+                                         go.Bar(x=np.arange(0, self.model.latent_dim), y=sweep[k])]) for k in
+                  range(1, N)]
+
+        updatemenus = [dict(type='buttons', buttons=[dict(label='Play', method='animate', args=[None, dict(
+            frame=dict(duration=500, redraw=True), transition=dict(duration=0), fromcurrent=True, mode='immediate')]),
+                                                     dict(label='Pause', method='animate', args=[[None], dict(
+                                                         frame=dict(duration=0, redraw=False),
+                                                         transition=dict(duration=0), easing='linear', fromcurrent=True,
+                                                         mode='immediate')])], direction='left', pad=dict(r=10, t=85),
+                            showactive=True, x=0.1, y=0, xanchor='right', yanchor='top')]
+
+        sliders = [{'yanchor': 'top', 'xanchor': 'left',
+                    'currentvalue': {'font': {'size': 16}, 'prefix': 'Frame: ', 'visible': True, 'xanchor': 'right'},
+                    'transition': {'duration': 500.0, 'easing': 'linear'}, 'pad': {'b': 10, 't': 50}, 'len': 0.9,
+                    'x': 0.1, 'y': 0, 'steps': [{'args': [[k], {
+                        'frame': {'duration': 500.0, 'easing': 'linear', 'redraw': True},
+                        'transition': {'duration': 500.0, 'easing': 'linear'}}], 'label': k, 'method': 'animate'} for k
+                                                in range(N)]}]
+
+        fig = plotly.subplots.make_subplots(rows=2, cols=1)
+
+        for t in range(2):
+            traces = [data[t]]
+            fig.add_traces(traces, rows=t + 1, cols=1)
+
+        fig.update_layout(updatemenus=updatemenus, sliders=sliders, yaxis2={'autorange': False, 'range': [min_, max_]},
+                          yaxis1={'scaleanchor': 'x'})
+        fig.update(frames=frames)
+        fig.show()
+
+        # TODO: Input decoded into feature model to see what output is  # TODO: show reconstruction loss  # TODO: Plot disentanglement metric
+
+
 class PCA():
 
-    def __init__(self, viz: Visualizations,
-                 layer: str,
-                 elm_index: int or np.ndarray = None
-                 ):
+    def __init__(self, viz: Visualizations, layer: str, elm_index: int or np.ndarray = None):
 
         self.args = viz.args
         self.logger = viz.logger
         self.model = viz.model
         self.device = viz.device
         self.test_data = viz.test_data
+        self.test_loader = viz.test_loader
         self.test_set = viz.test_set
         self.gen_suffix_type = viz.gen_suffix_type
         self.layer = layer
@@ -422,14 +603,14 @@ class PCA():
 
     def get_predictions(self) -> dict:
 
-        inputs, _ = next(iter(self.test_set))
+        inputs, _ = next(iter(self.test_loader))
 
         print(f"Input size: {inputs.shape}")
 
         if self.args.test_data_info:
             show_details(self.test_data)
 
-        model_predict(self.model, self.device, self.test_set)
+        # model_predict(self.model, self.device, self.test_loader)
 
         # get prediction dictionary containing truncated signals, labels,
         # micro-/macro-predictions and elm_time
@@ -478,11 +659,7 @@ class PCA():
         for i, component in enumerate(pca.components_[pca.explained_variance_ratio_ > 0.01]):
             print(f'\nComponent {i} ({pca.explained_variance_ratio_[i] * 100:0.2f}% E.V.):\n{component}')
 
-        self.pca_dict = {
-            'pca': decomposed_t,
-            'components': pca.components_,
-            'evr': pca.explained_variance_ratio_
-        }
+        self.pca_dict = {'pca': decomposed_t, 'components': pca.components_, 'evr': pca.explained_variance_ratio_}
 
         return self.pca_dict
 
@@ -504,25 +681,14 @@ class PCA():
         if plot_type == '3d':
             for start, end in start_end[:1]:
                 labels = labels_all[start:end]
-                fig = px.scatter_3d(x=decomposed_t[:, 0][start:end],
-                                    y=decomposed_t[:, 1][start:end],
-                                    z=decomposed_t[:, 2][start:end],
-                                    color=labels)
+                fig = px.scatter_3d(x=decomposed_t[:, 0][start:end], y=decomposed_t[:, 1][start:end],
+                                    z=decomposed_t[:, 2][start:end], color=labels)
 
-            fig.update_traces(marker=dict(size=2,
-                                          line=dict(width=1)),
-                              selector=dict(mode='markers'))
+            fig.update_traces(marker=dict(size=2, line=dict(width=1)), selector=dict(mode='markers'))
 
-            fig.update_layout(
-                title="PC_1 and PC_2 vs Time",
-                scene=dict(
-                    xaxis_title="Time (microseconds)",
-                    yaxis_title="PC 1",
-                    zaxis_title="PC 2"),
-                font=dict(
-                    family="Courier New, monospace",
-                    size=18,
-                    color="RebeccaPurple"))
+            fig.update_layout(title="PC_1 and PC_2 vs Time",
+                              scene=dict(xaxis_title="Time (microseconds)", yaxis_title="PC 1", zaxis_title="PC 2"),
+                              font=dict(family="Courier New, monospace", size=18, color="RebeccaPurple"))
             fig.show()
 
         if plot_type == 'grid':
@@ -546,11 +712,7 @@ class PCA():
                         else:
                             x = pc_x[start:end]
                             y = pc_y[start:end]
-                        ax.scatter(x=x,
-                                   y=y,
-                                   edgecolor='none',
-                                   c=colors,
-                                   s=4)
+                        ax.scatter(x=x, y=y, edgecolor='none', c=colors, s=4)
                     ax.set_ylabel(f'PC_{pc_col + 1}', fontsize='large')
                     ax.set_xlabel('Time' if pc_row == pc_col else f'PC_{pc_col - pc_row}', fontsize='large')
             legend_elements = [Line2D([0], [0], marker='o', color=colors[0], label='pre-ELM'),
@@ -596,35 +758,25 @@ class PCA():
                     {'ELM_ID': id_arr, 'Time': pc_arr[:, 0], 'Label': l_arr.astype(str), 'BES_CH_22': ch_22_arr,
                      'Predictions': p_arr, 'PC_1': pc_arr[:, 1], 'PC_2': pc_arr[:, 2]})
 
-            df_melt = pd.melt(df, id_vars=['Time', 'Label'], value_vars=['PC_1', 'PC_2'],
-                              var_name='PC', value_name='Activation')
+            df_melt = pd.melt(df, id_vars=['Time', 'Label'], value_vars=['PC_1', 'PC_2'], var_name='PC',
+                              value_name='Activation')
 
             df_melt['Activation'] = MinMaxScaler().fit_transform(df_melt[['Activation']])
 
-            fig = px.scatter(df_melt, x='Time', y='Activation',
-                             color='PC',
+            fig = px.scatter(df_melt, x='Time', y='Activation', color='PC',
                              title=f'Primary Components at Layer {self.layer} and Model Output')
 
-            fig.add_trace(go.Scatter(x=df['Time'], y=df['Predictions'],
-                                     mode='lines',
-                                     name='Model Prediction'))
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['Predictions'], mode='lines', name='Model Prediction'))
 
-            fig.add_trace(go.Scatter(x=df['Time'], y=df['BES_CH_22'],
-                                     mode='lines',
-                                     name='BES Channel 22'))
+            fig.add_trace(go.Scatter(x=df['Time'], y=df['BES_CH_22'], mode='lines', name='BES Channel 22'))
 
             last = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').last()['Time'].tolist()
             first = df[df['Label'] == 'ELM'].groupby(by='ELM_ID').first()['Time'].tolist()
             for x0, x1 in zip(first, last):
-                fig.add_vrect(x0=x0, x1=x1,
-                              annotation_text='Active ELM Region', annotation_position='top left',
-                              fillcolor='red',
-                              opacity=0.2,
-                              line_width=0)
+                fig.add_vrect(x0=x0, x1=x1, annotation_text='Active ELM Region', annotation_position='top left',
+                              fillcolor='red', opacity=0.2, line_width=0)
 
-            fig.update_layout(hovermode='x unified',
-                              font=dict(size=18)
-                              )
+            fig.update_layout(hovermode='x unified', font=dict(size=18))
 
             fig.show()
 
@@ -779,9 +931,7 @@ class PCA():
             labels = np.chararray(vals.shape, itemsize=7, unicode=True)
             for j in range(4):
                 labels[j, :] = f'Node {4 * i + j}'
-            activations_df = pd.DataFrame(data=list(zip(labels.flat, vals.flat)),
-                                          columns=['Node', 'Activation']
-                                          )
+            activations_df = pd.DataFrame(data=list(zip(labels.flat, vals.flat)), columns=['Node', 'Activation'])
             sns.violinplot(x='Node', y='Activation', data=activations_df, ax=ax)
 
         fig.suptitle(f'Violin Plots of Node Activations in Layer {self.layer}')
@@ -814,6 +964,7 @@ class PCA():
 
         return {key: arr, 'labels': label_arr, 'elm_start_idx': starts, 'elm_end_idx': ends}
 
+
 def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     layers = list(viz.model.layers.keys())[:-1]
     d_lst = []
@@ -830,10 +981,8 @@ def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
         l_lst += [layer] * len(labels)
 
     df_arr = np.array(d_lst).reshape((-1, 2))
-    df = pd.DataFrame({'Layer': l_lst,
-                       'Label': np.tile(labels, len(layers)),
-                       'Time': np.tile(np.arange(len(labels)), len(layers)),
-                       'PC_1': df_arr[:, 0],
+    df = pd.DataFrame({'Layer': l_lst, 'Label': np.tile(labels, len(layers)),
+                       'Time': np.tile(np.arange(len(labels)), len(layers)), 'PC_1': df_arr[:, 0],
                        'PC_2': df_arr[:, 1]})
     fig1 = px.scatter(df, x='PC_1', y='PC_2', animation_frame='Layer', color='Label',
                       title='PC 1 vs PC 2 Over Hidden Neural Network Layers')
@@ -844,6 +993,7 @@ def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     fig1.show()
     fig2.show()
     fig3.show()
+
 
 def plot_signal(pca: PCA):
     import matplotlib.transforms as mtransforms
@@ -858,6 +1008,7 @@ def plot_signal(pca: PCA):
     ax.set_ylabel('Channel Activation (V)')
     ax.set_xlabel('Time (ns)')
     plt.show()
+
 
 def plot_corr_layers(viz_obj):
     fig, (ax1, ax2) = plt.subplots(2, 1)
@@ -949,14 +1100,15 @@ def make_gen_csi(viz: Visualizations, num_iterations: int = 25, use_fft: bool = 
         if use_fft:
             for x in range(num_iterations):
                 out, model_out, gen_i = \
-                viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[-1]
+                    viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[
+                        -1]
                 frame = np.fft.rfftn(out, axes=(1, 2, 0))
                 gen_outs.append((np.log(np.abs(np.fft.fftshift(frame)) ** 2)))
                 gen_model_outs.append(model_out)
         else:
             for x in range(num_iterations):
                 out, model_out, gen_i = \
-                viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[-1]
+                    viz.generate_csi(target_class=cls, iterations=150, random_state=x, blur=blur, l2_weight=l2_weight)[-1]
                 gen_outs.append(out)
                 gen_model_outs.append(model_out)
 
@@ -969,12 +1121,12 @@ def make_gen_csi(viz: Visualizations, num_iterations: int = 25, use_fft: bool = 
         out_lst.append(out)
         model_out_lst.append(model_out)
 
-    _min, _max = np.amin(out_lst), np.amax(out_lst)
+    min_, max_ = np.amin(out_lst), np.amax(out_lst)
     fig, axs = plt.subplots(2, 1)
     for i in range(2):
         ax = axs[i]
         # model_output = torch.sigmoid(viz.model(torch.tensor(out_lst[i][np.newaxis, np.newaxis]))).item()
-        im = ax.imshow(out_lst[i].transpose((1, 2, 0)).reshape(8, 8 * out.shape[0]), vmin=_min, vmax=_max)
+        im = ax.imshow(out_lst[i].transpose((1, 2, 0)).reshape(8, 8 * out.shape[0]), vmin=min_, vmax=max_)
         ax.set_xticks(np.arange(-.5, 8 * out.shape[0] + 0.5, 8), minor=True)
         ax.set_xticklabels([])
         ax.grid(which='minor', color='w', linestyle='-', linewidth=2)
@@ -989,13 +1141,72 @@ def make_gen_csi(viz: Visualizations, num_iterations: int = 25, use_fft: bool = 
     return {cls_lst[0]: (model_out_lst[0], out_lst[0]), cls_lst[1]: (model_out_lst[1], out_lst[1])}
 
 
-if __name__ == "__main__":
-    args, parser = TestArguments().parse(verbose=True)
-    LOGGER = get_logger(script_name=__name__,
-            log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_{args.filename_suffix}.log", ), )
+def pca_with_csi(pca: PCA):
+    test_data = pca.test_data
+    test_set = pca.test_set
 
-    viz = Visualizations(args=args, logger=LOGGER)
-    out = make_gen_csi(viz, use_fft=True, blur=0.1)
-    pelm = torch.tensor(out['pre-ELM'][1]).unsqueeze(0).unsqueeze(0)
-    elm = torch.tensor(out['ELM'][1]).unsqueeze(0).unsqueeze(0)
-    print(torch.sigmoid(viz.model(pelm)).item(), torch.sigmoid(viz.model(elm)).item())
+    for i in range(0, len(test_set), test_set[0][0].shape[1]):
+        ipt, label = test_set[i]
+        label = label.item()
+        ipt = ipt.unsqueeze(0)
+        csi, model_output, ipt_block = viz.generate_csi(label, input_block=ipt, iterations=30)[-1]
+        csi = csi.squeeze()
+
+        idx = i * csi.shape[0]
+        try:
+            test_data[0][idx: idx + csi.shape[0]] = csi
+        except ValueError:
+            l = len(test_data[0][idx:])
+            test_data[0][idx:] = csi[:l]
+
+    pca.test_data = test_data
+    pca.test_set = dataset.ELMDataset(args, *test_data, logger=logger, phase="testing")
+    pca.elm_predictions = pca.get_predictions()
+    pca.perform_PCA()
+    pca.plot_pca(plot_type='grid')
+    pca.plot_pca(plot_type='compare')
+
+
+if __name__ == "__main__":
+
+    # TODO: plot loss vs beta
+    # TODO: show kl and likelihood and mse loss
+    # TODO: Balance classes
+    # TODO: Larger signal window size
+    # TODO: Histogram of distribution of data
+
+    args, parser = TestArguments().parse(verbose=True)
+
+    logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
+                                                                                   f"{args.filename_suffix}.log"))
+    vae_viz = VAEVisualization()
+    vae_viz.show_reconstruction()
+    exit()
+    viz = Visualizations()
+    elm_idx = [0]
+    pca = PCA(viz, layer='fc2', elm_index=elm_idx)
+    pca_with_csi(pca)
+    exit(0)
+    pred_dict1 = pca.elm_predictions[0].copy()
+
+    pca.plot_pca(plot_type='grid')
+    for i, idx in enumerate(elm_idx):
+        elm = pca.elm_predictions[idx]
+        signals = elm['signals']
+        labels = elm['labels']
+        stop = 0
+        for start in range(0, len(signals), pca.args.signal_window_size):
+            stop += pca.args.signal_window_size
+            if stop <= len(labels):
+                model_out = viz.generate_csi(target_class=int(labels[stop]), iterations=30)
+                signals[start:stop] = model_out[-1][0]
+            else:
+                model_out = viz.generate_csi(target_class=int(labels[-1]), iterations=30)
+                signals[start:] = model_out[-1][0][:len(labels) - start]
+        elm['micro_predictions'] = labels
+    print(pca.elm_predictions == pred_dict1, elm == pred_dict1, )
+    pca.perform_PCA()
+    # pca.plot_pca(plot_type='grid')
+    pca.plot_pca(plot_type='compare')
+    pca.perform_PCA()
+    exit()

@@ -102,7 +102,7 @@ class GaussianNoiseData(BaseData):
 #     args, _ = BaseArguments().parse()
 
 #     # create the logger object
-#     logger = utils.get_logger(
+#     logger = utils.make_logger(
 #         script_name=__name__,
 #         stream_handler=True,
 #         # log_file=f"output_logs.log",

@@ -52,7 +52,7 @@ class WaveletData(BaseData):
             _labels = np.array(elm_event["labels"], dtype=np.float32)
 
             if self.args.truncate_inputs:
-                active_elm_indices = np.where(_labels > 0)[0]
+                active_elm_indices = np.asarray(_labels > 0).nonzero()[0]
                 elm_end_index = (active_elm_indices[-1] + self.args.truncate_buffer)
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]

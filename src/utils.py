@@ -19,10 +19,10 @@ class MetricMonitor:
 
     def reset(self):
         """Reset all the parameters to zero."""
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+        self.val: float = 0
+        self.avg: float = 0
+        self.sum: float = 0
+        self.count: float = 0
 
     def update(self, val, n: int = 1):
         """Update the value of the metrics and calculate their
@@ -39,7 +39,8 @@ class MetricMonitor:
 
 
 # log the model and data preprocessing outputs
-def get_logger(script_name: str, log_file: Union[str, None] = None, stream_handler: bool = True, ) -> logging.getLogger:
+def make_logger(script_name: str, log_file: Union[str, None] = None,
+                stream_handler: bool = True, ) -> logging.getLogger:
     """Initiate the logger to log the progress into a file.
 
     Args:
@@ -58,7 +59,7 @@ def get_logger(script_name: str, log_file: Union[str, None] = None, stream_handl
 
     if log_file is not None:
         # create handlers
-        f_handler = logging.FileHandler(os.path.join(log_file), mode="w+")
+        f_handler = logging.FileHandler(os.path.join(log_file), mode="a")
         # create formatters and add it to the handlers
         f_format = logging.Formatter("%(asctime)s:%(name)s %(levelname)s:%(message)s")
         f_handler.setFormatter(f_format)
@@ -175,7 +176,7 @@ def get_params(model: object) -> int:
 def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print("\t\t\t\tMODEL SUMMARY")
     summary(model, input_size=input_size)
-    print(f"Output size: {model(x).shape}")
+    print(f"Output size: {model(x)[-1].shape}")
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 

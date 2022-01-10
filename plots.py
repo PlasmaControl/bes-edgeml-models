@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from src.utils import get_logger
+from src.utils import make_logger
 from options.test_arguments import TestArguments
 import torch
 import torch.nn as nn
@@ -176,9 +176,6 @@ def plot_voxels(n_voxels):
 
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
-    LOGGER = get_logger(
-        script_name=__name__,
-        log_file=None
-    )
+    LOGGER = make_logger(script_name=__name__, log_file=None)
 
     plot_voxels(args, LOGGER)

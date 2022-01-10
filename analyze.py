@@ -464,10 +464,7 @@ def get_layer(model: object, layer: str):
 def main(
         args: argparse.Namespace,
 ) -> None:
-    logger = utils.get_logger(
-        script_name=__name__,
-        stream_handler=True,
-    )
+    logger = utils.make_logger(script_name=__name__, stream_handler=True, )
     # instantiate the elm_model and load the checkpoint
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args)

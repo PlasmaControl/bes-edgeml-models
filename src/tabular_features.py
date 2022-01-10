@@ -72,7 +72,7 @@ def pool_features(args: argparse.Namespace, df: pd.DataFrame, signals: np.ndarra
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
-    LOGGER = utils.get_logger(script_name=__name__)
+    LOGGER = utils.make_logger(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     train_data, valid_data, test_data = data_obj.get_data()

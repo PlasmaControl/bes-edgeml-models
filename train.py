@@ -2,7 +2,8 @@ import os
 import time
 import pickle
 import argparse
-from typing import Union
+from typing import Union, Tuple, List
+import logging
 
 import torch
 import torch.nn as nn
@@ -10,14 +11,16 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
-from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, run, dataset
+from src.train_VAE import ELBOLoss
+
+LOGGER = logging.getLogger(__name__)
 
 
 # TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: str, fold: Union[int, None] = None,
-        desc: bool = True, ) -> None:
+               desc: bool = True, ) -> Tuple[List[float], List[float], List[float], List[float]]:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
 
@@ -40,6 +43,8 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     # containers to hold train and validation losses
     train_loss = []
     valid_loss = []
+    kl_loss = []
+    recon_loss = []
     test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
@@ -72,13 +77,13 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # create image transforms
     if ((args.model_name.startswith("feature")) or (args.model_name.startswith("cnn")) or (
-    args.model_name.startswith("rnn"))):
+            args.model_name.startswith("rnn")) or (args.model_name.startswith("VAE"))):
         transforms = None
     else:
         transforms = dataset.get_transforms(args)
 
     # create datasets
-    train_dataset = dataset.ELMDataset(args, *train_data, logger=LOGGER, phase="training")
+    train_dataset = dataset.ELMDataset(args, *train_data, logger=LOGGER, phase="training", )
 
     valid_dataset = dataset.ELMDataset(args, *valid_data, logger=LOGGER, phase="validation", )
 
@@ -129,10 +134,14 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # get the lr scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2,
-            verbose=True, )
+                                                           verbose=True, )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    if args.model_name.lower().startswith('vae'):
+        is_vae = True
+        criterion = ELBOLoss(reduction='none', beta=args.vae_beta)
+    else:
+        criterion = nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
@@ -141,17 +150,24 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
     engine = run.Run(model, device=device, criterion=criterion, optimizer=optimizer, use_focal_loss=args.focal_loss,
-            use_rnn=use_rnn, )
+                     use_rnn=use_rnn, clip_grad=args.clip_grad)
 
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
         start_time = time.time()
         # train
-        avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
+        if is_vae:
+            avg_loss, train_kl, train_likelihood = engine.train(train_loader, epoch, print_every=args.train_print_every)
+            kl_loss.append(train_kl)
+            recon_loss.append(train_likelihood)
+        else:
+            avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
+
         train_loss.append(avg_loss)
 
         # evaluate
-        avg_val_loss, preds, valid_labels = engine.evaluate(valid_loader, print_every=args.valid_print_every)
+        avg_val_loss, val_kl, val_likelihood, preds, valid_labels = engine.evaluate(valid_loader,
+                                                                                    print_every=args.valid_print_every)
         valid_loss.append(avg_val_loss)
 
         # step the scheduler
@@ -164,7 +180,10 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
                     {"train_loss": avg_loss, "valid_loss": avg_val_loss, }, epoch + 1, )
             writer.close()
         # scoring
-        roc_score = roc_auc_score(valid_labels, preds)
+        if is_vae:
+            roc_score = -1
+        else:
+            roc_score = roc_auc_score(valid_labels, preds)
         elapsed = time.time() - start_time
 
         LOGGER.info(f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}")
@@ -183,17 +202,26 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
             LOGGER.info(f"Epoch: {epoch + 1}, \tSave Best Loss: {best_loss:.4f} Model")
+            if not args.dry_run:
+                # save the model if best loss is found
+                model_save_path = os.path.join(model_ckpt_path,
+                                               f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth", )
+                torch.save({"model": model.state_dict(), "preds": preds}, model_save_path, )
+                LOGGER.info(f"Model saved to: {model_save_path}")
 
     # # save the predictions in the valid dataframe  # valid_folds["preds"] = torch.load(  #     os.path.join(  #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"  #     ),  #     map_location=torch.device("cpu"),  # )["preds"]
 
     # return valid_folds
 
+    # Plot training and validation loss
+    return train_loss, valid_loss, kl_loss, recon_loss
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
-    LOGGER = utils.get_logger(script_name=__name__,
-            log_file=os.path.join(args.log_dir, f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
+    LOGGER = utils.make_logger(script_name=__name__, log_file=os.path.join(args.log_dir,
+                                                                           f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_loop(args, data_obj,
-            test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl", )
+    train_loss, valid_loss, kl_loss, recon_loss = train_loop(args, data_obj,
+                                                             test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl", )
+    plot_loss([], valid_loss)

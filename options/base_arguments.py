@@ -30,15 +30,17 @@ class BaseArguments:
         parser.add_argument("--add_tensorboard", action="store_true", default=False,
                 help="if true, write loss summary to a tensorboard log file.", )
         parser.add_argument("--viz", nargs='?', const=True, default=False, choices=['show_autograd'],
-                help="Create a torchviz conceptual graph of a model. Specify "
-                     "`show_autograd` to view what pytorch saves for backward pass.")
+                            help="Create a torchviz conceptual graph of a model. Specify "
+                                 "`show_autograd` to view what pytorch saves for backward pass.")
         parser.add_argument("--save_pdf", type=str, help="Save figure to pdf. Specify file location.")
         parser.add_argument('--generated', action='store_true', default=False,
-                help='Use generated option if using generated data.')
+                            help='Use generated option if using generated data.')
         parser.add_argument("--device", type=str, default="cpu", help="device to use, [cuda | cpu].", )
         parser.add_argument("--dry_run", action="store_true", default=False,
-                help="if true, train (test) the model without saving anything.", )
+                            help="if true, train (test) the model without saving anything.", )
         parser.add_argument("--n_epochs", type=int, default=10, help="total number of epochs for training.", )
+        parser.add_argument("--vae_beta", type=int, default=1.0,
+                            help="Disentanglement parameter strength for VAE loss criterion.", )
         parser.add_argument("--seed", type=int, default=0, help="seed of the PRNG for reproducibity of results.", )
         # parser.add_argument(
         #     "--kfold",

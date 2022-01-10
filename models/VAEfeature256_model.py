@@ -6,11 +6,12 @@ import torch
 import torch.nn as nn
 
 
-class VAEModel(nn.Module):
+class VAEfeature256Model(nn.Module):
 
-    def __init__(self, args: argparse.Namespace, fc_units: Union[int, Tuple[int, int]] = (40, 20),
-                 dropout_rate: float = 0.4, negative_slope: float = 0.02, maxpool_size: int = 2, num_filters: int = 10,
-                 latent_dim: int = 10, beta: float = 1.0):
+    def __init__(self, args: argparse.Namespace, num_filters: int = 10,
+                 fc_units: Union[int, Tuple[int, int]] = (40, 20), latent_dim: int = 10, beta: float = 1.0,
+                 logscale=nn.Parameter(torch.Tensor([0.0])), dropout_rate: float = 0.4, negative_slope: float = 0.02,
+                 maxpool_size: int = 2, ):
         """
                 8x8 + time feature blocks followed by fully-connected layers. This function
                 takes in a 4-dimensional tensor of size: `(1, signal_window_size, 8, 8)`
@@ -39,10 +40,11 @@ class VAEModel(nn.Module):
                         Defaults to 1.0
                 """
 
-        super(VAEModel, self).__init__()
+        super(VAEfeature256Model, self).__init__()
         self.args = args
         self.latent_dim = latent_dim
         self.beta = beta
+        self.logscale = logscale
 
         pool_size = [1, maxpool_size, maxpool_size]
         filter_size = (int(self.args.signal_window_size), 4, 4)
@@ -74,10 +76,18 @@ class VAEModel(nn.Module):
                         ('relu2_decoder', nn.LeakyReLU(negative_slope=negative_slope)),
                         ('fc3_decoder', nn.Linear(in_features=fc_units[0], out_features=num_filters)),
                         ('dropout3_decoder', nn.Dropout(p=dropout_rate)),
-                        ('relu3_decoder', nn.LeakyReLU(negative_slope=negative_slope)),
-                 ('tconv_decoder',
-                  nn.Linear(in_features=num_filters, out_features=self.args.signal_window_size * 8 * 8)),
+                        ('relu3_decoder', nn.LeakyReLU(negative_slope=negative_slope)), (
+                'tconv_decoder', nn.Linear(in_features=num_filters, out_features=self.args.signal_window_size * 8 * 8)),
                         ('sigmoid_decoder', nn.Sigmoid())]))
+
+        self.apply(self.init_weights_)
+
+    @staticmethod
+    def init_weights_(m):
+        print(m)
+        if type(m) == nn.Linear:
+            with torch.no_grad():
+                torch.nn.init.uniform_(m.weight, -0.08, 0.08)
 
     def encode(self, x):
         dist = self.encoder(x).view(-1, 2, self.latent_dim)
@@ -87,19 +97,19 @@ class VAEModel(nn.Module):
 
     def parameterize(self, mu, logvar):
         if self.training:
-            std = torch.exp(0.5 * logvar)  # standard deviation
-            eps = torch.randn_like(std)  # `randn_like` as we need the same size
+            std = torch.exp(logvar / 2)  # standard deviation
+            eps = torch.randn_like(std)
             sample = mu + (eps * std)  # sampling as if coming from the input space
             return sample
         else:
             return mu
 
     def decode(self, z):
-        return self.decoder(*z).view(-1, 1, self.args.signal_window_size, 8, 8)
+        return self.decoder(z).view(-1, 1, self.args.signal_window_size, 8, 8)
 
     def forward(self, x):
         mu, logvar = self.encode(x)
-        z = self.parameterize(mu, logvar)
-        reconstruction = self.decode(z)
+        sample = self.parameterize(mu, logvar)
+        reconstruction = self.decode(sample)
 
-        return reconstruction, mu, logvar
+        return reconstruction, mu, logvar, sample

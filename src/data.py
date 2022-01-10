@@ -589,10 +589,8 @@ if __name__ == "__main__":
     args, _ = BaseArguments().parse()
 
     # create the logger object
-    logger = utils.get_logger(
-        script_name=__name__,
-        stream_handler=True,
-        # log_file=f"output_logs_{args.data_mode}.log",
+    logger = utils.make_logger(script_name=__name__, stream_handler=True,
+            # log_file=f"output_logs_{args.data_mode}.log",
     )
     data = Data(args, logger, truncate_inputs=True)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)

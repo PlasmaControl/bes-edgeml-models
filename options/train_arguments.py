@@ -19,8 +19,9 @@ class TrainArguments(BaseArguments):
                      "if rnn is used as a Model or for data_preprocessing.", )
         parser.add_argument("--weight_decay", type=float, default=0.005, help="L2 regularization factor.", )
         # training progress display parameters
+        parser.add_argument("--clip_grad", type=float, default=None, help="Gradient clipping weight.", )
         parser.add_argument("--train_print_every", type=int, default=5000,
-                help="frequency of showing training results on screen.", )
+                            help="frequency of showing training results on screen.", )
         parser.add_argument("--valid_print_every", type=int, default=2000,
                 help="frequency of showing validation results on screen.", )
         self.is_train = True
