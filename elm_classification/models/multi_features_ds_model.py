@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+import pywt
 from pytorch_wavelets import DWT1DForward
 
 
@@ -203,6 +204,8 @@ class DWTFeatureModel(_FeatureBase):
                 Defaults to 10.
         """
         super(DWTFeatureModel, self).__init__(*args, **kwargs)
+
+        assert self.args.dwt_level <= pywt.dwt_max_level(self.time_points, self.args.dwt_wavelet)
 
         # DWT and sample calculation to get new time domain size
         self.dwt = DWT1DForward(
