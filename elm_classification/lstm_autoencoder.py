@@ -889,7 +889,7 @@ def main(
             )
         else:
             raise NameError("Model name is not understood.")
-        torch.save(model, model_path)
+        torch.save(model.state_dict(), model_path)
     plot_loss(args, history, base_path=base_path, show_plots=show_plots)
 
     # # classification
