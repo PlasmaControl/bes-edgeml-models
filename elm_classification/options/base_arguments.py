@@ -298,7 +298,7 @@ class BaseArguments:
             "--dwt_level",
             type=int,
             default=3,
-            help="Wavelet decomposition level: int >= 1; default=3",
+            help="Wavelet decomposition level: int >=1, up to pywt.dwt_max_level(); default=3",
         )
 
         self.initialized = True
