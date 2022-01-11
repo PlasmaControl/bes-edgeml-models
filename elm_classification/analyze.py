@@ -16,6 +16,7 @@ from tqdm import tqdm
 from data_preprocessing import *
 from src import utils, dataset
 from options.test_arguments import TestArguments
+from models import multi_features_model
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
 palette = list(sns.color_palette("muted").as_hex())
@@ -101,10 +102,7 @@ def predict(
         active_elm_lower_buffer = active_elm_start - args.truncate_buffer
         active_elm_upper_buffer = active_elm_start + args.truncate_buffer
         predictions = np.zeros(
-            elm_labels.size
-            - args.signal_window_size
-            - args.label_look_ahead
-            + 1
+            elm_labels.size - args.signal_window_size - args.label_look_ahead + 1
         )
         for j in range(predictions.size):
             if args.data_preproc == "gradient":
@@ -114,9 +112,7 @@ def predict(
                     ),
                     dtype=np.float32,
                 )
-                input_signals = np.transpose(
-                    input_signals, axes=(0, 4, 1, 2, 3)
-                )
+                input_signals = np.transpose(input_signals, axes=(0, 4, 1, 2, 3))
             else:
                 input_signals = np.array(
                     elm_signals[j : j + args.signal_window_size, :, :].reshape(
@@ -150,9 +146,7 @@ def predict(
 
         # filter labels and micro-predictions for non-active elm regions
         elm_labels_pre_active_elms = elm_labels[:active_elm_lower_buffer]
-        micro_predictions_pre_active_elms = micro_predictions[
-            :active_elm_lower_buffer
-        ]
+        micro_predictions_pre_active_elms = micro_predictions[:active_elm_lower_buffer]
 
         # calculate macro predictions for each region
         macro_predictions_active_elms = np.array(
@@ -545,28 +539,69 @@ def show_metrics(
 
 
 def model_predict(
-    model,
+    args: argparse.Namespace,
+    logger: logging.Logger,
+    model: object,
     device: torch.device,
-    data_loader: torch.utils.data.DataLoader,
+    data: tuple,
+    data_cwt: Union[tuple, None] = None,
 ) -> None:
     # put the elm_model to eval mode
     model.eval()
     predictions = []
     targets = []
-    for images, labels in tqdm(data_loader):
-        images = images.to(device)
+    test_dataset = dataset.ELMDataset(args, *data, logger=logger, phase="testing")
+    data_loader = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        drop_last=True,
+    )
 
-        with torch.no_grad():
-            preds = model(images)
-        preds = preds.view(-1)
-        predictions.append(torch.sigmoid(preds).cpu().numpy())
-        targets.append(labels.cpu().numpy())
+    inputs, _ = next(iter(test_loader))
+    print(f"Input size: {inputs.shape}")
+
+    if args.multi_features and data_cwt is not None:
+        test_dataset_cwt = dataset.ELMDataset(
+            args, *data_cwt, logger=logger, phase="testing (CWT)"
+        )
+        test_dataset = dataset.ConcatDatasets(test_dataset, test_dataset_cwt)
+        data_loader = torch.utils.data.DataLoader(
+            test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=True
+        )
+
+        inputs, _ = next(iter(test_loader))
+        print(f"Input size: {inputs.shape}")
+
+        for (raw, cwt) in tqdm(data_loader):
+            raw_input, labels = raw[0], raw[1]
+            cwt_input = cwt[0]
+
+            raw_input = raw_input.to(device)
+            cwt_input = cwt_input.to(device)
+
+            with torch.no_grad():
+                preds = model(raw_input, cwt_input)
+
+            preds = preds.view(-1)
+            predictions.append(torch.sigmoid(preds).cpu().numpy())
+            targets.append(labels.cpu().numpy())
+    else:
+        for images, labels in tqdm(data_loader):
+            images = images.to(device)
+
+            with torch.no_grad():
+                preds = model(images)
+            preds = preds.view(-1)
+            predictions.append(torch.sigmoid(preds).cpu().numpy())
+            targets.append(labels.cpu().numpy())
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
+    f1_thresh = 0.35
+    f1 = metrics.f1_score(valid_labels, (predictions > f1_thresh).astype(int))
     print(predictions[:10], targets[:10])
-    print(
-        f"ROC score on test data: {metrics.roc_auc_score(targets, predictions)}"
-    )
+    print(f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
+    print(f"F1 score on test data: {f1:.4f}")
 
 
 def get_dict_values(pred_dict: dict, mode: str):
@@ -597,10 +632,20 @@ def main(
         script_name=__name__,
         stream_handler=True,
     )
+    test_data_cwt = None
+
     # instantiate the elm_model and load the checkpoint
-    model_cls = utils.create_model(args.model_name)
-    model = model_cls(args)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.multi_features:
+        raw_model = multi_features_model.RawFeatureModel(args)
+        fft_model = multi_features_model.FFTFeatureModel(args)
+        cwt_model = multi_features_model.CWTFeatureModel(args)
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args)
+
+    device = torch.device(args.device)
     model = model.to(device)
 
     # load the model checkpoint and other paths
@@ -629,28 +674,18 @@ def main(
         test_data_dir,
         f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
-
     print(f"Using test data file: {test_fname}")
 
     # get the data
     if args.multi_features:
         test_data, test_data_cwt = get_test_data(args, file_name=test_fname)
     else:
-        test_data = get_test_data(args, test_fname)
-
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        drop_last=True,
-    )
-    inputs, _ = next(iter(test_loader))
-    print(f"Input size: {inputs.shape}")
+        test_data = get_test_data(args, file_name=test_fname)
 
     if args.test_data_info:
         show_details(test_data)
 
-    model_predict(model, device, test_loader)
+    model_predict(args, logger, model, device, test_data, test_data_cwt)
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
@@ -661,9 +696,7 @@ def main(
 
     if args.show_metrics:
         # show metrics for micro predictions
-        targets_micro, predictions_micro = get_dict_values(
-            pred_dict, mode="micro"
-        )
+        targets_micro, predictions_micro = get_dict_values(pred_dict, mode="micro")
         show_metrics(
             args,
             targets_micro,
@@ -674,9 +707,7 @@ def main(
             pred_mode="micro",
         )
         # show metrics for macro predictions
-        targets_macro, predictions_macro = get_dict_values(
-            pred_dict, mode="macro"
-        )
+        targets_macro, predictions_macro = get_dict_values(pred_dict, mode="macro")
         show_metrics(
             args,
             targets_macro,
