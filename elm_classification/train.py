@@ -156,9 +156,6 @@ def train_loop(
         # create a combined dataset
         train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
         valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
-        x1, x2 = train_dataset.__getitem__(0)
-        print(x1[0].shape, x1[1].shape)
-        print(x2[0].shape, x2[1].shape)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(

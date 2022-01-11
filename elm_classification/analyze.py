@@ -22,25 +22,20 @@ palette = list(sns.color_palette("muted").as_hex())
 LABELS = ["no ELM", "ELM"]
 
 
-def get_test_dataset(
+def get_test_data(
     args: argparse.Namespace,
     file_name: str,
-    logger: logging.getLogger = None,
-) -> Tuple[tuple, dataset.ELMDataset]:
-    """Read the pickle file containing the test data and return PyTorch dataset
-    and data attributes such as signals, labels, sample_indices, and
-    window_start_indices.
+) -> Union[Tuple[tuple], Tuple[tuple, tuple]]:
+    """Read the pickle file(s) containing the test data and return the data attributes
+    such as signals, labels, sample_indices, and window_start_indices.
 
     Args:
     -----
         args (argparse.Namespace): Argparse namespace object containing all the
             base and test arguments.
         file_name (str): Name of the test data file.
-        logger (logging.getLogger): Logger object that adds inference logs to
-            a file. Defaults to None.
-        transforms: Image transforms to perform data augmentation on the given
-            input. Defaults to None.
     """
+    # read the pickle file and load the contents
     with open(file_name, "rb") as f:
         test_data = pickle.load(f)
 
@@ -49,11 +44,33 @@ def get_test_dataset(
     sample_indices = np.array(test_data["sample_indices"])
     window_start = np.array(test_data["window_start"])
     data_attrs = (signals, labels, sample_indices, window_start)
-    test_dataset = dataset.ELMDataset(
-        args, *data_attrs, logger=logger, phase="testing"
-    )
 
-    return data_attrs, test_dataset
+    # if multi features are used, load that pickle file as well
+    if args.multi_features:
+        # get the base directory
+        base_path = os.path.dirname(file_name)
+        # filename
+        fname = os.path.basename(file_name)
+        # rename the filename for multi-features and join the base path with it
+        fname = "cwt_" + fname
+        file_name_cwt = os.path.join(base_path, fname)
+
+        with open(file_name_cwt, "rb") as f:
+            test_data_cwt = pickle.load(f)
+
+        signals_cwt = np.array(test_data_cwt["signals"])
+        labels_cwt = np.array(test_data_cwt["labels"])
+        sample_indices_cwt = np.array(test_data_cwt["sample_indices"])
+        window_start_cwt = np.array(test_data_cwt["window_start"])
+        data_attrs_cwt = (
+            signals_cwt,
+            labels_cwt,
+            sample_indices_cwt,
+            window_start_cwt,
+        )
+        return data_attrs, data_attrs_cwt
+
+    return data_attrs
 
 
 def predict(
@@ -187,7 +204,7 @@ def plot(
             flag = True
         predictions = elm_predictions[i_elm]["micro_predictions"]
         elm_time = elm_predictions[i_elm]["elm_time"]
-        print(f"ELM {i+1} of {len(elms)} with {len(elm_time)} time points")
+        print(f"ELM {i + 1} of {len(elms)} with {len(elm_time)} time points")
         if (n_rows is not None) and (n_cols is not None):
             plt.subplot(n_rows, n_cols, i + 1)
         else:
@@ -597,7 +614,7 @@ def main(
     ) = output_paths
     model_ckpt_path = os.path.join(
         model_ckpt_dir,
-        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth",
+        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
     )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
@@ -610,13 +627,17 @@ def main(
     # get the test data and dataloader
     test_fname = os.path.join(
         test_data_dir,
-        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl",
+        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
 
     print(f"Using test data file: {test_fname}")
-    test_data, test_dataset = get_test_dataset(
-        args, file_name=test_fname, logger=logger
-    )
+
+    # get the data
+    if args.multi_features:
+        test_data, test_data_cwt = get_test_data(args, file_name=test_fname)
+    else:
+        test_data = get_test_data(args, test_fname)
+
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=args.batch_size,
