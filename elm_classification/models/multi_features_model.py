@@ -152,7 +152,7 @@ class CWTFeatureModel(nn.Module):
         #     else (int(self.args.signal_window_size / 2), 8, 8)
         # )
         # filter_size = (int(np.log2(1024)) + 1, 8, 8)
-        filter_size = (args.signal_window_size, 8, 8)
+        filter_size = (52, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )

@@ -126,7 +126,7 @@ def predict(
                             1,
                             1,
                             args.signal_window_size,
-                            args.signal_window_size,
+                            52,
                             8,
                             8,
                         ]
@@ -825,7 +825,6 @@ def main(
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
     pred_dict = predict(args, model, device, test_data, test_data_cwt)
-    print(pred_dict)
 
     if args.plot_data:
         plot_all(args, pred_dict, plot_dir)
