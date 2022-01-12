@@ -76,9 +76,10 @@ def get_test_data(
 
 def predict(
     args: argparse.Namespace,
-    test_data: tuple,
     model: object,
     device: torch.device,
+    test_data: tuple,
+    test_data_cwt: Union[tuple, None] = None,
 ) -> dict:
     signals = test_data[0]
     print(f"Signals shape: {signals.shape}")
@@ -87,89 +88,214 @@ def predict(
     window_start = test_data[3]
     num_elms = len(window_start)
     elm_predictions = dict()
-    for i_elm in range(num_elms):
-        print(f"Processing elm event with start index: {window_start[i_elm]}")
-        i_start = window_start[i_elm]
-        if i_elm < num_elms - 1:
-            i_stop = window_start[i_elm + 1] - 1
-        else:
-            i_stop = labels.size
-        # gathering the indices for active elm events
-        elm_signals = signals[i_start:i_stop, ...]
-        elm_labels = labels[i_start:i_stop]
-        active_elm = np.where(elm_labels > 0.0)[0]
-        active_elm_start = active_elm[0]
-        active_elm_lower_buffer = active_elm_start - args.truncate_buffer
-        active_elm_upper_buffer = active_elm_start + args.truncate_buffer
-        predictions = np.zeros(
-            elm_labels.size - args.signal_window_size - args.label_look_ahead + 1
-        )
-        for j in range(predictions.size):
-            if args.data_preproc == "gradient":
-                input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
-                        [1, args.signal_window_size, 8, 8, 6]
-                    ),
-                    dtype=np.float32,
-                )
-                input_signals = np.transpose(input_signals, axes=(0, 4, 1, 2, 3))
+    if args.multi_features and test_data_cwt is not None:
+        signals_cwt = test_data_cwt[0]
+        for i_elm in range(num_elms):
+            print(
+                f"Processing {i_elm + 1} of {num_elms} elm events with start index: {window_start[i_elm]}"
+            )
+            i_start = window_start[i_elm]
+            if i_elm < num_elms - 1:
+                i_stop = window_start[i_elm + 1] - 1
             else:
+                i_stop = labels.size
+            # gathering the indices for active elm events
+            elm_signals_cwt = signals_cwt[i_start:i_stop, ...]
+            elm_signals = signals[i_start:i_stop, ...]
+            elm_labels = labels[i_start:i_stop]
+            active_elm = np.where(elm_labels > 0.0)[0]
+            active_elm_start = active_elm[0]
+            active_elm_lower_buffer = active_elm_start - args.truncate_buffer
+            active_elm_upper_buffer = active_elm_start + args.truncate_buffer
+            predictions = np.zeros(
+                elm_labels.size
+                - args.signal_window_size
+                - args.label_look_ahead
+                + 1
+            )
+            for j in range(predictions.size):
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    elm_signals[j : j + args.signal_window_size].reshape(
                         [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=np.float32,
                 )
-            input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
-            input_signals = input_signals.to(device)
-            predictions[j] = model(input_signals)
-        elm_signals = elm_signals[
-            : (-args.signal_window_size - args.label_look_ahead + 1), ...
-        ]
-        elm_labels = elm_labels[
-            : (-args.signal_window_size - args.label_look_ahead + 1)
-        ]
-        # convert logits to probability
-        # calculate micro predictions for each time step
-        micro_predictions = (
-            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
-            .cpu()
-            .numpy()
-        )
-        # filter labels and micro-predictions for active elm regions
-        elm_labels_active_elms = elm_labels[
-            active_elm_lower_buffer:active_elm_upper_buffer
-        ]
-        micro_predictions_active_elms = micro_predictions[
-            active_elm_lower_buffer:active_elm_upper_buffer
-        ]
+                input_signals_cwt = np.array(
+                    elm_signals_cwt[j : j + args.signal_window_size].reshape(
+                        [
+                            1,
+                            1,
+                            args.signal_window_size,
+                            args.signal_window_size,
+                            8,
+                            8,
+                        ]
+                    ),
+                    dtype=np.float32,
+                )
+                input_signals = torch.as_tensor(
+                    input_signals, dtype=torch.float32
+                )
+                input_signals_cwt = torch.as_tensor(
+                    input_signals_cwt, dtype=torch.float32
+                )
 
-        # filter labels and micro-predictions for non-active elm regions
-        elm_labels_pre_active_elms = elm_labels[:active_elm_lower_buffer]
-        micro_predictions_pre_active_elms = micro_predictions[:active_elm_lower_buffer]
+                input_signals = input_signals.to(device)
+                input_signals_cwt = input_signals_cwt.to(device)
+                predictions[j] = model(input_signals, input_signals_cwt)
+            elm_signals = elm_signals[
+                : (-args.signal_window_size - args.label_look_ahead + 1), ...
+            ]
+            elm_signals_cwt = elm_signals_cwt[
+                : (-args.signal_window_size - args.label_look_ahead + 1), ...
+            ]
+            elm_labels = elm_labels[
+                : (-args.signal_window_size - args.label_look_ahead + 1)
+            ]
+            # convert logits to probability
+            # calculate micro predictions for each time step
+            micro_predictions = (
+                torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+                .cpu()
+                .numpy()
+            )
+            # filter labels and micro-predictions for active elm regions
+            elm_labels_active_elms = elm_labels[
+                active_elm_lower_buffer:active_elm_upper_buffer
+            ]
+            micro_predictions_active_elms = micro_predictions[
+                active_elm_lower_buffer:active_elm_upper_buffer
+            ]
 
-        # calculate macro predictions for each region
-        macro_predictions_active_elms = np.array(
-            [np.any(micro_predictions_active_elms).astype(int)]
-        )
+            # filter labels and micro-predictions for non-active elm regions
+            # elm_labels_pre_active_elms = elm_labels[:active_elm_lower_buffer]
+            micro_predictions_pre_active_elms = micro_predictions[
+                :active_elm_lower_buffer
+            ]
 
-        macro_predictions_pre_active_elms = np.array(
-            [np.any(micro_predictions_pre_active_elms > 0.5).astype(int)]
-        )
+            # calculate macro predictions for each region
+            macro_predictions_active_elms = np.array(
+                [np.any(micro_predictions_active_elms).astype(int)]
+            )
 
-        macro_labels = np.array([0, 1], dtype="int")
-        macro_predictions = np.concatenate(
-            [macro_predictions_pre_active_elms, macro_predictions_active_elms]
-        )
-        elm_time = np.arange(elm_labels.size)
-        elm_predictions[window_start[i_elm]] = {
-            "signals": elm_signals,
-            "labels": elm_labels,
-            "micro_predictions": micro_predictions,
-            "macro_labels": macro_labels,
-            "macro_predictions": macro_predictions,
-            "elm_time": elm_time,
-        }
+            macro_predictions_pre_active_elms = np.array(
+                [np.any(micro_predictions_pre_active_elms > 0.5).astype(int)]
+            )
+
+            macro_labels = np.array([0, 1], dtype="int")
+            macro_predictions = np.concatenate(
+                [
+                    macro_predictions_pre_active_elms,
+                    macro_predictions_active_elms,
+                ]
+            )
+            elm_time = np.arange(elm_labels.size)
+            elm_predictions[window_start[i_elm]] = {
+                "signals": elm_signals,
+                "labels": elm_labels,
+                "micro_predictions": micro_predictions,
+                "macro_labels": macro_labels,
+                "macro_predictions": macro_predictions,
+                "elm_time": elm_time,
+            }
+    else:
+        for i_elm in range(num_elms):
+            print(
+                f"Processing elm event with start index: {window_start[i_elm]}"
+            )
+            i_start = window_start[i_elm]
+            if i_elm < num_elms - 1:
+                i_stop = window_start[i_elm + 1] - 1
+            else:
+                i_stop = labels.size
+            # gathering the indices for active elm events
+            elm_signals = signals[i_start:i_stop, ...]
+            elm_labels = labels[i_start:i_stop]
+            active_elm = np.where(elm_labels > 0.0)[0]
+            active_elm_start = active_elm[0]
+            active_elm_lower_buffer = active_elm_start - args.truncate_buffer
+            active_elm_upper_buffer = active_elm_start + args.truncate_buffer
+            predictions = np.zeros(
+                elm_labels.size
+                - args.signal_window_size
+                - args.label_look_ahead
+                + 1
+            )
+            for j in range(predictions.size):
+                if args.data_preproc == "gradient":
+                    input_signals = np.array(
+                        elm_signals[
+                            j : j + args.signal_window_size, :, :
+                        ].reshape([1, args.signal_window_size, 8, 8, 6]),
+                        dtype=np.float32,
+                    )
+                    input_signals = np.transpose(
+                        input_signals, axes=(0, 4, 1, 2, 3)
+                    )
+                else:
+                    input_signals = np.array(
+                        elm_signals[
+                            j : j + args.signal_window_size, :, :
+                        ].reshape([1, 1, args.signal_window_size, 8, 8]),
+                        dtype=np.float32,
+                    )
+                input_signals = torch.as_tensor(
+                    input_signals, dtype=torch.float32
+                )
+                input_signals = input_signals.to(device)
+                predictions[j] = model(input_signals)
+            elm_signals = elm_signals[
+                : (-args.signal_window_size - args.label_look_ahead + 1), ...
+            ]
+            elm_labels = elm_labels[
+                : (-args.signal_window_size - args.label_look_ahead + 1)
+            ]
+            # convert logits to probability
+            # calculate micro predictions for each time step
+            micro_predictions = (
+                torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+                .cpu()
+                .numpy()
+            )
+            # filter labels and micro-predictions for active elm regions
+            elm_labels_active_elms = elm_labels[
+                active_elm_lower_buffer:active_elm_upper_buffer
+            ]
+            micro_predictions_active_elms = micro_predictions[
+                active_elm_lower_buffer:active_elm_upper_buffer
+            ]
+
+            # filter labels and micro-predictions for non-active elm regions
+            # elm_labels_pre_active_elms = elm_labels[:active_elm_lower_buffer]
+            micro_predictions_pre_active_elms = micro_predictions[
+                :active_elm_lower_buffer
+            ]
+
+            # calculate macro predictions for each region
+            macro_predictions_active_elms = np.array(
+                [np.any(micro_predictions_active_elms).astype(int)]
+            )
+
+            macro_predictions_pre_active_elms = np.array(
+                [np.any(micro_predictions_pre_active_elms > 0.5).astype(int)]
+            )
+
+            macro_labels = np.array([0, 1], dtype="int")
+            macro_predictions = np.concatenate(
+                [
+                    macro_predictions_pre_active_elms,
+                    macro_predictions_active_elms,
+                ]
+            )
+            elm_time = np.arange(elm_labels.size)
+            elm_predictions[window_start[i_elm]] = {
+                "signals": elm_signals,
+                "labels": elm_labels,
+                "micro_predictions": micro_predictions,
+                "macro_labels": macro_labels,
+                "macro_predictions": macro_predictions,
+                "elm_time": elm_time,
+            }
     return elm_predictions
 
 
@@ -236,7 +362,6 @@ def plot(
             label="Ground truth",
             ls="-",
             lw=1.25,
-            # c=colors[1],
         )
         plt.plot(
             elm_time,  # - args.label_look_ahead,
@@ -244,7 +369,6 @@ def plot(
             label="Prediction",
             ls="-",
             lw=1.25,
-            # c="slategrey",
         )
         if flag:
             plt.axvline(
@@ -297,8 +421,8 @@ def plot(
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
         flag = False
-        if i == 36:
-            break
+        # if i == 36:
+        #     break
     plt.suptitle(
         f"Model output, ELM index: {elm_range}",
         fontsize=20,
@@ -308,7 +432,7 @@ def plot(
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series_{elm_range}.png",
+                f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}_time_series_{elm_range}{args.filename_suffix}.png",
             ),
             dpi=200,
         )
@@ -320,13 +444,13 @@ def plot_all(
     elm_predictions: dict,
     plot_dir: str,
 ) -> None:
-    state = np.random.RandomState(seed=args.seed)
     elm_id = list(elm_predictions.keys())
-    # i_elms = state.choice(elm_id, args.plot_num, replace=False)
     i_elms_1_12 = elm_id[:12]
     i_elms_12_24 = elm_id[12:24]
     i_elms_24_36 = elm_id[24:36]
-    # i_elms_36_42 = elm_id[36:]
+    i_elms_36_48 = elm_id[36:48]
+    i_elms_48_60 = elm_id[48:60]
+    i_elms_60_66 = elm_id[60:66]
 
     # plot 1-12
     plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
@@ -334,17 +458,21 @@ def plot_all(
     plot(args, elm_predictions, plot_dir, i_elms_12_24, elm_range="12-24")
     # plot 24-36
     plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
-    # plot 36-42
-    # plot(
-    #     args,
-    #     elm_predictions,
-    #     plot_dir,
-    #     i_elms_36_42,
-    #     elm_range="36-42",
-    #     n_rows=2,
-    #     n_cols=3,
-    #     figsize=(14, 6),
-    # )
+    # plot 36-48
+    plot(args, elm_predictions, plot_dir, i_elms_36_48, elm_range="36-48")
+    # plot 48-60
+    plot(args, elm_predictions, plot_dir, i_elms_48_60, elm_range="48-60")
+    # plot 60-66
+    plot(
+        args,
+        elm_predictions,
+        plot_dir,
+        i_elms_60_66,
+        elm_range="60-66",
+        n_rows=2,
+        n_cols=3,
+        figsize=(14, 6),
+    )
 
 
 def show_details(test_data: tuple) -> None:
@@ -437,21 +565,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
+                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
+                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}.png",
+                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )
@@ -513,21 +641,21 @@ def show_metrics(
             df.to_csv(
                 os.path.join(
                     report_dir,
-                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
+                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=True,
             )
             roc_details.to_csv(
                 os.path.join(
                     roc_dir,
-                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.csv",
+                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
                 ),
                 index=False,
             )
             fig.savefig(
                 os.path.join(
                     plot_dir,
-                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}.png",
+                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
                 ),
                 dpi=100,
             )
@@ -550,7 +678,9 @@ def model_predict(
     model.eval()
     predictions = []
     targets = []
-    test_dataset = dataset.ELMDataset(args, *data, logger=logger, phase="testing")
+    test_dataset = dataset.ELMDataset(
+        args, *data, logger=logger, phase="testing"
+    )
     data_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=args.batch_size,
@@ -558,7 +688,7 @@ def model_predict(
         drop_last=True,
     )
 
-    inputs, _ = next(iter(test_loader))
+    inputs, _ = next(iter(data_loader))
     print(f"Input size: {inputs.shape}")
 
     if args.multi_features and data_cwt is not None:
@@ -567,11 +697,14 @@ def model_predict(
         )
         test_dataset = dataset.ConcatDatasets(test_dataset, test_dataset_cwt)
         data_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=True
+            test_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            drop_last=True,
         )
 
-        inputs, _ = next(iter(test_loader))
-        print(f"Input size: {inputs.shape}")
+        raw, cwt = next(iter(data_loader))
+        print(f"Input size: {raw[0].shape}, {cwt[0].shape}")
 
         for (raw, cwt) in tqdm(data_loader):
             raw_input, labels = raw[0], raw[1]
@@ -598,9 +731,11 @@ def model_predict(
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
     f1_thresh = 0.35
-    f1 = metrics.f1_score(valid_labels, (predictions > f1_thresh).astype(int))
+    f1 = metrics.f1_score(targets, (predictions > f1_thresh).astype(int))
     print(predictions[:10], targets[:10])
-    print(f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
+    print(
+        f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}"
+    )
     print(f"F1 score on test data: {f1:.4f}")
 
 
@@ -644,7 +779,7 @@ def main(
     else:
         model_cls = utils.create_model(args.model_name)
         model = model_cls(args)
-
+    print(model)
     device = torch.device(args.device)
     model = model.to(device)
 
@@ -689,14 +824,17 @@ def main(
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict(args, test_data, model, device)
+    pred_dict = predict(args, model, device, test_data, test_data_cwt)
+    print(pred_dict)
 
     if args.plot_data:
         plot_all(args, pred_dict, plot_dir)
 
     if args.show_metrics:
         # show metrics for micro predictions
-        targets_micro, predictions_micro = get_dict_values(pred_dict, mode="micro")
+        targets_micro, predictions_micro = get_dict_values(
+            pred_dict, mode="micro"
+        )
         show_metrics(
             args,
             targets_micro,
@@ -707,7 +845,9 @@ def main(
             pred_mode="micro",
         )
         # show metrics for macro predictions
-        targets_macro, predictions_macro = get_dict_values(pred_dict, mode="macro")
+        targets_macro, predictions_macro = get_dict_values(
+            pred_dict, mode="macro"
+        )
         show_metrics(
             args,
             targets_macro,
