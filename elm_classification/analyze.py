@@ -126,7 +126,7 @@ def predict(
                             1,
                             1,
                             args.signal_window_size,
-                            11,  # args.signal_window_size,
+                            args.signal_window_size,
                             8,
                             8,
                         ]
