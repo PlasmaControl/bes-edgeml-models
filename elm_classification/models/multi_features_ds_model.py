@@ -236,7 +236,7 @@ class DWTFeatureModel(_FeatureBase):
 
         dwt_output_shape = list(x.shape)
         dwt_output_shape[2] = self.dwt_output_length
-        x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype)
+        x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype, device=x.device)
         for ibatch in torch.arange(x.shape[0]):  # loop over batch members
             x_tmp = x[ibatch, 0, :, :, :].permute(
                 1, 2, 0
