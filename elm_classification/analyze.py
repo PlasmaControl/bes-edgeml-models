@@ -107,13 +107,14 @@ def predict(
             active_elm_start = active_elm[0]
             active_elm_lower_buffer = active_elm_start - args.truncate_buffer
             active_elm_upper_buffer = active_elm_start + args.truncate_buffer
-            predictions = np.zeros(
+            predictions = np.zeros(elm_labels.size)
+            effective_len = (
                 elm_labels.size
                 - args.signal_window_size
                 - args.label_look_ahead
                 + 1
             )
-            for j in range(predictions.size):
+            for j in range(effective_len):
                 input_signals = np.array(
                     elm_signals[j : j + args.signal_window_size],
                     dtype=np.float32,
@@ -143,24 +144,11 @@ def predict(
 
                 input_signals = input_signals.to(device)
                 input_signals_cwt = input_signals_cwt.to(device)
-                predictions[j] = model(input_signals, input_signals_cwt)
-            elm_signals = elm_signals[
-                : (-args.signal_window_size - args.label_look_ahead + 1), ...
-            ]
-            elm_signals_cwt = elm_signals_cwt[
-                : (-args.signal_window_size - args.label_look_ahead + 1), ...
-            ]
-            elm_labels = elm_labels[
-                : (-args.signal_window_size - args.label_look_ahead + 1)
-            ]
+                predictions[
+                    j + args.signal_window_size + args.label_look_ahead - 1
+                ] = model(input_signals, input_signals_cwt)
 
-            # elm_signals = elm_signals[: (-args.label_look_ahead + 1), ...]
-            # elm_signals_cwt = elm_signals_cwt[
-            #     : (-args.label_look_ahead + 1), ...
-            # ]
-            # elm_labels = elm_labels[: (-args.label_look_ahead + 1)]
-            elm_time = np.arange(elm_labels.size)  # - args.label_look_ahead)
-
+            elm_time = np.arange(elm_labels.size)
             # convert logits to probability
             # calculate micro predictions for each time step
             micro_predictions = (
@@ -168,6 +156,9 @@ def predict(
                 .cpu()
                 .numpy()
             )
+            micro_predictions[
+                : (args.signal_window_size + args.label_look_ahead - 1)
+            ] = 0
             # filter labels and micro-predictions for active elm regions
             elm_labels_active_elms = elm_labels[
                 active_elm_lower_buffer:active_elm_upper_buffer
@@ -232,13 +223,14 @@ def predict(
             active_elm_start = active_elm[0]
             active_elm_lower_buffer = active_elm_start - args.truncate_buffer
             active_elm_upper_buffer = active_elm_start + args.truncate_buffer
-            predictions = np.zeros(
+            predictions = np.zeros(elm_labels.size)
+            effective_len = (
                 elm_labels.size
                 - args.signal_window_size
                 - args.label_look_ahead
                 + 1
             )
-            for j in range(predictions.size):
+            for j in range(effective_len):
                 if args.data_preproc == "gradient":
                     input_signals = np.array(
                         elm_signals[
@@ -260,15 +252,9 @@ def predict(
                     input_signals, dtype=torch.float32
                 )
                 input_signals = input_signals.to(device)
-            #     predictions[j] = model(input_signals)
-            # elm_signals = elm_signals[
-            #     : (-args.signal_window_size - args.label_look_ahead + 1), ...
-            # ]
-            # elm_labels = elm_labels[
-            #     : (-args.signal_window_size - args.label_look_ahead + 1)
-            # ]
-            elm_signals = elm_signals[: (-args.label_look_ahead + 1), ...]
-            elm_labels = elm_labels[: (-args.label_look_ahead + 1)]
+                predictions[
+                    j + args.signal_window_size + args.label_look_ahead - 1
+                ] = model(input_signals)
             # convert logits to probability
             # calculate micro predictions for each time step
             micro_predictions = (
@@ -276,6 +262,9 @@ def predict(
                 .cpu()
                 .numpy()
             )
+            micro_predictions[
+                : (args.signal_window_size + args.label_look_ahead - 1)
+            ] = 0
             # filter labels and micro-predictions for active elm regions
             elm_labels_active_elms = elm_labels[
                 active_elm_lower_buffer:active_elm_upper_buffer
@@ -357,40 +346,33 @@ def plot(
         #         signals[:, 2, 6, 0] / np.max(signals),
         #         label="BES ch. 22",
         #         lw=1.25,
-        #         # c=colors[0],
         #     )
         # else:
         #     # plt.plot(
         #     #     elm_time,
-        #     #     signals[:, 0, 0] / signal_max,
-        #     #     label="Ch. 1",  # c=colors[0]
+        #     #     signals[:, 0, 0] / np.max(signals),
+        #     #     label="Ch. 1",
         #     #     lw=1.25,
         #     # )
         plt.plot(
-            # elm_time,
-            signals[:, 2, 6] / np.max(signals),  # / signal_max,
-            label="Ch. 22",  # c=colors[0]
+            elm_time,
+            signals[:, 2, 6] / np.max(signals),
+            label="Ch. 22",
             lw=1.25,
         )
-        # plt.plot(
-        #     elm_time,
-        #     signals[:, 7, 7],  # / signal_max,
-        #     label="Ch. 64",  # c=colors[0]
-        #     lw=1.25,
-        # )
         plt.plot(
-            # elm_time,
+            elm_time,
             labels + 0.02,
             label="Ground truth",
             ls="-",
             lw=1.25,
         )
         plt.plot(
-            # elm_time,  # - args.label_look_ahead,
+            elm_time,
             predictions,
             label="Prediction",
             ls="-",
-            lw=1.25,
+            lw=0.75,
         )
         if flag:
             plt.axvline(
@@ -443,8 +425,6 @@ def plot(
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
         flag = False
-        # if i == 36:
-        #     break
     plt.suptitle(
         f"Model output, ELM index: {elm_range}",
         fontsize=20,
