@@ -115,10 +115,11 @@ def predict(
             )
             for j in range(predictions.size):
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size].reshape(
-                        [1, 1, args.signal_window_size, 8, 8]
-                    ),
+                    elm_signals[j : j + args.signal_window_size],
                     dtype=np.float32,
+                )
+                input_signals = input_signals.reshape(
+                    [1, 1, args.signal_window_size, 8, 8]
                 )
                 input_signals_cwt = np.array(
                     elm_signals_cwt[j : j + args.signal_window_size].reshape(
@@ -152,6 +153,14 @@ def predict(
             elm_labels = elm_labels[
                 : (-args.signal_window_size - args.label_look_ahead + 1)
             ]
+
+            # elm_signals = elm_signals[: (-args.label_look_ahead + 1), ...]
+            # elm_signals_cwt = elm_signals_cwt[
+            #     : (-args.label_look_ahead + 1), ...
+            # ]
+            # elm_labels = elm_labels[: (-args.label_look_ahead + 1)]
+            elm_time = np.arange(elm_labels.size)  # - args.label_look_ahead)
+
             # convert logits to probability
             # calculate micro predictions for each time step
             micro_predictions = (
@@ -189,7 +198,13 @@ def predict(
                     macro_predictions_active_elms,
                 ]
             )
-            elm_time = np.arange(elm_labels.size)
+            print(f"Signals shape: {elm_signals.shape}")
+            print(f"Signals CWT shape: {elm_signals_cwt.shape}")
+            print(f"Labels shape: {elm_labels.shape}")
+            print(f"Time shape: {elm_time.shape}")
+            print(f"Micro predictions shape: {micro_predictions.shape}")
+            print(f"Macro predictions shape: {macro_predictions.shape}")
+
             elm_predictions[window_start[i_elm]] = {
                 "signals": elm_signals,
                 "labels": elm_labels,
@@ -198,6 +213,8 @@ def predict(
                 "macro_predictions": macro_predictions,
                 "elm_time": elm_time,
             }
+            if i_elm == 11:
+                break
     else:
         for i_elm in range(num_elms):
             print(
@@ -243,13 +260,15 @@ def predict(
                     input_signals, dtype=torch.float32
                 )
                 input_signals = input_signals.to(device)
-                predictions[j] = model(input_signals)
-            elm_signals = elm_signals[
-                : (-args.signal_window_size - args.label_look_ahead + 1), ...
-            ]
-            elm_labels = elm_labels[
-                : (-args.signal_window_size - args.label_look_ahead + 1)
-            ]
+            #     predictions[j] = model(input_signals)
+            # elm_signals = elm_signals[
+            #     : (-args.signal_window_size - args.label_look_ahead + 1), ...
+            # ]
+            # elm_labels = elm_labels[
+            #     : (-args.signal_window_size - args.label_look_ahead + 1)
+            # ]
+            elm_signals = elm_signals[: (-args.label_look_ahead + 1), ...]
+            elm_labels = elm_labels[: (-args.label_look_ahead + 1)]
             # convert logits to probability
             # calculate micro predictions for each time step
             micro_predictions = (
@@ -288,6 +307,9 @@ def predict(
                 ]
             )
             elm_time = np.arange(elm_labels.size)
+            print(f"Signals shape: {elm_signals.shape}")
+            print(f"Labels shape: {elm_labels.shape}")
+            print(f"Time shape: {elm_time.shape}")
             elm_predictions[window_start[i_elm]] = {
                 "signals": elm_signals,
                 "labels": elm_labels,
@@ -345,7 +367,7 @@ def plot(
         #     #     lw=1.25,
         #     # )
         plt.plot(
-            elm_time,
+            # elm_time,
             signals[:, 2, 6] / np.max(signals),  # / signal_max,
             label="Ch. 22",  # c=colors[0]
             lw=1.25,
@@ -357,14 +379,14 @@ def plot(
         #     lw=1.25,
         # )
         plt.plot(
-            elm_time,
+            # elm_time,
             labels + 0.02,
             label="Ground truth",
             ls="-",
             lw=1.25,
         )
         plt.plot(
-            elm_time,  # - args.label_look_ahead,
+            # elm_time,  # - args.label_look_ahead,
             predictions,
             label="Prediction",
             ls="-",
@@ -820,7 +842,7 @@ def main(
     if args.test_data_info:
         show_details(test_data)
 
-    model_predict(args, logger, model, device, test_data, test_data_cwt)
+    # model_predict(args, logger, model, device, test_data, test_data_cwt)
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
