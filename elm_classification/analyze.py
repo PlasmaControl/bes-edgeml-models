@@ -107,7 +107,7 @@ def predict(
             active_elm_start = active_elm[0]
             active_elm_lower_buffer = active_elm_start - args.truncate_buffer
             active_elm_upper_buffer = active_elm_start + args.truncate_buffer
-            predictions = np.zeros(elm_labels.size)
+            predictions = []
             effective_len = (
                 elm_labels.size
                 - args.signal_window_size
@@ -144,10 +144,9 @@ def predict(
 
                 input_signals = input_signals.to(device)
                 input_signals_cwt = input_signals_cwt.to(device)
-                predictions[
-                    j + args.signal_window_size + args.label_look_ahead - 1
-                ] = model(input_signals, input_signals_cwt)
-
+                outputs = model(input_signals, input_signals_cwt)
+                predictions.append(outputs.item())
+            predictions = np.array(predictions)
             elm_time = np.arange(elm_labels.size)
             # convert logits to probability
             # calculate micro predictions for each time step
@@ -156,9 +155,12 @@ def predict(
                 .cpu()
                 .numpy()
             )
-            micro_predictions[
-                : (args.signal_window_size + args.label_look_ahead - 1)
-            ] = 0
+            micro_predictions = np.pad(
+                micro_predictions,
+                pad_width=(args.signal_window_size - 1, args.label_look_ahead),
+                mode="constant",
+                constant_values=(0, 0),
+            )
             # filter labels and micro-predictions for active elm regions
             elm_labels_active_elms = elm_labels[
                 active_elm_lower_buffer:active_elm_upper_buffer
@@ -372,7 +374,7 @@ def plot(
             predictions,
             label="Prediction",
             ls="-",
-            lw=0.75,
+            lw=1,
         )
         if flag:
             plt.axvline(
