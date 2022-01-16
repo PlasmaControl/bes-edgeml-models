@@ -206,8 +206,6 @@ def predict(
                 "macro_predictions": macro_predictions,
                 "elm_time": elm_time,
             }
-            if i_elm == 11:
-                break
     else:
         for i_elm in range(num_elms):
             print(
