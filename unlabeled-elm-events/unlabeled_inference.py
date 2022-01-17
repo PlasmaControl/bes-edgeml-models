@@ -308,7 +308,6 @@ def predict(
         elm_predictions[elm_event] = {
             "signals": signal,
             "micro_predictions": micro_predictions,
-            "elm_time": time,
         }
     return elm_predictions
 
@@ -323,27 +322,33 @@ def plot(
     figsize: tuple = (14, 12),
     dry_run: bool = True,
 ) -> None:
-    flag = False
     fig = plt.figure(figsize=figsize)
     for i, elm_event in enumerate(elms):
         signals = elm_predictions[elm_event]["signals"]
         # signal_max = np.max(signals)
         predictions = elm_predictions[elm_event]["micro_predictions"]
-        elm_time = elm_predictions[elm_event]["elm_time"]
-        print(f"ELM {i + 1} of {len(elms)} with {len(elm_time)} time points")
+        print(f"ELM {i + 1} of {len(elms)} with {len(signals)} time points")
         plt.subplot(n_rows, n_cols, i + 1)
         plt.plot(
-            elm_time,
-            signals[:, 21] / np.max(signals),
+            signals[:, 0] / np.max(signals),
             label="Ch. 22",
-            lw=1.25,
+            lw=0.85,
         )
         plt.plot(
-            elm_time,
+            signals[:, 21] / np.max(signals),
+            label="Ch. 22",
+            lw=0.85,
+        )
+        plt.plot(
+            signals[:, 63] / np.max(signals),
+            label="Ch. 64",
+            lw=0.85,
+        )
+        plt.plot(
             predictions,
             label="Prediction",
             ls="-",
-            lw=1,
+            lw=1.25,
         )
         plt.title(f"ELM ID: {elm_event}", fontsize=12)
         plt.xlabel("Time (micro-s)", fontsize=10)
@@ -352,7 +357,7 @@ def plot(
         plt.tick_params(axis="y", labelsize=8)
         plt.ylim([None, 1.1])
         sns.despine(offset=10, trim=False)
-        plt.legend(fontsize=7, frameon=False)
+        plt.legend(fontsize=6, ncol=2, frameon=False)
         plt.gca().spines["left"].set_color("lightgrey")
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
@@ -377,11 +382,11 @@ def plot_all(
 ) -> None:
     elm_id = list(elm_predictions.keys())
     i_elms_1_12 = elm_id[:12]
-    i_elms_12_24 = elm_id[12:24]
-    i_elms_24_36 = elm_id[24:36]
-    i_elms_36_48 = elm_id[36:48]
-    i_elms_48_60 = elm_id[48:60]
-    i_elms_60_66 = elm_id[60:64]
+    # i_elms_12_24 = elm_id[12:24]
+    # i_elms_24_36 = elm_id[24:36]
+    # i_elms_36_48 = elm_id[36:48]
+    # i_elms_48_60 = elm_id[48:60]
+    # i_elms_60_64 = elm_id[60:64]
 
     # plot 1-12
     plot(
@@ -393,64 +398,64 @@ def plot_all(
         n_cols=3,
         dry_run=dry_run,
     )
-    # plot 12-24
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_12_24,
-        elm_range="12-24",
-        n_rows=4,
-        n_cols=3,
-        dry_run=dry_run,
-    )
-    # plot 24-36
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_24_36,
-        elm_range="24-36",
-        n_rows=4,
-        n_cols=3,
-        dry_run=dry_run,
-    )
-    # plot 36-48
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_36_48,
-        elm_range="36-48",
-        n_rows=4,
-        n_cols=3,
-        dry_run=dry_run,
-    )
-    # plot 48-60
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_48_60,
-        elm_range="48-60",
-        n_rows=4,
-        n_cols=3,
-        dry_run=dry_run,
-    )
-    # plot 60-66
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_60_66,
-        elm_range="60-64",
-        n_rows=2,
-        n_cols=2,
-        figsize=(10, 6),
-        dry_run=dry_run,
-    )
+    # # plot 12-24
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_12_24,
+    #     elm_range="12-24",
+    #     n_rows=4,
+    #     n_cols=3,
+    #     dry_run=dry_run,
+    # )
+    # # plot 24-36
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_24_36,
+    #     elm_range="24-36",
+    #     n_rows=4,
+    #     n_cols=3,
+    #     dry_run=dry_run,
+    # )
+    # # plot 36-48
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_36_48,
+    #     elm_range="36-48",
+    #     n_rows=4,
+    #     n_cols=3,
+    #     dry_run=dry_run,
+    # )
+    # # plot 48-60
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_48_60,
+    #     elm_range="48-60",
+    #     n_rows=4,
+    #     n_cols=3,
+    #     dry_run=dry_run,
+    # )
+    # # plot 60-66
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_60_64,
+    #     elm_range="60-64",
+    #     n_rows=2,
+    #     n_cols=2,
+    #     figsize=(10, 6),
+    #     dry_run=dry_run,
+    # )
 
 
 if __name__ == "__main__":
     # signal window size and label lookahead
     sws = 512
     la = 0
-    num_unlabeled_events = 2
+    num_unlabeled_events = 12
 
     # define paths for model checkpoint and unlabeled data
     base_path = os.path.dirname(os.getcwd())
@@ -465,7 +470,6 @@ if __name__ == "__main__":
     model = get_model(sws)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    print(model)
 
     # load saved model from checkpoint
     model.load_state_dict(
@@ -482,4 +486,4 @@ if __name__ == "__main__":
     file_obj.close()
 
     # plot
-    plot_all(predictions, plot_dir=os.getcwd(), dry_run=True)
+    plot_all(predictions, plot_dir=os.getcwd(), dry_run=False)
