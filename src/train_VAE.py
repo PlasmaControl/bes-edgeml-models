@@ -17,6 +17,7 @@ class ELBOLoss:
         self.reduction = reduction
 
     def __call__(self, data_in, reconstruction, sample, mu, logvar, logscale):
+        # Likelihood
         recon_loss = self.gaussian_likelihood(reconstruction, data_in, logscale)
 
         # kl
@@ -25,6 +26,7 @@ class ELBOLoss:
 
         # elbo
         elbo = (self.beta * kl - recon_loss)
+
         if self.reduction == 'mean':
             elbo = elbo.mean()
 
@@ -40,11 +42,11 @@ class ELBOLoss:
         q = torch.distributions.Normal(mu, std)
 
         # 2. get the probabilities from the equation
-        log_qsx = q.log_prob(sample)
-        log_ps = p.log_prob(sample)
+        log_qzx = q.log_prob(sample)
+        log_pz = p.log_prob(sample)
 
         # kl
-        kl = (log_qsx - log_ps)
+        kl = (log_qzx - log_pz)
 
         # sum over last dim to go from single dim distribution to multi-dim
         kl = kl.sum(-1)

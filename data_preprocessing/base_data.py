@@ -87,6 +87,8 @@ class BaseData:
             self.logger.info("-" * 30)
             test_data = self._preprocess_data(test_elms, shuffle_sample_indices=shuffle_sample_indices, )
 
+        if self.args.balance_data:
+            train_data, validation_data, test_data = self._balance_data(train_data, validation_data, test_data)
         self.hf.close()
         if self.hf:
             self.logger.info("File is open.")
@@ -94,6 +96,54 @@ class BaseData:
             self.logger.info("File is closed.")
 
         return ((all_elms, all_data) if self.args.use_all_data else (train_data, validation_data, test_data,))
+
+    def _balance_data(self, train, valid, test):
+
+        clip_type = self.args.balance_data
+
+        self.logger.info("-" * 40)
+        self.logger.info(f"  Balancing data - {clip_type}")
+        self.logger.info("-" * 40)
+
+        old = [train, valid, test]
+        new = [None, None, None]
+
+        for x, old_set in enumerate(old):
+            signals, labels, idx, start_idx = old_set
+            clipped = [[], [], []]
+            for j, i in enumerate(start_idx, start=1):
+
+                j = start_idx[j] if j != len(start_idx) else None
+
+                elm_event_signals = signals[i:j]
+                elm_event_labels = labels[i:j]
+
+                n_elms = len(elm_event_labels[elm_event_labels == 1])
+                n_pelms = len(elm_event_labels[elm_event_labels == 0])
+                diff = n_pelms - n_elms
+
+                if clip_type == 'clip_outside':
+                    _signals = elm_event_signals[diff:] if diff >= 0 else elm_event_signals[:diff]
+                    _labels = elm_event_labels[diff:] if diff >= 0 else elm_event_labels[:diff]
+                elif clip_type == 'clip_inside':
+                    slc = np.s_[n_elms:-n_elms] if diff >= 0 else np.s_[n_elms:-n_elms]
+                    _signals = np.delete(elm_event_signals, slc)
+                    _labels = np.delete(elm_event_labels, slc)
+                else:
+                    (f, t) = (n_pelms // n_elms, n_pelms % n_elms) if diff >= 0 else (
+                    n_elms // n_pelms, n_elms % n_pelms)
+                    _signals = np.concatenate((elm_event_signals[t:n_pelms:f], elm_event_signals[n_pelms:]))
+                    _labels = np.concatenate((elm_event_labels[t:n_pelms:f], elm_event_labels[n_pelms:]))
+
+                clipped[0].extend(_signals)
+                clipped[1].extend(_labels)
+                clipped[2].extend(range(len(_labels) - (self.args.signal_window_size - 1)))
+
+            new_start_idxs = np.pad((np.diff(np.array([0] + clipped[1])) == -1).nonzero()[0], (1, 0))
+
+            new[x] = (np.array(clipped[0]), np.array(clipped[1]), np.array(clipped[2]), new_start_idxs)
+
+        return new[0], new[1], new[2]
 
     def _get_total_frames(self):
         count = 0

@@ -65,7 +65,8 @@ def get_model(args: argparse.Namespace,
 
     model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
                                                   f'{gen_type_suffix}'
-                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}.pth')
+                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
+                                                  f'{"_" + args.balance_data if args.balance_data else ""}.pth')
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
     model_cls = src.utils.create_model(args.model_name)

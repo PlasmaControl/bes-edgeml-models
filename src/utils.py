@@ -5,6 +5,7 @@ import math
 import argparse
 import importlib
 from typing import Union, Tuple
+from traceback import print_tb
 
 import torch
 from torchinfo import summary
@@ -74,6 +75,14 @@ def make_logger(script_name: str, log_file: Union[str, None] = None,
         logger.addHandler(s_handler)
 
     return logger
+
+
+def log_exceptions(logger):
+    def my_handler(type, value, tb):
+        print_tb(tb)
+        logger.exception(f' {type.__name__}: {value}')
+
+    return my_handler
 
 
 def as_minutes_seconds(s: int) -> str:

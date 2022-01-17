@@ -1,8 +1,9 @@
 import os
+import sys
 import time
 import pickle
 import argparse
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Dict, Any, Set
 import logging
 
 import torch
@@ -15,12 +16,13 @@ from options.train_arguments import TrainArguments
 from src import utils, run, dataset
 from src.train_VAE import ELBOLoss
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('__main__')
+sys.excepthook = utils.log_exceptions(LOGGER)
 
 
 # TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: str, fold: Union[int, None] = None,
-               desc: bool = True, ) -> Tuple[List[float], List[float], List[float], List[float]]:
+               desc: bool = True, ) -> Dict[str, Dict[str, Union[List[Any], List[Union[float, Any]]]]]:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
 
@@ -41,10 +43,17 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     #     )
     #     fold = None
     # containers to hold train and validation losses
-    train_loss = []
+
     valid_loss = []
-    kl_loss = []
-    recon_loss = []
+    valid_mse_loss = []
+    valid_likelihood_loss = []
+    valid_kl_loss = []
+
+    train_loss = []
+    train_mse_loss = []
+    train_kl_loss = []
+    train_likelihood_loss = []
+
     test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
@@ -73,7 +82,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     if not args.dry_run:
         with open(test_data_file, "w+b") as f:
             pickle.dump({"signals": valid_data[0], "labels": valid_data[1], "sample_indices": valid_data[2],
-                    "window_start": valid_data[3], }, f, )
+                         "window_start": valid_data[3], }, f, )
 
     # create image transforms
     if ((args.model_name.startswith("feature")) or (args.model_name.startswith("cnn")) or (
@@ -89,10 +98,10 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+                                               num_workers=args.num_workers, pin_memory=True, drop_last=True, )
 
     valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+                                               num_workers=args.num_workers, pin_memory=True, drop_last=True, )
 
     # model
     model_cls = utils.create_model(args.model_name)
@@ -130,18 +139,15 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
             writer.add_graph(model, x)
 
     # optimizer
-    optimizer = optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # get the lr scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2,
                                                            verbose=True, )
 
     # loss function
-    if args.model_name.lower().startswith('vae'):
-        is_vae = True
-        criterion = ELBOLoss(reduction='none', beta=args.vae_beta)
-    else:
-        criterion = nn.BCEWithLogitsLoss(reduction="none")
+    is_vae = args.model_name.lower().startswith('vae')
+    criterion = ELBOLoss(reduction='none', beta=args.vae_beta) if is_vae else nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
@@ -157,27 +163,36 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         start_time = time.time()
         # train
         if is_vae:
-            avg_loss, train_kl, train_likelihood = engine.train(train_loader, epoch, print_every=args.train_print_every)
-            kl_loss.append(train_kl)
-            recon_loss.append(train_likelihood)
+            train_avg_loss, train_kl, train_likelihood, train_mse = engine.train(train_loader, epoch,
+                                                                                 print_every=args.train_print_every)
+            train_kl_loss.append(train_kl)
+            train_likelihood_loss.append(train_likelihood)
+            train_mse_loss.append(train_mse)
         else:
-            avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
+            train_avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
 
-        train_loss.append(avg_loss)
+        train_loss.append(train_avg_loss)
 
         # evaluate
-        avg_val_loss, val_kl, val_likelihood, preds, valid_labels = engine.evaluate(valid_loader,
-                                                                                    print_every=args.valid_print_every)
-        valid_loss.append(avg_val_loss)
+        losses = engine.evaluate(valid_loader, print_every=args.valid_print_every)
+        if is_vae:
+            val_avg_loss, val_kl, val_likelihood, val_mse, preds, valid_labels = losses
+            valid_mse_loss.append(val_mse)
+            valid_likelihood_loss.append(val_likelihood)
+            valid_kl_loss.append(val_kl)
+        else:
+            val_avg_loss, preds, valid_labels = losses
+
+        valid_loss.append(val_avg_loss)
 
         # step the scheduler
-        scheduler.step(avg_val_loss)
+        scheduler.step(val_avg_loss)
         # print(f"Train losses: {train_loss}")
         # print(f"Valid losses: {valid_loss}")
         if args.add_tensorboard:
             writer.add_scalars(
                     f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-                    {"train_loss": avg_loss, "valid_loss": avg_val_loss, }, epoch + 1, )
+                    {"train_loss": train_avg_loss, "valid_loss": val_avg_loss, }, epoch + 1, )
             writer.close()
         # scoring
         if is_vae:
@@ -186,7 +201,8 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
             roc_score = roc_auc_score(valid_labels, preds)
         elapsed = time.time() - start_time
 
-        LOGGER.info(f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}")
+        LOGGER.info(
+            f"Epoch: {epoch + 1}, \tavg train loss: {train_avg_loss:.4f}, \tavg validation loss: {val_avg_loss:.4f}")
         LOGGER.info(f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}")
 
         if roc_score > best_score:
@@ -194,18 +210,20 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
             LOGGER.info(f"Epoch: {epoch + 1}, \tSave Best Score: {best_score:.4f} Model")
             if not args.dry_run:
                 # save the model if best ROC is found
-                model_save_path = os.path.join(model_ckpt_path,
-                        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth", )
+                model_save_path = os.path.join(model_ckpt_path, f"{args.model_name}_lookahead_{args.label_look_ahead}_"
+                                                                f"{args.data_preproc}"
+                                                                f"{'_' + args.balance_data if args.balance_data else ''}.pth", )
                 torch.save({"model": model.state_dict(), "preds": preds}, model_save_path, )
                 LOGGER.info(f"Model saved to: {model_save_path}")
 
-        if avg_val_loss < best_loss:
-            best_loss = avg_val_loss
+        if val_avg_loss < best_loss:
+            best_loss = val_avg_loss
             LOGGER.info(f"Epoch: {epoch + 1}, \tSave Best Loss: {best_loss:.4f} Model")
             if not args.dry_run:
                 # save the model if best loss is found
-                model_save_path = os.path.join(model_ckpt_path,
-                                               f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth", )
+                model_save_path = os.path.join(model_ckpt_path, f"{args.model_name}_lookahead_{args.label_look_ahead}_"
+                                                                f"{args.data_preproc}"
+                                                                f"{'_' + args.balance_data if args.balance_data else ''}.pth", )
                 torch.save({"model": model.state_dict(), "preds": preds}, model_save_path, )
                 LOGGER.info(f"Model saved to: {model_save_path}")
 
@@ -214,7 +232,12 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     # return valid_folds
 
     # Plot training and validation loss
-    return train_loss, valid_loss, kl_loss, recon_loss
+
+    return {'training': {'loss': train_loss, 'kl_loss': train_kl_loss, 'log_likelihood_loss': train_likelihood_loss,
+            'mse_loss': train_mse_loss},
+            'validation': {'loss': valid_loss, 'kl_loss': valid_kl_loss, 'log_likelihood_loss': valid_likelihood_loss,
+                    'mse_loss': valid_mse_loss}}
+
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
@@ -222,6 +245,5 @@ if __name__ == "__main__":
                                                                            f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_loss, valid_loss, kl_loss, recon_loss = train_loop(args, data_obj,
-                                                             test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl", )
-    plot_loss([], valid_loss)
+    train_loop(args, data_obj,
+               test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")

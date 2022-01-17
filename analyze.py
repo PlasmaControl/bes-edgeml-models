@@ -480,8 +480,9 @@ def main(
         plot_dir,
         roc_dir,
     ) = output_paths
-    model_ckpt_path = os.path.join(model_ckpt_dir,
-            f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth", )
+    model_ckpt_path = os.path.join(model_ckpt_dir, f"{args.model_name}_lookahead_{args.label_look_ahead}_"
+                                                   f"{args.data_preproc}"
+                                                   f"{'_' + args.balance_data if args.balance_data else ''}.pth", )
     print(f"Using elm_model checkpoint: {model_ckpt_path}")
     model.load_state_dict(
         torch.load(

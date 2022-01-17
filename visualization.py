@@ -400,7 +400,19 @@ class VAEVisualization(Visualizations):
         self.wavelet_test_set, self.up_test_set = self._get_data()
         self.wavelet_test_iter = iter(self.wavelet_test_set)
         self.up_test_iter = iter(self.up_test_set)
+        self.feature_model = self.get_feature_model_()
         self.model.eval()
+
+    def get_feature_model_(self):
+        from copy import copy
+
+        args_copy = copy(self.args)
+        args_copy.model_name = 'feature'
+        args_copy.balance_data = False
+        model = get_model(args_copy, self.logger)
+        model.eval()
+
+        return model
 
     def _check_model(self):
 
@@ -445,18 +457,28 @@ class VAEVisualization(Visualizations):
             up_signal, up_label = next(self.up_test_iter)
             if up_label != label:
                 raise ValueError('Unprocessed and Processed datasets not identical')
+            signal = signal.reshape(-1, 1, self.args.signal_window_size, 8, 8)
             label = label.item()
             while inpt != label:
                 signal, label = next(self.wavelet_test_iter)
                 up_signal, up_label = next(self.up_test_iter)
                 label = label.item()
+                signal = signal.reshape(-1, 1, self.args.signal_window_size, 8, 8)
 
-                if label == 1 and torch.max(signal) < 0.9:
+                if label == 1 and torch.sigmoid(self.feature_model(signal)) < 0.8:
+                    label = ~int(inpt)
+                    continue
+                elif label == 0 and torch.sigmoid(self.feature_model(signal)) > 0.1:
                     label = ~int(inpt)
                     continue
 
-            reconstruction, mu, logvar, sample = self.model(signal.reshape(-1, 1, self.args.signal_window_size, 8, 8))
+            reconstruction, mu, logvar, sample = self.model(signal)
             loss = self.criterion(signal, reconstruction)
+            in_pred = torch.sigmoid(self.feature_model(signal)).item()
+            recon_pred = torch.sigmoid(self.feature_model(reconstruction)).item()
+            print(f'Label: {label}')
+            print(f'Input Signal Prediction: {in_pred}')
+            print(f'Reconstruction Prediction: {recon_pred}')
             # detach and numpy all parameters
             up_signal = up_signal.squeeze().detach().numpy()
             signal = signal.squeeze().detach().numpy()
@@ -468,7 +490,6 @@ class VAEVisualization(Visualizations):
             max_ = np.amax(np.array([up_signal, signal, reconstruction]))
             # min_ = 0
             # max_ = 1
-
             # <Make Plot>
             fig, axs = plt.subplots(4, 1)
             ax1, ax2, ax3, ax4 = axs[0], axs[1], axs[2], axs[3]
@@ -478,14 +499,14 @@ class VAEVisualization(Visualizations):
             ax1.set_xticklabels([])
             ax1.grid(which='minor', color='w', linestyle='-', linewidth=2)
             ax1.grid(visible=None, which='major', axis='both')
-            ax1.set_title('Real BES Signal (Normalized)')
+            ax1.set_title('Real BES Signal')
 
             ax2.imshow(signal.transpose((1, 2, 0)).reshape(8, 8 * signal.shape[0]), vmin=min_, vmax=max_)
             ax2.set_xticks(np.arange(-.5, 8 * signal.shape[0] + 0.5, 8), minor=True)
             ax2.set_xticklabels([])
             ax2.grid(which='minor', color='w', linestyle='-', linewidth=2)
             ax2.grid(visible=None, which='major', axis='both')
-            ax2.set_title('Processed BES Signal (Normalized)')
+            ax2.set_title('Processed BES Signal')
 
             im = ax3.imshow(reconstruction.transpose((1, 2, 0)).reshape(8, 8 * reconstruction.shape[0]), vmin=min_,
                             vmax=max_)
@@ -495,13 +516,18 @@ class VAEVisualization(Visualizations):
             ax3.grid(visible=None, which='major', axis='both')
             ax3.set_title(f'Reconstructed BES Signal (MSE: {loss.item():0.2f})')
 
-            fig.colorbar(im, ax=[ax1, ax2, ax3])
+            cbar = fig.colorbar(im, ax=[ax1, ax2, ax3])
+            cbar.set_label('Normalized BES Amplitude')
 
             ax4.bar(x=np.arange(len(mu)), height=mu)
             ax4.set_title('Latent Variable Values')
+            textstr = '\n'.join((f'Input Signal Prediction: {in_pred:0.2f}',
+                                 f'Reconstruction Prediction: {recon_pred:0.2f}', f'Reconstruction MSE: {loss:0.2f}'))
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            ax4.text(0.75, 0.5, textstr, transform=ax4.transAxes, fontsize=14, verticalalignment='top', bbox=props)
 
             fig.suptitle(f'Real and Reconstructed inputs for {classes[label]} Signal Window')
-
+            recon1 = reconstruction
             plt.pause(1)
             plt.show(block=True)  # </Make Plot>
 
@@ -574,7 +600,7 @@ class VAEVisualization(Visualizations):
         fig.update(frames=frames)
         fig.show()
 
-        # TODO: Input decoded into feature model to see what output is  # TODO: show reconstruction loss  # TODO: Plot disentanglement metric
+        # TODO: show reconstruction loss  # TODO: Plot disentanglement metric
 
 
 class PCA():

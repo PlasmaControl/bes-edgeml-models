@@ -28,6 +28,7 @@ class Run:
         losses = utils.MetricMonitor()
         kls = utils.MetricMonitor()
         likelihoods = utils.MetricMonitor()
+        mses = utils.MetricMonitor()
 
         # put the model to train mode
         self.model.train()
@@ -53,11 +54,15 @@ class Run:
                 loss, kl, likelihood = self.criterion(data_in=images, reconstruction=reconstruction, mu=mu,
                                                       logvar=logvar, sample=sample, logscale=self.model.logscale)
 
+                mseloss = torch.nn.MSELoss(reduction='none')(images, reconstruction)
+
                 # perform similar reduction to loss
                 kl = kl.mean()
                 kls.update(kl.item(), batch_size)
                 likelihood = likelihood.mean()
                 likelihoods.update(likelihood.item(), batch_size)
+                mseloss = mseloss.mean()
+                mses.update(mseloss.item(), batch_size)
             else:
                 y_preds = self.model(images)
                 if self.use_rnn:
@@ -101,7 +106,7 @@ class Run:
                       f"{'Reconstruction Loss' + likelihoods.val if self.is_vae_ else ''}")
 
         if self.is_vae_:
-            return losses.avg, kls.avg, likelihoods.avg
+            return losses.avg, kls.avg, likelihoods.avg, mses.avg
         else:
             return losses.avg
 
@@ -112,6 +117,7 @@ class Run:
         losses = utils.MetricMonitor()
         kls = utils.MetricMonitor()
         likelihoods = utils.MetricMonitor()
+        mses = utils.MetricMonitor()
 
         # switch the model to evaluation mode
         self.model.eval()
@@ -135,11 +141,14 @@ class Run:
                     loss, kl, likelihood = self.criterion(data_in=images, reconstruction=y_preds, mu=mu, logvar=logvar,
                                                           sample=sample, logscale=self.model.logscale)
 
+                    mseloss = torch.nn.MSELoss(reduction='none')(images, y_preds)
                     # perform reduction and update monitor
                     kl = kl.mean()
                     kls.update(kl.item(), batch_size)
                     likelihood = likelihood.mean()
                     likelihoods.update(likelihood.item(), batch_size)
+                    mseloss = mseloss.mean()
+                    mses.update(mseloss.item(), batch_size)
                 else:
                     y_preds = self.model(images)
                     if self.use_rnn:
@@ -174,7 +183,7 @@ class Run:
         predictions = np.concatenate(preds)
         targets = np.concatenate(valid_labels)
         if self.is_vae_:
-            return losses.avg, kls.avg, likelihoods.avg, predictions, targets
+            return losses.avg, kls.avg, likelihoods.avg, mses.avg, predictions, targets
         else:
             return losses.avg, predictions, targets
 

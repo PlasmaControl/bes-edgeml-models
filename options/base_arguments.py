@@ -95,17 +95,21 @@ class BaseArguments:
                 help="if true, normalizes the data in spatial dimensions. Divides the "
                      "channels 1 to 32 by 10 and channels 33 to 64 by 5.", )
         parser.add_argument("--interpolate_size", type=int, required="interpolate" in sys.argv,
-                help="final size of the spatial dimensions of the input if interpolation is done. "
-                     "Must be passed if `data_preproc` == `interpolate`.", )
+                            help="final size of the spatial dimensions of the input if interpolation is done. "
+                                 "Must be passed if `data_preproc` == `interpolate`.", )
         parser.add_argument("--mu", type=float, required="gaussian_noise" in sys.argv,
-                help="mean of the Gaussian noise. Must be passed "
-                     "when `gaussian_noise` is passed as `data_preproc`.", )
+                            help="mean of the Gaussian noise. Must be passed "
+                                 "when `gaussian_noise` is passed as `data_preproc`.", )
         parser.add_argument("--sigma", type=float, required="gaussian_noise" in sys.argv,
-                help="standard deviation of the Gaussian noise. Must be passed "
-                     "when `gaussian_noise` is passed as `data_preproc`.", )
+                            help="standard deviation of the Gaussian noise. Must be passed "
+                                 "when `gaussian_noise` is passed as `data_preproc`.", )
         parser.add_argument("--shuffle_sample_indices", action="store_true", default=False,
-                help="if true, shuffle the sample indices calculated based on `signal_window_size` "
-                     "and `label_look_ahead`.", )
+                            help="if true, shuffle the sample indices calculated based on `signal_window_size` "
+                                 "and `label_look_ahead`.", )
+        parser.add_argument('--balance_data', nargs='?', const='clip_outside', default=False,
+                            choices=['clip_outside', 'clip_inside', 'even'],
+                            help='Balance ELM and pre-ELM class data. Removes data points from the start, end, '
+                                 'or evenly throughout.')
         self.initialized = True
 
         return parser

@@ -84,7 +84,6 @@ class VAEfeature256Model(nn.Module):
 
     @staticmethod
     def init_weights_(m):
-        print(m)
         if type(m) == nn.Linear:
             with torch.no_grad():
                 torch.nn.init.uniform_(m.weight, -0.08, 0.08)
