@@ -155,11 +155,20 @@ def predict(
                 .cpu()
                 .numpy()
             )
+            # micro_predictions = np.pad(
+            #     micro_predictions,
+            #     pad_width=(args.signal_window_size - 1, args.label_look_ahead),
+            #     mode="constant",
+            #     constant_values=(0, 0),
+            # )
             micro_predictions = np.pad(
                 micro_predictions,
-                pad_width=(args.signal_window_size - 1, args.label_look_ahead),
+                pad_width=(
+                    args.signal_window_size + args.label_look_ahead - 1,
+                    0,
+                ),
                 mode="constant",
-                constant_values=(0, 0),
+                constant_values=0,
             )
             # filter labels and micro-predictions for active elm regions
             elm_labels_active_elms = elm_labels[
