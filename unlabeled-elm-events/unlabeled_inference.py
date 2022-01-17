@@ -454,7 +454,7 @@ def plot_all(
 if __name__ == "__main__":
     # signal window size and label lookahead
     sws = 512
-    la = 0
+    la = 1000
     num_unlabeled_events = 12
 
     # define paths for model checkpoint and unlabeled data
