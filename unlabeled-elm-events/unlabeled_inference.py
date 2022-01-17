@@ -313,6 +313,8 @@ def predict(
 
 
 def plot(
+    sws: int,
+    la: int,
     elm_predictions: dict,
     plot_dir: str,
     elms: List[int],
@@ -321,17 +323,17 @@ def plot(
     n_cols: Union[int, None] = None,
     figsize: tuple = (14, 12),
     dry_run: bool = True,
+    show_plots: bool = True,
 ) -> None:
     fig = plt.figure(figsize=figsize)
     for i, elm_event in enumerate(elms):
         signals = elm_predictions[elm_event]["signals"]
-        # signal_max = np.max(signals)
         predictions = elm_predictions[elm_event]["micro_predictions"]
         print(f"ELM {i + 1} of {len(elms)} with {len(signals)} time points")
         plt.subplot(n_rows, n_cols, i + 1)
         plt.plot(
             signals[:, 0] / np.max(signals),
-            label="Ch. 22",
+            label="Ch. 1",
             lw=0.85,
         )
         plt.plot(
@@ -344,12 +346,7 @@ def plot(
             label="Ch. 64",
             lw=0.85,
         )
-        plt.plot(
-            predictions,
-            label="Prediction",
-            ls="-",
-            lw=1.25,
-        )
+        plt.plot(predictions, label="Prediction", ls="-", lw=1.25, alpha=0.75)
         plt.title(f"ELM ID: {elm_event}", fontsize=12)
         plt.xlabel("Time (micro-s)", fontsize=10)
         plt.ylabel("Signal | label", fontsize=10)
@@ -362,7 +359,7 @@ def plot(
         plt.gca().spines["bottom"].set_color("lightgrey")
         plt.grid(axis="y")
     plt.suptitle(
-        f"Model output, ELM index: {elm_range}",
+        f"ELM index: {elm_range}, Signal window size: {sws}, Lookahead: {la}",
         fontsize=20,
     )
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -374,14 +371,37 @@ def plot(
             ),
             dpi=200,
         )
-    plt.show()
+    if show_plots:
+        plt.show()
 
 
 def plot_all(
-    elm_predictions: dict, plot_dir: str, dry_run: bool = True
+    sws: int,
+    la: int,
+    elm_predictions: dict,
+    plot_dir: str,
+    dry_run: bool = True,
+    show_plots: bool = True,
 ) -> None:
     elm_id = list(elm_predictions.keys())
-    i_elms_1_12 = elm_id[:12]
+    for i in range(25):
+        i_elms = elm_id[i * 12 : (i + 1) * 12]
+        i_elm_predictions = {
+            k: v for k, v in elm_predictions.items() if k in i_elms
+        }
+        plot(
+            sws,
+            la,
+            i_elm_predictions,
+            plot_dir,
+            i_elms,
+            elm_range=str((i * 12) + 1) + "-" + str((i + 1) * 12),
+            n_rows=4,
+            n_cols=3,
+            dry_run=dry_run,
+            show_plots=show_plots,
+        )
+    # i_elms_1_12 = elm_id[:12]
     # i_elms_12_24 = elm_id[12:24]
     # i_elms_24_36 = elm_id[24:36]
     # i_elms_36_48 = elm_id[36:48]
@@ -389,15 +409,15 @@ def plot_all(
     # i_elms_60_64 = elm_id[60:64]
 
     # plot 1-12
-    plot(
-        elm_predictions,
-        plot_dir,
-        i_elms_1_12,
-        elm_range="1-12",
-        n_rows=4,
-        n_cols=3,
-        dry_run=dry_run,
-    )
+    # plot(
+    #     elm_predictions,
+    #     plot_dir,
+    #     i_elms_1_12,
+    #     elm_range="1-12",
+    #     n_rows=4,
+    #     n_cols=3,
+    #     dry_run=dry_run,
+    # )
     # # plot 12-24
     # plot(
     #     elm_predictions,
@@ -454,8 +474,8 @@ def plot_all(
 if __name__ == "__main__":
     # signal window size and label lookahead
     sws = 512
-    la = 1000
-    num_unlabeled_events = 12
+    la = 0
+    num_unlabeled_events = 300
 
     # define paths for model checkpoint and unlabeled data
     base_path = os.path.dirname(os.getcwd())
@@ -486,4 +506,11 @@ if __name__ == "__main__":
     file_obj.close()
 
     # plot
-    plot_all(predictions, plot_dir=os.getcwd(), dry_run=False)
+    plot_all(
+        sws,
+        la,
+        predictions,
+        plot_dir=os.getcwd(),
+        dry_run=False,
+        show_plots=False,
+    )
