@@ -86,7 +86,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # create image transforms
     if ((args.model_name.startswith("feature")) or (args.model_name.startswith("cnn")) or (
-            args.model_name.startswith("rnn")) or (args.model_name.startswith("VAE"))):
+            args.model_name.startswith("rnn")) or (args.model_name.upper().startswith("VAE"))):
         transforms = None
     else:
         transforms = dataset.get_transforms(args)

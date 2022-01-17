@@ -126,9 +126,9 @@ class BaseData:
                     _signals = elm_event_signals[diff:] if diff >= 0 else elm_event_signals[:diff]
                     _labels = elm_event_labels[diff:] if diff >= 0 else elm_event_labels[:diff]
                 elif clip_type == 'clip_inside':
-                    slc = np.s_[n_elms:-n_elms] if diff >= 0 else np.s_[n_elms:-n_elms]
-                    _signals = np.delete(elm_event_signals, slc)
-                    _labels = np.delete(elm_event_labels, slc)
+                    slc = np.s_[n_elms:-n_elms] if diff >= 0 else np.s_[n_pelms:-n_pelms]
+                    _signals = np.delete(elm_event_signals, slc, axis=0)
+                    _labels = np.delete(elm_event_labels, slc, axis=0)
                 else:
                     (f, t) = (n_pelms // n_elms, n_pelms % n_elms) if diff >= 0 else (
                     n_elms // n_pelms, n_elms % n_pelms)
@@ -143,7 +143,7 @@ class BaseData:
 
             new[x] = (np.array(clipped[0]), np.array(clipped[1]), np.array(clipped[2]), new_start_idxs)
 
-        return new[0], new[1], new[2]
+        return new
 
     def _get_total_frames(self):
         count = 0
