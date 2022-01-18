@@ -10,6 +10,7 @@ def plot_unbatched(ax):
 
     cwt, freqs = pywt.cwt(arr, scales=[1024], wavelet="morl", axis=0)
     first_nonzero = (np.around(cwt, decimals=4) != 0).argmax()
+    print('First non-zero unbatched: ', first_nonzero)
 
     ticks = np.arange(0, arr.size, max_scale)
 
@@ -42,6 +43,7 @@ def plot_batched(ax):
     leading_freqs = np.array(leading_freqs)
 
     first_nonzero = (np.around(leading_freqs, decimals=4) != 0).argmax()
+    print('First non-zero batched: ', first_nonzero)
     ticks = np.arange(0, arr.size, max_scale)
 
     ax.plot(np.arange(arr.size), leading_freqs / leading_freqs.max(), label='CWT Scale 1024 (Normalized)')
@@ -49,7 +51,7 @@ def plot_batched(ax):
     ax.vlines(ticks, -0.1, 0.1, color='k', zorder=5)
 
     ax.set_title('Wavelet Transform on batched Dataset')
-    ax.annotate('First nonzero (rounded to 4th decimal)', (first_nonzero, 0), xytext=(first_nonzero, 0.5), ha='center',
+    ax.annotate('First nonzero (rounded to 4th decimal)', (first_nonzero, 0), xytext=(first_nonzero, 0.5), ha='right',
                 va='bottom', arrowprops=dict(facecolor='black', shrink=0.05))
 
     ax.legend()
