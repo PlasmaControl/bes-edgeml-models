@@ -30,8 +30,11 @@ def get_multi_features(args, train_data, valid_data):
     #     if args.signal_window_size <= 64
     #     else np.arange(2, args.signal_window_size + 1, 2)
     # )
-    num = int(np.log2(args.signal_window_size)) + 1
-    widths = np.geomspace(1, args.signal_window_size, num=num, endpoint=True)
+    max_scale = 1024
+    num = int(np.log2(max_scale)) + 1
+    widths = np.round(
+        np.geomspace(1, max_scale, num=num, endpoint=True)
+    ).astype(int)
     train_data_cwt[0], _ = pywt.cwt(
         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
@@ -242,7 +245,7 @@ def train_loop(
     #     )
     #     fold = None
     with wandb.init(
-        project=f"multi_features_{time.strftime('%m%d%Y')}",  # f"{args.model_name}_{time.strftime('%m%d%Y')}",
+        project=f"multi_features_12202021",  # f"{args.model_name}_{time.strftime('%m%d%Y')}",
         config=config,
     ):
         wandb.run.name = f"{args.model_name}_sws_{args.signal_window_size}_la_{args.label_look_ahead}{args.filename_suffix}"

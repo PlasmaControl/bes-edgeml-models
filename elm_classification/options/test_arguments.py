@@ -8,13 +8,6 @@ class TestArguments(BaseArguments):
 
     def create_parser(self, parser):
         parser = BaseArguments.create_parser(self, parser)
-        # basic parameters
-        parser.add_argument(
-            "--output_dir",
-            type=str,
-            default="outputs",
-            help="path to the inference outputs.",
-        )
         # test parameters
         parser.add_argument(
             "--threshold",

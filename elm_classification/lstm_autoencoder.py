@@ -1,3 +1,17 @@
+"""Time series anomaly detector using an autoencoder. It allows for using either 
+a fully connected or a LSTM layer as encoder and decoder. The model is trained on the
+majority class i.e. non-ELM events to learn an intermediate representation. For 
+validation, both non-ELM and active ELM events are passed through the trained model.
+An input will be classified as an anomalyu on the basis of the reconstruction error
+obtained during inference - majority class will lead to small reconstruction error
+(since the model is trained on them) but the model will output a large reconstruction 
+error for the minority class (active ELM events). 
+
+We can set a threshold for use the reconstruction error as a metric to categorize 
+a given input as an anomaly or not. By default, the value of the threshold is chosen
+to be `mean(training_loss) + 2 * standard_deviation(training_loss)`.
+"""
+
 import os
 import time
 import argparse
@@ -28,6 +42,20 @@ LABELS = ["no ELM", "ELM"]
 def get_all_data(
     args: argparse.Namespace, logger: logging.Logger
 ) -> Tuple[tuple, tuple, tuple]:
+    """Helper function to obtain all the data. It takes in the data preprocessing
+    mode (from argparse `--data_preproc` argument and create a data object. This
+    data object can be further used to create train, validation and test data.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the command line arguments.
+        logger (logging.Logger): Logger object (only required to display the data creation steps on console).
+
+    Returns:
+    --------
+        Tuple[tuple, tuple, tuple]: Tuple containing three tuples for train, validation
+                    and test data respectively.
+    """
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, logger)
     train_data, valid_data, test_data = data_obj.get_data()
@@ -35,6 +63,17 @@ def get_all_data(
 
 
 def print_data_info(args: argparse.Namespace, data: tuple, verbose=0) -> None:
+    """Helper function to print the information about the data. Base level details
+    only consists of shapes of the signals, labels, etc but deeper details like
+    start, stop indices using `window_start` for each ELM event can be displayed
+    as well by setting verbose setting to any integer greater than 0.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        data (tuple): Tuple containing signals, labels, allowed indices (consistent with `--signal_window_size` and `--label_look_ahead` arguments) and start window index for each ELM event.
+        verbose (int, optional): Verbosity level. Defaults to 0.
+    """
     signals = data[0]
     labels = data[1]
     allowed_indices = data[2]
@@ -77,11 +116,37 @@ def temporalize(
     labels: np.ndarray,
     allowed_indices: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Format the data to make it compatible for an autoencoder. It takes inputs
+    signals which have shape: `(n_timesteps, 64)` and create outputs with shape:
+    `(len(valid_indices), sequence_length, 64)`, where `n_timesteps` are the total
+    number of time steps in the original signal and `len(valid_indices)` is
+    the subset of time steps from the signal consistent with `--signal_window_size`
+    and `--label_look_ahead`. `sequence_length` is the length of the rolling window
+    (same as the `--signal_window_size`) along the time axis.
+
+    Apart from formatting the signals and labels, this function also calculates the
+    unique ID for each ELM event using the `valid_indices` and `window_start` and
+    broadcast it for each time step of that particular ELM event. It is stored as
+    `broadcasted_elm_ids` variable.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the command line arguments.
+        signals (np.ndarray): Original signal with shape `(n_timesteps, 64`).
+        labels (np.ndarray): Corresponding labels with shape `(n_timesteps,)`.
+        allowed_indices (np.ndarray): Valid indices in the signal time series that can be used as the first index of the rolling window.
+
+    Returns:
+    --------
+        Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple of numpy arrays containing formatted signals, labels and the broadcasted ELM IDs.
+    """
     X = []
     y = []
     count = 1
-    repeats = []
+    broadcasted_elm_ids = []
     for i_current in range(len(allowed_indices)):
+        # iterate the time series with two pointers offset by one time step
+        # to compare them.
         if i_current == 0:
             i_prev = 0
         else:
@@ -89,11 +154,14 @@ def temporalize(
         prev_time_idx = allowed_indices[i_prev]
         current_time_idx = allowed_indices[i_current]
         diff = current_time_idx - prev_time_idx
-        if diff == 1 or diff == 0:
-            repeats.append(count)
-        else:
-            repeats.append(count)
+        broadcasted_elm_ids.append(count)
+
+        # if difference is greater than 1, a new ELM event is started in the time
+        # series - increment the counter.
+        if diff not in [0, 1]:
             count += 1
+
+        # capture the signal and labels upto the signal window size
         signal_window = signals[
             current_time_idx : current_time_idx + args.signal_window_size
         ]
@@ -105,19 +173,20 @@ def temporalize(
         ]
         X.append(signal_window)
         y.append(label)
-    repeats = np.array(repeats)
+    broadcasted_elm_ids = np.array(broadcasted_elm_ids)
     X = np.array(X).reshape(-1, args.signal_window_size, 64)
     X = X.astype(np.float32)
     y = np.array(y).astype(np.uint8)
     print(f"X shape: {X.shape}")
     print(f"y shape: {y.shape}")
-    print(f"Repeats shape: {repeats.shape}")
-    return X, y, repeats
+    print(f"Repeats shape: {broadcasted_elm_ids.shape}")
+    return X, y, broadcasted_elm_ids
 
 
 def make_tensors(
     X: Union[np.ndarray, torch.Tensor], y: Union[np.ndarray, torch.Tensor]
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Create PyTorch tensors from NumPy arrays."""
     X = torch.as_tensor(X, dtype=torch.float32)
     y = torch.as_tensor(y, dtype=torch.long)
 
@@ -127,6 +196,8 @@ def make_tensors(
 def create_tensor_dataset(
     X: Union[np.ndarray, torch.Tensor], y: Union[np.ndarray, torch.Tensor]
 ) -> torch.utils.data.Dataset:
+    """Create PyTorch dataset from the input tensors. All the PyTorch dataset
+    specific methods like `__len__` and `__getitem__` can be used."""
     X, y = make_tensors(X, y)
     dataset = torch.utils.data.TensorDataset(X, y)
     return dataset
@@ -140,6 +211,18 @@ class FCAutoencoder(nn.Module):
         num_nodes: list = [128, 32],
         dropout: float = 0.3,
     ) -> None:
+        """Implementation of a Fully connected autoencoder. Considering the input
+        to be of size `(n_batches, 16, 64)`, it first flattens the input to size
+        `(n_batches, 16x64)` and then passes it to the fully connected layers acting
+        as encoder and decoder.
+
+        Args:
+        -----
+            args (argparse.Namespace): Argparse namespace object.
+            input_features (int, optional): Number of input features. For a signal window of size 16, it will be 16x64. Defaults to 1024.
+            num_nodes (list, optional): Number of nodes in the fc layers of the encoder. Defaults to [128, 32].
+            dropout (float, optional): Dropout percentage. Defaults to 0.3.
+        """
         super(FCAutoencoder, self).__init__()
         self.args = args
         self.num_nodes = num_nodes
@@ -177,6 +260,26 @@ class Encoder(nn.Module):
         n_layers: int,
         dropout: float,
     ):
+        """Encoder part of the autoencoder using LSTM layers to create an
+        intermediate representation. The architecture is loosely based on paper:
+        https://arxiv.org/abs/1502.04681
+
+        It takes an argument `seq_len` which is the length of the input sequence.
+        It is basically the size of the rolling signal window of the BES signal.
+        `n_features` argument takes in the size of the input to the LSTM layer,
+        this is the 64 channels of the BES signal.
+
+        All the dimensional gymnastics are put as line comments at each step in
+        the forward pass.
+
+        Args:
+        -----
+            args (argparse.Namespace): Argparse namespace object containing all the command line arguments.
+            seq_len (int): Length of the input sequence i.e. `--signal_window_size`.
+            n_features (int): Input size to the LSTM layer i.e. 64 BES channels.
+            n_layers (int): Number of layers in the LSTM.
+            dropout (float): Dropout for the LSTM layer, ignored if `n_layers = 1`.
+        """
         super(Encoder, self).__init__()
         self.args = args
         self.seq_len = seq_len
@@ -194,15 +297,12 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         _, (hidden, _) = self.rnn(x)
-        # hidden size: (num_layers, batch_size, hidden_size)
-        # hidden = hidden.reshape(
-        #     batch_size, -1
-        # )  # (batch_size, num_layers*hidden_size)
+        # hidden shape: (num_layers, batch_size, hidden_size)
         hidden = (
             hidden.transpose(0, 1)
             .contiguous()
             .view(-1, self.n_layers * self.hidden_dim)
-        )
+        )  # hidden shape: (batch_size, num_layers*hidden_size)
         return hidden
 
 
@@ -215,6 +315,28 @@ class Decoder(nn.Module):
         n_layers: int,
         dropout: float,
     ):
+        """Decoder part of the autoencoder using LSTM layers to create an
+        intermediate representation. The architecture is loosely based on paper:
+        https://arxiv.org/abs/1502.04681
+
+        **The arguments and their meaning is mostly similar to that of the encoder.**
+
+        It takes an argument `seq_len` which is the length of the input sequence.
+        It is basically the size of the rolling signal window of the BES signal.
+        `n_features` argument takes in the size of the input to the LSTM layer,
+        this is the 64 channels of the BES signal.
+
+        All the dimensional gymnastics are put as line comments at each step in
+        the forward pass.
+
+        Args:
+        -----
+            args (argparse.Namespace): Argparse namespace object containing all the command line arguments.
+            seq_len (int): Length of the input sequence i.e. `--signal_window_size`.
+            n_features (int): Input size to the LSTM layer i.e. 64 BES channels.
+            n_layers (int): Number of layers in the LSTM.
+            dropout (float): Dropout for the LSTM layer, ignored if `n_layers = 1`.
+        """
         super(Decoder, self).__init__()
         self.args = args
         self.seq_len = seq_len
@@ -243,6 +365,14 @@ class Decoder(nn.Module):
 
 class LSTMAutoencoder(nn.Module):
     def __init__(self, encoder: Encoder, decoder: Decoder):
+        """Autoencoder class that encapsulates both encoder and decoder of the
+        LSTM autoencoder.
+
+        Args:
+        -----
+            encoder (Encoder): Encoder object.
+            decoder (Decoder): Decoder object.
+        """
         super(LSTMAutoencoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -256,7 +386,6 @@ class LSTMAutoencoder(nn.Module):
         ), "Encoder and decoder should have same number of layers"
 
     def forward(self, input):
-        # input = torch.unsqueeze(input, 0)
         # encode
         hidden = self.encoder(input)
         # decode
@@ -269,8 +398,25 @@ def train_model(
     args: argparse.Namespace,
     train_dataloader: torch.utils.data.DataLoader,
     valid_dataloader: torch.utils.data.DataLoader,
-):
+) -> Tuple[object, dict]:
+    """Train the time series anomaly detector autoencoder model.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        train_dataloader (torch.utils.data.DataLoader): PyTorch training dataloader.
+        valid_dataloader (torch.utils.data.DataLoader): PyTorch validation dataloader.
+
+    Raises:
+    -------
+        NameError: When `--model_name` is not lstm_ae or fc_ae.
+
+    Returns:
+    --------
+        Tuple: Tuple containing model instance and dictionary containing training and validation loss.
+    """
     model = None
+    # choose the model and instantiate it
     if args.model_name == "lstm_ae":
         seq_len = args.signal_window_size
         n_features = 64
@@ -296,6 +442,8 @@ def train_model(
     else:
         raise NameError("Model name is not understood.")
     model = model.to(args.device)
+
+    # define optimizer, loss function and learning rate scheduler
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=4, verbose=True
@@ -303,6 +451,7 @@ def train_model(
     criterion = nn.L1Loss(reduction="mean")
     history = dict(train=[], valid=[])
 
+    # start training and evaluation
     for epoch in range(args.n_epochs):
         model = model.train()
         ts = time.time()
@@ -323,6 +472,7 @@ def train_model(
 
             train_losses.append(loss.item())
 
+        # evaluate
         valid_losses = []
         model.eval()
         with torch.no_grad():
@@ -357,6 +507,15 @@ def plot_loss(
     base_path: str,
     show_plots: bool = True,
 ) -> None:
+    """Plot training and validation loss vs epoch.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        history (dict): Python dictionary consisting training and validation losses.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     plt.figure(figsize=(8, 6), dpi=120)
     plt.plot(history["train"], label="train", lw=2.5)
     plt.plot(history["valid"], label="valid", lw=2.5)
@@ -386,6 +545,15 @@ def precision_recall_curve(
     base_path: str,
     show_plots: bool = True,
 ) -> None:
+    """Plot precision-recall curve.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        error_df (pd.DataFrame): Pandas dataframe containing reconstruction error and ground truth.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     # plot precision-recall curve
     precision, recall, threshold = metrics.precision_recall_curve(
         error_df.ground_truth.values, error_df.reconstruction_error.values
@@ -424,6 +592,17 @@ def plot_recons_loss_dist(
     base_path: str,
     show_plots: bool = True,
 ):
+    """Plot histograms of the reconstruction error for majority and minorty class
+    along with the threshold value.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        error_df (pd.DataFrame): Pandas dataframe containing reconstruction error and ground truth.
+        threshold_val (float): Value of reconstruction error to be used as a threshold for anomaly detection.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     # plot reconstruction error distribution for no ELMs
     fig = plt.figure(figsize=(14, 6), dpi=120)
 
@@ -511,33 +690,20 @@ def plot_recons_loss_with_signals(
     base_path: str,
     show_plots: bool = True,
 ) -> None:
+    """Plot BES signal time series with the reconstruction error for majority
+    and minorty class along with the threshold value.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        error_df (pd.DataFrame): Pandas dataframe containing reconstruction error and ground truth.
+        threshold_val (float): Value of reconstruction error to be used as a threshold for anomaly detection.
+        plot_thresh (bool): If true, plot the threshold value in the time series plots.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     # plot reconstruction loss with signals
     if plot_thresh:
-        # groups = error_df.groupby("ground_truth")
-        # fig = plt.figure(figsize=(12, 6), dpi=200)
-        # ax = fig.add_subplot()
-        # for (name, group), alpha in zip(groups, [1, 0.8]):
-        #     ax.plot(
-        #         group.index,
-        #         group.reconstruction_error,
-        #         marker="o",
-        #         ms=3,
-        #         linestyle="",
-        #         label=LABELS[1] if name == 1 else LABELS[0],
-        #         alpha=alpha,
-        #     )
-        # ax.axhline(
-        #     y=threshold_val,
-        #     zorder=10,
-        #     ls="--",
-        #     lw=1.0,
-        #     c="crimson",
-        #     label="Threshold",
-        # )
-        # ax.set_ylabel("Reconstruction Loss")
-        # ax.set_xlabel("Data point index")
-        # ax.set_title("Reconstruction error for different classes")
-        # ax.legend(frameon=False)
         fig = plt.figure(figsize=(14, 12), dpi=120)
         classes = ["no ELM", "ELM", "Threshold"]
         class_colors = [palette[0], palette[1], "crimson"]
@@ -695,6 +861,16 @@ def plot_confusion_matrix(
     base_path: str,
     show_plots: bool = True,
 ) -> None:
+    """Plot confusion matrix for the classification of the signals obtained from the
+    reconstruction error for majority and minorty class along with the threshold value.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        error_df (pd.DataFrame): Pandas dataframe containing reconstruction error and ground truth.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     # confusion matrix
     conf_matrix = metrics.confusion_matrix(
         error_df.ground_truth.values, error_df.predictions
@@ -738,6 +914,16 @@ def plot_metrics(
     show_plots: bool = True,
     base_path: str = "outputs/ts_anomaly_detection_plots",
 ):
+    """Plot all the metrics.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        error_df (pd.DataFrame): Pandas dataframe containing reconstruction error and ground truth.
+        threshold_val (float): Value of reconstruction error to be used as a threshold for anomaly detection.
+        base_path (str): Path where the plots are saved-`outputs/ts_anomaly_detection_plots`
+        show_plots (bool, optional): If true, display plots to the screen. Defaults to True.
+    """
     precision_recall_curve(
         args, error_df, base_path=base_path, show_plots=show_plots
     )
@@ -799,13 +985,13 @@ def main(
     print_data_info(args, valid_data)
     del valid_data, train_data
 
-    # create train signals and labels suited for an RNN
+    # create train signals and labels compatible with an RNN
     X_train, y_train, _ = temporalize(
         args, train_signals, train_labels, train_allowed_indices
     )
     print_arrays_shape(X_train, y_train, mode="train")
 
-    # create valid signals and labels suited for an RNN
+    # create valid signals and labels compatible with an RNN
     X_valid, y_valid, repeats_valid = temporalize(
         args, valid_signals, valid_labels, valid_allowed_indices
     )
@@ -877,7 +1063,7 @@ def main(
         shuffle=False,
     )
     model, history = train_model(args, train_loader, valid_loader)
-    threshold = np.mean(history["train"]) + 3 * np.std(history["train"])
+    threshold = np.mean(history["train"]) + 2 * np.std(history["train"])
     print(f"Threshold value: {threshold}")
 
     # save the model
@@ -889,7 +1075,7 @@ def main(
             )
         else:
             raise NameError("Model name is not understood.")
-        torch.save(model, model_path)
+        torch.save(model.state_dict(), model_path)
     plot_loss(args, history, base_path=base_path, show_plots=show_plots)
 
     # # classification

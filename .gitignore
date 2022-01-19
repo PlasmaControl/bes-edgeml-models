@@ -3,6 +3,7 @@ __pycache__/
 .idea/
 .vscode/
 data/
+test_data/
 processed_data/
 jobs/
 figures/
@@ -170,3 +171,4 @@ cython_debug/
 # outputs/signal_window_16/label_look_ahead_200/roc/roc_details_lr_manual_lookahead_200.csv
 # outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead_50.csv
 *.pth
+*.hdf5

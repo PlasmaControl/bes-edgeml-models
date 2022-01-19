@@ -8,7 +8,6 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-# from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 import pywt
@@ -24,11 +23,11 @@ def get_multi_features(args, train_data, valid_data):
     print(f"Valid data shape: {valid_data[0].shape}")
     train_data_cwt = list(train_data)
     valid_data_cwt = list(valid_data)
-    widths = (
-        np.arange(1, args.signal_window_size + 1)
-        if args.signal_window_size <= 64
-        else np.arange(2, args.signal_window_size + 1, 2)
-    )
+    max_scale = 1024
+    num = int(np.log2(max_scale)) + 1
+    widths = np.round(
+        np.geomspace(1, max_scale, num=num, endpoint=True)
+    ).astype(int)
     train_data_cwt[0], _ = pywt.cwt(
         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
     )
@@ -56,7 +55,6 @@ def get_multi_features(args, train_data, valid_data):
     return train_data_cwt, valid_data_cwt
 
 
-# TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(
     args: argparse.Namespace,
     data_obj: object,
@@ -77,12 +75,6 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    # if (not args.kfold) and (fold is not None):
-    #     LOGGER.info(
-    #         f"K-fold is set to {args.kfold} but fold index is passed!"
-    #         " Proceeding without using K-fold."
-    #     )
-    #     fold = None
     # containers to hold train and validation losses
     train_loss = []
     valid_loss = []
@@ -96,16 +88,6 @@ def train_loop(
         test_data_file_cwt = os.path.join(
             test_data_path, "cwt_" + test_datafile_name
         )
-
-    # # add loss values to tensorboard
-    # if args.add_tensorboard:
-    #     writer = SummaryWriter(
-    #         log_dir=os.path.join(
-    #             args.log_dir,
-    #             "tensorboard",
-    #             f"{args.model_name}{args.filename_suffix}",
-    #         )
-    #     )
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
@@ -174,9 +156,6 @@ def train_loop(
         # create a combined dataset
         train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
         valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
-        x1, x2 = train_dataset.__getitem__(0)
-        print(x1[0].shape, x1[1].shape)
-        print(x2[0].shape, x2[1].shape)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -187,10 +166,6 @@ def train_loop(
         pin_memory=True,
         drop_last=True,
     )
-
-    input, target = next(iter(train_loader))
-    print(input[0].shape, input[1].shape)
-    print(target[0].shape, target[1].shape)
 
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
@@ -203,10 +178,6 @@ def train_loop(
 
     # model
     if args.multi_features:
-        # if not isinstance(model, multi_features_model.MultiFeaturesModel):
-        #     raise ValueError(
-        #         "Multi features are passed but multi features model is not used."
-        #     )
         raw_model = multi_features_model.RawFeatureModel(args)
         fft_model = multi_features_model.FFTFeatureModel(args)
         cwt_model = multi_features_model.CWTFeatureModel(args)
@@ -216,9 +187,7 @@ def train_loop(
         model_cls = utils.create_model(args.model_name)
         model = model_cls(args)
 
-    device = torch.device(
-        args.device
-    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device)
     model = model.to(device)
     LOGGER.info("-" * 50)
     LOGGER.info(f"       Training with model: {args.model_name}       ")
@@ -309,18 +278,7 @@ def train_loop(
 
         # step the scheduler
         scheduler.step(avg_val_loss)
-        # print(f"Train losses: {train_loss}")
-        # print(f"Valid losses: {valid_loss}")
-        # if args.add_tensorboard:
-        #     writer.add_scalars(
-        #         f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-        #         {
-        #             "train_loss": avg_loss,
-        #             "valid_loss": avg_val_loss,
-        #         },
-        #         epoch + 1,
-        #     )
-        #     writer.close()
+
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores.append(roc_score)
@@ -384,15 +342,6 @@ def train_loop(
             },
             f,
         )
-    # # save the predictions in the valid dataframe
-    # valid_folds["preds"] = torch.load(
-    #     os.path.join(
-    #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
-    #     ),
-    #     map_location=torch.device("cpu"),
-    # )["preds"]
-
-    # return valid_folds
 
 
 if __name__ == "__main__":
