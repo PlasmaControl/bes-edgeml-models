@@ -126,13 +126,12 @@ class FFTFeatureModel(_FeatureBase):
         """
         super(FFTFeatureModel, self).__init__(*args, **kwargs)
 
-        self.nfft = self.args.fft_nfft
-        if self.nfft == 0:
-            self.nfft = self.time_points
-        assert self.nfft <= self.time_points
-        assert np.log2(self.nfft) % 1 == 0  # ensure power of 2
+        self.nbins = self.args.fft_nbins
+        assert np.log2(self.nbins) % 1 == 0  # ensuree power of 2
+
+        self.nfft = self.time_points // self.nbins
+
         self.nfreqs = self.nfft // 2 + 1
-        self.nbins = self.time_points // self.nfft
 
         self.num_filters = self.args.fft_num_filters
         filter_size = (
@@ -162,7 +161,7 @@ class FFTFeatureModel(_FeatureBase):
                 8 // self.maxpool_size,
                 8 // self.maxpool_size,
             ]
-            ffts = torch.empty(size=fft_bins_size, dtype=x.dtype)
+            ffts = torch.empty(size=fft_bins_size, dtype=x.dtype, device=x.device)
             for i in torch.arange(self.nbins):
                 bin_data = x[:, :, i * self.nfft : (i + 1) * self.nfft, :, :]
                 ffts[:, i : i + 1, :, :, :] = torch.abs(
@@ -205,12 +204,17 @@ class DWTFeatureModel(_FeatureBase):
         """
         super(DWTFeatureModel, self).__init__(*args, **kwargs)
 
-        assert self.args.dwt_level <= pywt.dwt_max_level(self.time_points, self.args.dwt_wavelet)
+        if self.args.dwt_level == -1:
+            dwt_level = pywt.dwt_max_level(self.time_points, self.args.dwt_wavelet)
+        else:
+            dwt_level = self.args.dwt_level
+
+        assert dwt_level <= pywt.dwt_max_level(self.time_points, self.args.dwt_wavelet)
 
         # DWT and sample calculation to get new time domain size
         self.dwt = DWT1DForward(
             wave=self.args.dwt_wavelet,
-            J=self.args.dwt_level,
+            J=dwt_level,
             mode="reflect",
         )
         x_tmp = torch.empty(1, 1, self.time_points)

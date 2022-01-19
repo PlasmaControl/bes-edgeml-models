@@ -277,10 +277,10 @@ class BaseArguments:
             help="Number of features for FFTFeatureModel: int >= 0",
         )
         parser.add_argument(
-            "--fft_nfft",
+            "--fft_nbins",
             type=int,
-            default=0,
-            help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
+            default=1,
+            help="FFT bins for FFTFeatureModel; power of 2: 1(default)|2|4...",
         )
         parser.add_argument(
             "--dwt_num_filters",
@@ -297,8 +297,8 @@ class BaseArguments:
         parser.add_argument(
             "--dwt_level",
             type=int,
-            default=3,
-            help="Wavelet decomposition level: int >=1, up to pywt.dwt_max_level(); default=3",
+            default=-1,
+            help="Wavelet decomposition level: int >=1 (-1 (default) = max dwt level)",
         )
 
         self.initialized = True

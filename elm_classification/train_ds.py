@@ -391,6 +391,10 @@ def train_loop(
 
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(outputs, f,)
+
+    for handler in LOGGER.handlers[:]:
+        handler.close()
+        LOGGER.removeHandler(handler)
     
     return outputs
     # # save the predictions in the valid dataframe
@@ -425,13 +429,15 @@ if __name__ == "__main__":
         "multi_features_ds",
         "--data_preproc",
         "unprocessed",
+        '--device',
+        'cuda',
         "--data_dir",
-        # (Path.home() / "Documents/Projects/data").as_posix(),
-        (
-            Path.home() / "research/bes_edgeml_models/elm_classification/data"
-        ).as_posix(),
+        (Path.home() / "scratch/edgeml/data").as_posix(),
+        # (
+        #     Path.home() / "research/bes_edgeml_models/elm_classification/data"
+        # ).as_posix(),
         "--input_file",
-        "labeled-elm-events-large.hdf5",
+        "labeled-elm-events.hdf5",
         "--test_data_dir",
         Path("test_data").as_posix(),
         "--signal_window_size",
@@ -439,9 +445,9 @@ if __name__ == "__main__":
         "--label_look_ahead",
         "0",
         "--max_elms",
-        "-1",
+        "10",
         "--n_epochs",
-        "20",
+        "2",
         "--dry_run",
     ]
     args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
