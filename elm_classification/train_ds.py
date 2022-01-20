@@ -8,61 +8,61 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-# from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
-# import pywt
+import pywt
 
 from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
+from models import multi_features_model
 from models import multi_features_ds_model
 
 
-# def get_multi_features(args, train_data, valid_data):
-#     print(f"Train data shape: {train_data[0].shape}")
-#     print(f"Valid data shape: {valid_data[0].shape}")
-#     train_data_cwt = list(train_data)
-#     valid_data_cwt = list(valid_data)
-#     widths = (
-#         np.arange(1, args.signal_window_size + 1)
-#         if args.signal_window_size <= 64
-#         else np.arange(2, args.signal_window_size + 1, 2)
-#     )
-#     train_data_cwt[0], _ = pywt.cwt(
-#         train_data_cwt[0], scales=widths, wavelet="morl", axis=0
-#     )
-#     train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
-#     valid_data_cwt[0], _ = pywt.cwt(
-#         valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
-#     )
-#     valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
+def get_multi_features(args, train_data, valid_data):
+    print(f"Train data shape: {train_data[0].shape}")
+    print(f"Valid data shape: {valid_data[0].shape}")
+    train_data_cwt = list(train_data)
+    valid_data_cwt = list(valid_data)
+    max_scale = 1024
+    num = int(np.log2(max_scale)) + 1
+    widths = np.round(
+        np.geomspace(1, max_scale, num=num, endpoint=True)
+    ).astype(int)
+    train_data_cwt[0], _ = pywt.cwt(
+        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
+    valid_data_cwt[0], _ = pywt.cwt(
+        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
+    )
+    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
 
-#     train_data_cwt = tuple(train_data_cwt)
-#     valid_data_cwt = tuple(valid_data_cwt)
-#     print(f"CWT Train data shape: {train_data_cwt[0].shape}")
-#     print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
+    train_data_cwt = tuple(train_data_cwt)
+    valid_data_cwt = tuple(valid_data_cwt)
+    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
+    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
 
-#     print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
-#     print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
+    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
+    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
 
-#     assert (
-#         train_data[0].shape[0] == train_data_cwt[0].shape[0]
-#     ), "CWT train data leading dimension does not match with the raw data!"
-#     assert (
-#         valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
-#     ), "CWT valid data leading dimension does not match with the raw data!"
+    assert (
+        train_data[0].shape[0] == train_data_cwt[0].shape[0]
+    ), "CWT train data leading dimension does not match with the raw data!"
+    assert (
+        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
+    ), "CWT valid data leading dimension does not match with the raw data!"
 
-#     return train_data_cwt, valid_data_cwt
+    return train_data_cwt, valid_data_cwt
 
 
-# TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(
     args: argparse.Namespace,
     data_obj: object,
     test_datafile_name: str,
     fold: Union[int, None] = None,
     desc: bool = False,
+    trial = None,  # optuna `trial` object
 ) -> None:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
@@ -77,12 +77,6 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    # if (not args.kfold) and (fold is not None):
-    #     LOGGER.info(
-    #         f"K-fold is set to {args.kfold} but fold index is passed!"
-    #         " Proceeding without using K-fold."
-    #     )
-    #     fold = None
     # containers to hold train and validation losses
     train_loss = []
     valid_loss = []
@@ -94,20 +88,11 @@ def train_loop(
             args, infer_mode=False
         )
         test_data_file = os.path.join(test_data_path, test_datafile_name)
-    # if args.multi_features:
-    #     test_data_file_cwt = os.path.join(
-    #         test_data_path, "cwt_" + test_datafile_name
-    #     )
 
-    # # add loss values to tensorboard
-    # if args.add_tensorboard:
-    #     writer = SummaryWriter(
-    #         log_dir=os.path.join(
-    #             args.log_dir,
-    #             "tensorboard",
-    #             f"{args.model_name}{args.filename_suffix}",
-    #         )
-    #     )
+    if args.multi_features:
+        test_data_file_cwt = os.path.join(
+            test_data_path, "cwt_" + test_datafile_name
+        )
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
@@ -119,18 +104,19 @@ def train_loop(
     LOGGER.info("-" * 30)
 
     # turn off model details for subsequent folds/epochs
-    if fold is not None and fold >= 1:
-        desc = False
+    if fold is not None:
+        if fold >= 1:
+            desc = False
 
     # create train, valid and test data
     train_data, valid_data, _ = data_obj.get_data(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
 
-    # if args.multi_features:
-    #     train_data_cwt, valid_data_cwt = get_multi_features(
-    #         args, train_data, valid_data
-    #     )
+    if args.multi_features:
+        train_data_cwt, valid_data_cwt = get_multi_features(
+            args, train_data, valid_data
+        )
 
     # dump test data into a file
     if not args.dry_run:
@@ -144,17 +130,17 @@ def train_loop(
                 },
                 f,
             )
-        # if args.multi_features:
-        #     with open(test_data_file_cwt, "wb") as f:
-        #         pickle.dump(
-        #             {
-        #                 "signals": valid_data_cwt[0],
-        #                 "labels": valid_data_cwt[1],
-        #                 "sample_indices": valid_data_cwt[2],
-        #                 "window_start": valid_data_cwt[3],
-        #             },
-        #             f,
-        #         )
+        if args.multi_features:
+            with open(test_data_file_cwt, "wb") as f:
+                pickle.dump(
+                    {
+                        "signals": valid_data_cwt[0],
+                        "labels": valid_data_cwt[1],
+                        "sample_indices": valid_data_cwt[2],
+                        "window_start": valid_data_cwt[3],
+                    },
+                    f,
+                )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -164,20 +150,17 @@ def train_loop(
         args, *valid_data, logger=LOGGER, phase="validation"
     )
 
-    # if args.multi_features:
-    #     train_dataset_cwt = dataset.ELMDataset(
-    #         args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
-    #     )
-    #     valid_dataset_cwt = dataset.ELMDataset(
-    #         args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
-    #     )
+    if args.multi_features:
+        train_dataset_cwt = dataset.ELMDataset(
+            args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
+        )
+        valid_dataset_cwt = dataset.ELMDataset(
+            args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
+        )
 
-    #     # create a combined dataset
-    #     train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
-    #     valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
-    #     x1, x2 = train_dataset.__getitem__(0)
-    #     print(x1[0].shape, x1[1].shape)
-    #     print(x2[0].shape, x2[1].shape)
+        # create a combined dataset
+        train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
+        valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -189,10 +172,6 @@ def train_loop(
         drop_last=True,
     )
 
-    input, target = next(iter(train_loader))
-    # print(input[0].shape, input[1].shape)
-    # print(target[0].shape, target[1].shape)
-
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
         batch_size=args.batch_size,
@@ -203,33 +182,46 @@ def train_loop(
     )
 
     # model
-    # set raw, FFT, and DWT features on/off (default is all on)
-    raw_model = (
-        multi_features_ds_model.RawFeatureModel(args)
-        if args.raw_num_filters > 0
-        else None
-    )
-    fft_model = (
-        multi_features_ds_model.FFTFeatureModel(args)
-        if args.fft_num_filters > 0
-        else None
-    )
-    dwt_model = (
-        multi_features_ds_model.DWTFeatureModel(args)
-        if args.dwt_num_filters > 0
-        else None
-    )
-    model_cls = utils.create_model(args.model_name)
-    model = model_cls(args, raw_model, fft_model, dwt_model)
+    if args.model_name == 'multi_features_ds':
+        raw_model = (
+            multi_features_ds_model.RawFeatureModel(args)
+            if args.raw_num_filters > 0
+            else None
+        )
+        fft_model = (
+            multi_features_ds_model.FFTFeatureModel(args)
+            if args.fft_num_filters > 0
+            else None
+        )
+        dwt_model = (
+            multi_features_ds_model.DWTFeatureModel(args)
+            if args.dwt_num_filters > 0
+            else None
+        )
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args, raw_model, fft_model, dwt_model)
+    elif args.multi_features:
+        raw_model = multi_features_model.RawFeatureModel(args)
+        fft_model = multi_features_model.FFTFeatureModel(args)
+        cwt_model = multi_features_model.CWTFeatureModel(args)
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model_cls = utils.create_model(args.model_name)
+        model = model_cls(args)
 
-    device = torch.device(
-        args.device
-    )  # "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(args.device)
     model = model.to(device)
-
     LOGGER.info("-" * 50)
     LOGGER.info(f"       Training with model: {args.model_name}       ")
     LOGGER.info("-" * 50)
+
+    n_parameters = 0
+    for parameter in model.parameters():
+        if parameter.requires_grad:
+            n_parameters += parameter.numel()
+
+    LOGGER.info(f"  Trainable parameters: {n_parameters}       ")
 
     # display model details
     if desc:
@@ -296,7 +288,7 @@ def train_loop(
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
-        # multi_features=args.multi_features,
+        multi_features=args.multi_features,
     )
 
     # iterate through all the epochs
@@ -316,18 +308,7 @@ def train_loop(
 
         # step the scheduler
         scheduler.step(avg_val_loss)
-        # print(f"Train losses: {train_loss}")
-        # print(f"Valid losses: {valid_loss}")
-        # if args.add_tensorboard:
-        #     writer.add_scalars(
-        #         f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-        #         {
-        #             "train_loss": avg_loss,
-        #             "valid_loss": avg_val_loss,
-        #         },
-        #         epoch + 1,
-        #     )
-        #     writer.close()
+
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores.append(roc_score)
@@ -397,76 +378,10 @@ def train_loop(
         LOGGER.removeHandler(handler)
     
     return outputs
-    # # save the predictions in the valid dataframe
-    # valid_folds["preds"] = torch.load(
-    #     os.path.join(
-    #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"
-    #     ),
-    #     map_location=torch.device("cpu"),
-    # )["preds"]
-
-    # return valid_folds
 
 
 if __name__ == "__main__":
-    # args, parser = TrainArguments().parse(verbose=True)
-    # LOGGER = utils.get_logger(
-    #     script_name=__name__,
-    #     log_file=os.path.join(
-    #         args.log_dir,
-    #         f"output_logs_{args.model_name}{args.filename_suffix}.log",
-    #     ),
-    # )
-    # data_cls = utils.create_data(args.data_preproc)
-    # data_obj = data_cls(args, LOGGER)
-    # train_loop(
-    #     args,
-    #     data_obj,
-    #     test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
-    # )
-    arg_list = [
-        "--device",
-        "cuda",
-        "--model_name",
-        "multi_features_ds",
-        "--data_preproc",
-        "unprocessed",
-        '--device',
-        'cuda',
-        "--data_dir",
-        (Path.home() / "scratch/edgeml/data").as_posix(),
-        # (
-        #     Path.home() / "research/bes_edgeml_models/elm_classification/data"
-        # ).as_posix(),
-        "--input_file",
-        "labeled-elm-events.hdf5",
-        "--test_data_dir",
-        Path("test_data").as_posix(),
-        "--signal_window_size",
-        "64",
-        "--label_look_ahead",
-        "0",
-        "--raw_num_filters",
-        "48",
-        "--fft_num_filters",
-        "48",
-        "--dwt_num_filters",
-        "48",
-        "--max_elms",
-        "10",
-        "--n_epochs",
-        "20",
-        "--dwt_wavelet",
-        "db2",
-        "--dwt_level",
-        "6",
-        "--filename_suffix",
-        "_dwt_no_pooling",
-        "--normalize_data",
-        "--truncate_inputs",
-        # "--dry_run",
-    ]
-    args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    args, parser = TrainArguments().parse(verbose=True)
     LOGGER = utils.get_logger(
         script_name=__name__,
         log_file=os.path.join(

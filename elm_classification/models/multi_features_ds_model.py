@@ -32,9 +32,7 @@ class _FeatureBase(nn.Module):
         self.time_slice_interval = self.args.mf_time_slice_interval
         assert np.log2(self.time_slice_interval) % 1 == 0  # ensure power of 2
         assert self.time_slice_interval < self.args.signal_window_size
-        self.time_points = (
-            self.args.signal_window_size // self.time_slice_interval
-        )
+        self.time_points = self.args.signal_window_size // self.time_slice_interval
 
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
         self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
@@ -127,14 +125,14 @@ class FFTFeatureModel(_FeatureBase):
         super(FFTFeatureModel, self).__init__(*args, **kwargs)
 
         self.nbins = self.args.fft_nbins
-        assert np.log2(self.nbins) % 1 == 0  # ensuree power of 2
+        assert np.log2(self.nbins) % 1 == 0  # ensure power of 2
 
         self.nfft = self.time_points // self.nbins
 
         self.nfreqs = self.nfft // 2 + 1
 
         self.num_filters = self.args.fft_num_filters
-        filter_size = (self.nfreqs, 8, 8)
+        filter_size = (self.nfreqs, 8//self.maxpool_size, 8//self.maxpool_size)
         self.conv = nn.Conv3d(
             in_channels=1,
             out_channels=self.num_filters,
@@ -143,8 +141,7 @@ class FFTFeatureModel(_FeatureBase):
 
     def forward(self, x):
         x = x.to(self.args.device)  # needed for PowerPC architecture
-        # x = self._time_interval_and_maxpool(x)
-
+        x = self._time_interval_and_maxpool(x)
         if self.nbins == 1:
             # FFT for full time domain
             x = torch.abs(torch.fft.rfft(x, dim=2))
@@ -164,9 +161,7 @@ class FFTFeatureModel(_FeatureBase):
                     torch.fft.rfft(bin_data, dim=2)
                 )
             x = torch.mean(ffts, dim=1, keepdim=True)
-
         x = self._conv_dropout_relu_flatten(x)
-
         return x
 
 
@@ -220,7 +215,7 @@ class DWTFeatureModel(_FeatureBase):
             self.dwt_output_length += hi.shape[2]
 
         self.num_filters = self.args.dwt_num_filters
-        filter_size = (self.dwt_output_length, 8, 8)
+        filter_size = (self.dwt_output_length, 8//self.maxpool_size, 8//self.maxpool_size)
         self.conv = nn.Conv3d(
             in_channels=1,
             out_channels=self.num_filters,
@@ -228,25 +223,17 @@ class DWTFeatureModel(_FeatureBase):
         )
 
     def forward(self, x):
-        # x = self._time_interval_and_maxpool(x)
+        x = self._time_interval_and_maxpool(x)
         dwt_output_shape = list(x.shape)
         dwt_output_shape[2] = self.dwt_output_length
         x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype, device=x.device)
         for ibatch in torch.arange(x.shape[0]):  # loop over batch members
-            x_tmp = x[ibatch, 0, :, :, :].permute(
-                1, 2, 0
-            )  # make 3D and move time dim. to last
+            x_tmp = x[ibatch, 0, :, :, :].permute(1, 2, 0)  # make 3D and move time dim. to last
             x_lo, x_hi = self.dwt(x_tmp)  # multi-level DWT on last dim.
             coeff = [x_lo] + [hi for hi in x_hi]  # make list of coeff.
-            concat_coeff = torch.cat(
-                coeff, dim=2
-            )  # concat list in time dim. (last dim.)
-            concat_coeff = (
-                concat_coeff.permute(2, 0, 1).unsqueeze(0).unsqueeze(0)
-            )  # unpermute and expand
+            concat_coeff = torch.cat(coeff, dim=2)  # concat list in time dim. (last dim.)
+            concat_coeff = concat_coeff.permute(2, 0, 1).unsqueeze(0).unsqueeze(0)  # unpermute and expand
             x_dwt[ibatch, 0, :, :, :] = concat_coeff
-
-        x_dwt = x_dwt.to(self.args.device)
         x = self._conv_dropout_relu_flatten(x_dwt)
         return x
 
