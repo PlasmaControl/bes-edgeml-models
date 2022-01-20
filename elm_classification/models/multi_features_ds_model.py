@@ -225,25 +225,19 @@ class DWTFeatureModel(_FeatureBase):
         # x = self._time_interval_and_maxpool(x)
         dwt_output_shape = list(x.shape)
         dwt_output_shape[2] = self.dwt_output_length
-        print(f'DWT output shape: {dwt_output_shape}')
         x_dwt = torch.empty(dwt_output_shape, dtype=x.dtype)
         for ibatch in torch.arange(x.shape[0]):  # loop over batch members
             x_tmp = x[ibatch, 0, :, :, :].permute(
                 1, 2, 0
             )  # make 3D and move time dim. to last
             x_lo, x_hi = self.dwt(x_tmp)  # multi-level DWT on last dim.
-            print(f'X Lo shape: {x_lo.shape}')
-            for i in range(len(x_hi)):
-                print(f'For level {i+1}, X Hi shape: {x_hi[i].shape}')
             coeff = [x_lo] + [hi for hi in x_hi]  # make list of coeff.
             concat_coeff = torch.cat(
                 coeff, dim=2
             )  # concat list in time dim. (last dim.)
-            print(f'Concat coefficient shape before: {concat_coeff.shape}')
             concat_coeff = (
                 concat_coeff.permute(2, 0, 1).unsqueeze(0).unsqueeze(0)
             )  # unpermute and expand
-            print(f'Concat coefficient shape after: {concat_coeff.shape}')
             x_dwt[ibatch, 0, :, :, :] = concat_coeff
 
         x_dwt = x_dwt.to(self.args.device)
@@ -389,15 +383,15 @@ if __name__ == "__main__":
     raw_model = RawFeatureModel(args)
     fft_model = FFTFeatureModel(args)
     cwt_model = DWTFeatureModel(args)
-    # model = MultiFeaturesDsModel(args, raw_model, fft_model, cwt_model)
-    # print(summary(model, input_size=shape_raw, device=args.device))
+    model = MultiFeaturesDsModel(args, raw_model, fft_model, cwt_model)
+    print(summary(model, input_size=shape_raw, device=args.device))
 
-    # for param in list(model.named_parameters()):
-    #     print(
-    #         f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
-    #     )
-    # print(
-    #     f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
-    # )
-    y = cwt_model(x_raw)
+    for param in list(model.named_parameters()):
+        print(
+            f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+        )
+    print(
+        f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
+    y = model(x_raw)
     print(y.shape)
