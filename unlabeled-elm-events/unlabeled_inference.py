@@ -243,7 +243,7 @@ def get_cwt(signal: np.ndarray):
 
 
 def predict(
-    sws: int, la: int, device: torch.device, file_obj: h5py.File, ids: int
+    sws: int, la: int, device: torch.device, file_obj: h5py.File, ids: np.ndarray
 ):
     elm_predictions = dict()
     for i_elm, elm_event in enumerate(ids):
@@ -255,7 +255,7 @@ def predict(
         print(
             f"Processing {i_elm + 1} of {len(ids)} elm events with id {elm_event} and length {time.shape[0]}"
         )
-        signal_cwt = get_cwt(signal)
+        # signal_cwt = get_cwt(signal)
 
         predictions = []
         effective_len = time.shape[0] - sws - la + 1
@@ -264,20 +264,24 @@ def predict(
                 signal[j : j + sws],
                 dtype=np.float32,
             )
+            if j % 1000 == 0:
+                print(f'Calculating CWT for index {j+1} of {effective_len}')
+            input_signals_cwt = get_cwt(input_signals)
             input_signals = input_signals.reshape([1, 1, sws, 8, 8])
-            input_signals_cwt = np.array(
-                signal_cwt[j : j + sws].reshape(
-                    [
-                        1,
-                        1,
-                        sws,
-                        11,
-                        8,
-                        8,
-                    ]
-                ),
-                dtype=np.float32,
-            )
+            # input_signals_cwt = np.array(
+            #     signal_cwt[j : j + sws].reshape(
+            #         [
+            #             1,
+            #             1,
+            #             sws,
+            #             11,
+            #             8,
+            #             8,
+            #         ]
+            #     ),
+            #     dtype=np.float32,
+            # )
+            input_signals_cwt = input_signals_cwt.reshape([1, 1, sws, 11, 8, 8])
             input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
             input_signals_cwt = torch.as_tensor(
                 input_signals_cwt, dtype=torch.float32
@@ -302,7 +306,7 @@ def predict(
             constant_values=0,
         )
         print(f"Signals shape: {signal.shape}")
-        print(f"Signals CWT shape: {signal_cwt.shape}")
+        # print(f"Signals CWT shape: {signal_cwt.shape}")
         print(f"Time shape: {time.shape[0]}")
         print(f"Micro predictions shape: {micro_predictions.shape}")
         elm_predictions[elm_event] = {
@@ -367,7 +371,7 @@ def plot(
         fig.savefig(
             os.path.join(
                 plot_dir,
-                f"unlabeled_sws_{sws}_la_{la}_time_series_{elm_range}.png",
+                f"testing_unlabeled_sws_{sws}_la_{la}_time_series_{elm_range}.png",
             ),
             dpi=200,
         )
@@ -384,7 +388,7 @@ def plot_all(
     show_plots: bool = True,
 ) -> None:
     elm_id = list(elm_predictions.keys())
-    for i in range(25):
+    for i in range(1):
         i_elms = elm_id[i * 12 : (i + 1) * 12]
         i_elm_predictions = {
             k: v for k, v in elm_predictions.items() if k in i_elms
@@ -475,7 +479,7 @@ if __name__ == "__main__":
     # signal window size and label lookahead
     sws = 512
     la = 0
-    num_unlabeled_events = 300
+    num_unlabeled_events = 12
 
     # define paths for model checkpoint and unlabeled data
     base_path = os.path.dirname(os.getcwd())
@@ -511,6 +515,6 @@ if __name__ == "__main__":
         la,
         predictions,
         plot_dir=os.getcwd(),
-        dry_run=False,
-        show_plots=False,
+        dry_run=True,
+        show_plots=True,
     )
