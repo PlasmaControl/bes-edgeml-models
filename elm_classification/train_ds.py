@@ -12,6 +12,11 @@ import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 import pywt
 
+try:
+    import optuna
+except ImportError:
+    pass
+
 from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
@@ -292,6 +297,7 @@ def train_loop(
     )
 
     # iterate through all the epochs
+    do_prune = False  # only used if optuna is enabled
     for epoch in range(args.n_epochs):
         start_time = time.time()
         # train
@@ -347,6 +353,14 @@ def train_loop(
                 f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
             )
 
+        # optuna hook to monitor training epochs
+        if trial is not None:
+            trial.report(f1, epoch)
+            trial.set_user_attr('roc_score', roc_score)
+            if trial.should_prune():
+                do_prune = True
+                break
+
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)
     roc_scores = np.array(roc_scores)
@@ -373,10 +387,14 @@ def train_loop(
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(outputs, f,)
 
+    if do_prune:
+        LOGGER.info("Trial pruned by Optuna")
+        optuna.TrialPruned()
+
     for handler in LOGGER.handlers[:]:
         handler.close()
         LOGGER.removeHandler(handler)
-    
+
     return outputs
 
 
