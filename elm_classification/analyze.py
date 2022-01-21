@@ -3,6 +3,7 @@ import pickle
 from typing import Tuple, List, Union
 import argparse
 import logging
+from pathlib import Path
 
 import torch
 import numpy as np
@@ -16,7 +17,7 @@ from tqdm import tqdm
 from data_preprocessing import *
 from src import utils, dataset
 from options.test_arguments import TestArguments
-from models import multi_features_model
+from models import multi_features_model, multi_features_ds_model
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
 palette = list(sns.color_palette("muted").as_hex())
@@ -781,15 +782,32 @@ def main(
     test_data_cwt = None
 
     # instantiate the elm_model and load the checkpoint
-    if args.multi_features:
-        raw_model = multi_features_model.RawFeatureModel(args)
-        fft_model = multi_features_model.FFTFeatureModel(args)
-        cwt_model = multi_features_model.CWTFeatureModel(args)
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args, raw_model, fft_model, cwt_model)
-    else:
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args)
+    # if args.multi_features:
+    #     raw_model = multi_features_model.RawFeatureModel(args)
+    #     fft_model = multi_features_model.FFTFeatureModel(args)
+    #     cwt_model = multi_features_model.CWTFeatureModel(args)
+    #     model_cls = utils.create_model(args.model_name)
+    #     model = model_cls(args, raw_model, fft_model, cwt_model)
+    # else:
+    #     model_cls = utils.create_model(args.model_name)
+    #     model = model_cls(args)
+    raw_model = (
+        multi_features_ds_model.RawFeatureModel(args)
+        if args.raw_num_filters > 0
+        else None
+    )
+    fft_model = (
+        multi_features_ds_model.FFTFeatureModel(args)
+        if args.fft_num_filters > 0
+        else None
+    )
+    dwt_model = (
+        multi_features_ds_model.DWTFeatureModel(args)
+        if args.dwt_num_filters > 0
+        else None
+    )
+    model_cls = utils.create_model(args.model_name)
+    model = model_cls(args, raw_model, fft_model, dwt_model)
     print(model)
     device = torch.device(args.device)
     model = model.to(device)
@@ -870,6 +888,50 @@ def main(
 
 
 if __name__ == "__main__":
-    args, parser = TestArguments().parse(verbose=True)
+    arg_list = [
+        "--device",
+        "cuda",
+        "--model_name",
+        "multi_features_ds",
+        "--data_preproc",
+        "unprocessed",
+        "--data_dir",
+        # (Path.home() / "Documents/Projects/data").as_posix(),
+        (
+                Path.home() / "research/bes_edgeml_models/elm_classification/data"
+        ).as_posix(),
+        "--input_file",
+        "labeled-elm-events-large.hdf5",
+        "--test_data_dir",
+        Path("data/test_data").as_posix(),
+        "--signal_window_size",
+        "512",
+        "--label_look_ahead",
+        "0",
+        "--raw_num_filters",
+        "48",
+        "--fft_num_filters",
+        "48",
+        "--dwt_num_filters",
+        "48",
+        "--max_elms",
+        "-1",
+        "--n_epochs",
+        "20",
+        "--dwt_wavelet",
+        "db4",
+        "--dwt_level",
+        "9",
+        "--filename_suffix",
+        "_dwt",
+        "--threshold",
+        "0.5",
+        "--plot_data",
+        "--show_metrics",
+        "--normalize_data",
+        "--truncate_inputs",
+        # "--dry_run",
+    ]
+    args, parser = TestArguments().parse(verbose=True, arg_list=arg_list)
     utils.test_args_compat(args, parser, infer_mode=True)
     main(args)
