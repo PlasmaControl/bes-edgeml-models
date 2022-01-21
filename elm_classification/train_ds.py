@@ -432,7 +432,7 @@ if __name__ == "__main__":
         "--input_file",
         "labeled-elm-events-large.hdf5",
         "--test_data_dir",
-        Path("test_data").as_posix(),
+        Path("data/test_data").as_posix(),
         "--signal_window_size",
         "512",
         "--label_look_ahead",
