@@ -2,6 +2,7 @@ import time
 from typing import Tuple, Union, Callable
 
 import numpy as np
+import pywt
 import torch
 import torch.nn as nn
 
@@ -15,9 +16,10 @@ class Run:
         device: torch.device,
         criterion,
         optimizer: torch.optim.Optimizer,
+        sws: int,
         use_focal_loss: bool = False,
         use_rnn: bool = False,
-        multi_features: bool = False,
+        use_cwt: bool = False,
     ):
         self.model = model
         self.criterion = criterion
@@ -25,7 +27,8 @@ class Run:
         self.device = device
         self.use_focal_loss = use_focal_loss
         self.use_rnn = use_rnn
-        self.multi_features = multi_features
+        self.use_cwt = use_cwt
+        self.sws = sws
 
     def train(
         self,
@@ -42,114 +45,64 @@ class Run:
         self.model.train()
 
         start = end = time.time()
+        images_cwt = None
+        for batch_idx, (images, labels) in enumerate(data_loader):
+            # data loading time
+            data_time.update(time.time() - end)
 
-        if self.multi_features:
-            for batch_idx, (raw, cwt) in enumerate(data_loader):
-                # data loading time
-                data_time.update(time.time() - end)
+            # zero out all the accumulated gradients
+            self.optimizer.zero_grad()
 
-                # zero out all the accumulated gradients
-                self.optimizer.zero_grad()
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            if self.use_cwt:
+                # get CWT batch wise
+                images_cwt = self._get_cwt(images)
+                images_cwt = images_cwt.to(self.device)
+            batch_size = images.size(0)
 
-                # send data to device
-                raw_input, labels = raw[0], raw[1]
-                cwt_input = cwt[0]
-                batch_size = raw_input.size(0)
-
-                raw_input = raw_input.to(self.device)
-                labels = labels.to(self.device)
-                cwt_input = cwt_input.to(self.device)
-
-                # forward pass
-                y_preds = self.model(raw_input, cwt_input)
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
-
-                loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
-
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
-
-                # perform loss reduction
-                loss = loss.mean()
-
-                # record loss
-                losses.update(loss.item(), batch_size)
-
-                # backpropagate
-                loss.backward()
-
-                # optimizer step
-                self.optimizer.step()
-
-                # elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-                # step the scheduler if provided
-                if scheduler is not None:
-                    scheduler.step()
-
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Epoch: [{epoch+1}][{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-
-        else:
-            for batch_idx, (images, labels) in enumerate(data_loader):
-                # data loading time
-                data_time.update(time.time() - end)
-
-                # zero out all the accumulated gradients
-                self.optimizer.zero_grad()
-
-                # send the data to device
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                batch_size = images.size(0)
-
-                # forward pass
+            # forward pass
+            if self.use_cwt:
+                y_preds = self.model(images, images_cwt)
+            else:
                 y_preds = self.model(images)
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
 
-                loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
+            loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
 
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
 
-                # perform loss reduction
-                loss = loss.mean()
+            # perform loss reduction
+            loss = loss.mean()
 
-                # record loss
-                losses.update(loss.item(), batch_size)
+            # record loss
+            losses.update(loss.item(), batch_size)
 
-                # backpropagate
-                loss.backward()
+            # backpropagate
+            loss.backward()
 
-                # optimizer step
-                self.optimizer.step()
+            # optimizer step
+            self.optimizer.step()
 
-                # elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
+            # elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-                # step the scheduler if provided
-                if scheduler is not None:
-                    scheduler.step()
+            # step the scheduler if provided
+            if scheduler is not None:
+                scheduler.step()
 
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Epoch: [{epoch+1}][{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
+            # display results
+            if (batch_idx + 1) % print_every == 0:
+                print(
+                    f"Epoch: [{epoch + 1}][{batch_idx + 1}/{len(data_loader)}] "
+                    f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
+                    f"Elapsed {utils.time_since(start, float(batch_idx + 1) / len(data_loader))} "
+                    f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
+                )
 
         return losses.avg
 
@@ -167,107 +120,64 @@ class Run:
         preds = []
         valid_labels = []
         start = end = time.time()
-        if self.multi_features:
-            for batch_idx, (raw, cwt) in enumerate(data_loader):
-                # measure data loading time
-                data_time.update(time.time() - end)
+        images_cwt = None
+        for batch_idx, (images, labels) in enumerate(data_loader):
+            # measure data loading time
+            data_time.update(time.time() - end)
 
-                # send the data to device
-                raw_input, labels = raw[0], raw[1]
-                cwt_input = cwt[0]
-                batch_size = raw_input.size(0)
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            if self.use_cwt:
+                # get CWT batch wise
+                images_cwt = self._get_cwt(images)
+                images_cwt = images_cwt.to(self.device)
+            batch_size = images.size(0)
 
-                raw_input = raw_input.to(self.device)
-                labels = labels.to(self.device)
-                cwt_input = cwt_input.to(self.device)
-
-                # compute loss with no backprop
-                with torch.no_grad():
-                    y_preds = self.model(raw_input, cwt_input)
-
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
-
-                y_preds = y_preds.view(-1)
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
-
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
-
-                # perform loss reduction
-                loss = loss.mean()
-
-                losses.update(loss.item(), batch_size)
-
-                # record accuracy
-                preds.append(torch.sigmoid(y_preds).cpu().numpy())
-                valid_labels.append(labels.cpu().numpy())
-
-                # measure elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Evaluating: [{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-            predictions = np.concatenate(preds)
-            targets = np.concatenate(valid_labels)
-
-        else:
-            for batch_idx, (images, labels) in enumerate(data_loader):
-                # measure data loading time
-                data_time.update(time.time() - end)
-
-                # send the data to device
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                batch_size = images.size(0)
-
-                # compute loss with no backprop
-                with torch.no_grad():
+            # compute loss with no backprop
+            with torch.no_grad():
+                if self.use_cwt:
+                    y_preds = self.model(images, images_cwt)
+                else:
                     y_preds = self.model(images)
 
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
 
-                y_preds = y_preds.view(-1)
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
+            y_preds = y_preds.view(-1)
+            loss = self.criterion(y_preds, labels.type_as(y_preds))
 
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
 
-                # perform loss reduction
-                loss = loss.mean()
+            # perform loss reduction
+            loss = loss.mean()
 
-                losses.update(loss.item(), batch_size)
+            losses.update(loss.item(), batch_size)
 
-                # record accuracy
-                preds.append(torch.sigmoid(y_preds).cpu().numpy())
-                valid_labels.append(labels.cpu().numpy())
+            # record accuracy
+            preds.append(torch.sigmoid(y_preds).cpu().numpy())
+            valid_labels.append(labels.cpu().numpy())
 
-                # measure elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Evaluating: [{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-            predictions = np.concatenate(preds)
-            targets = np.concatenate(valid_labels)
+            # display results
+            if (batch_idx + 1) % print_every == 0:
+                print(
+                    f"Evaluating: [{batch_idx + 1}/{len(data_loader)}] "
+                    f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
+                    f"Elapsed {utils.time_since(start, float(batch_idx + 1) / len(data_loader))} "
+                    f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
+                )
+        predictions = np.concatenate(preds)
+        targets = np.concatenate(valid_labels)
 
         return losses.avg, predictions, targets
 
-    def _focal_loss(self, y_true, y_preds, loss, gamma=2):
+    @staticmethod
+    def _focal_loss(y_true, y_preds, loss, gamma=2):
         probas = torch.sigmoid(y_preds)
         loss = torch.where(
             y_true >= 0.5,
@@ -275,3 +185,17 @@ class Run:
             probas ** gamma * loss,
         )
         return loss
+
+    @staticmethod
+    def _get_cwt(x: torch.Tensor):
+        x = x.numpy()
+        x = x[:, :, -1, ...]
+        max_scale = self.sws
+        num = int(np.log2(max_scale)) + 1
+        widths = np.round(np.geomspace(1, max_scale, num=num, endpoint=True)).astype(
+            int
+        )
+        x, _ = pywt.cwt(x, scales=widths, wavelet="morl", axis=1)
+        x = np.transpose(x, (1, 2, 0, 3, 4))
+        x = torch.as_tensor(x, dtype=torch.float32)
+        return x
