@@ -84,10 +84,10 @@ def train_loop(
         args, infer_mode=False
     )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
-    if args.multi_features:
-        test_data_file_cwt = os.path.join(
-            test_data_path, "cwt_" + test_datafile_name
-        )
+    # if args.multi_features:
+    #     test_data_file_cwt = os.path.join(
+    #         test_data_path, "cwt_" + test_datafile_name
+    #     )
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
@@ -108,10 +108,10 @@ def train_loop(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
 
-    if args.multi_features:
-        train_data_cwt, valid_data_cwt = get_multi_features(
-            args, train_data, valid_data
-        )
+    # if args.multi_features:
+    #     train_data_cwt, valid_data_cwt = get_multi_features(
+    #         args, train_data, valid_data
+    #     )
 
     # dump test data into a file
     if not args.dry_run:
@@ -125,17 +125,17 @@ def train_loop(
                 },
                 f,
             )
-        if args.multi_features:
-            with open(test_data_file_cwt, "wb") as f:
-                pickle.dump(
-                    {
-                        "signals": valid_data_cwt[0],
-                        "labels": valid_data_cwt[1],
-                        "sample_indices": valid_data_cwt[2],
-                        "window_start": valid_data_cwt[3],
-                    },
-                    f,
-                )
+        # if args.multi_features:
+        #     with open(test_data_file_cwt, "wb") as f:
+        #         pickle.dump(
+        #             {
+        #                 "signals": valid_data_cwt[0],
+        #                 "labels": valid_data_cwt[1],
+        #                 "sample_indices": valid_data_cwt[2],
+        #                 "window_start": valid_data_cwt[3],
+        #             },
+        #             f,
+        #         )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -145,17 +145,17 @@ def train_loop(
         args, *valid_data, logger=LOGGER, phase="validation"
     )
 
-    if args.multi_features:
-        train_dataset_cwt = dataset.ELMDataset(
-            args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
-        )
-        valid_dataset_cwt = dataset.ELMDataset(
-            args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
-        )
-
-        # create a combined dataset
-        train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
-        valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
+    # if args.multi_features:
+    #     train_dataset_cwt = dataset.ELMDataset(
+    #         args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
+    #     )
+    #     valid_dataset_cwt = dataset.ELMDataset(
+    #         args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
+    #     )
+    #
+    #     # create a combined dataset
+    #     train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
+    #     valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -177,7 +177,7 @@ def train_loop(
     )
 
     # model
-    if args.multi_features:
+    if args.use_cwt:
         raw_model = multi_features_model.RawFeatureModel(args)
         fft_model = multi_features_model.FFTFeatureModel(args)
         cwt_model = multi_features_model.CWTFeatureModel(args)
@@ -256,9 +256,10 @@ def train_loop(
         device=device,
         criterion=criterion,
         optimizer=optimizer,
+        sws=args.signal_window_size,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
-        multi_features=args.multi_features,
+        use_cwt=args.use_cwt
     )
 
     # iterate through all the epochs

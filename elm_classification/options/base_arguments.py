@@ -49,10 +49,10 @@ class BaseArguments:
             "sets.",
         )
         parser.add_argument(
-            "--multi_features",
+            "--use_cwt",
             action="store_true",
             default=False,
-            help="if true, create additional features based on FFT and CWT",
+            help="if true, calculate batch wise CWT and create additional features.",
         )
         parser.add_argument(
             "--use_fft",

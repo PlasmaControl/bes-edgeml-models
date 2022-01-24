@@ -5,6 +5,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+# class _BaseFeatureModel(nn.Module):
+#     def __init__(self, args:argparse.Namespace):
+#         pass
+#     super(_BaseFeatureModel, self).__init__()
+#     self.args = args
 
 class RawFeatureModel(nn.Module):
     def __init__(
@@ -146,7 +151,7 @@ class CWTFeatureModel(nn.Module):
         """
         super(CWTFeatureModel, self).__init__()
         self.args = args
-        filter_size = (int(np.log2(1024)) + 1, 8, 8)
+        filter_size = (int(np.log2(self.args.signal_window_size)) + 1, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=num_filters, kernel_size=filter_size
         )
@@ -154,7 +159,6 @@ class CWTFeatureModel(nn.Module):
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
 
     def forward(self, x):
-        x = x[:, :, -1, ...]  # take only the last time step
         x = self.dropout3d(self.conv(x))
         x = self.relu(x)
         x = torch.flatten(x, 1)
@@ -166,9 +170,9 @@ class MultiFeaturesModel(nn.Module):
     def __init__(
         self,
         args: argparse.Namespace,
-        raw_features_model: RawFeatureModel,
-        fft_features_model: FFTFeatureModel,
-        cwt_features_model: CWTFeatureModel,
+        raw_features_model: Union[RawFeatureModel, None] = None,
+        fft_features_model: Union[FFTFeatureModel, None] = None,
+        cwt_features_model: Union[CWTFeatureModel, None] = None,
         dropout_rate: float = 0.4,
         negative_slope: float = 0.02,
     ):
