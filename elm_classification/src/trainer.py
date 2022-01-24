@@ -52,14 +52,16 @@ class Run:
 
             # zero out all the accumulated gradients
             self.optimizer.zero_grad()
-
-            # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            
             if self.use_cwt:
                 # get CWT batch wise
                 images_cwt = self._get_cwt(images)
                 images_cwt = images_cwt.to(self.device)
+                
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            
             batch_size = images.size(0)
 
             # forward pass
@@ -124,14 +126,16 @@ class Run:
         for batch_idx, (images, labels) in enumerate(data_loader):
             # measure data loading time
             data_time.update(time.time() - end)
-
-            # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            
             if self.use_cwt:
                 # get CWT batch wise
                 images_cwt = self._get_cwt(images)
                 images_cwt = images_cwt.to(self.device)
+                
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
+            
             batch_size = images.size(0)
 
             # compute loss with no backprop
