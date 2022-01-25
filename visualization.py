@@ -990,6 +990,105 @@ class PCA():
 
         return {key: arr, 'labels': label_arr, 'elm_start_idx': starts, 'elm_end_idx': ends}
 
+    def generate_csi(self, target_class, input_block=None, iterations=150, initial_lr=6, random_state=None, blur=None,
+                     l2_weight: float = 0):
+        """
+
+        @param initial_lr: Learning rate of optimizer
+        @param random_state: State for seed input
+        @param blur: Apply Gaussian Blur after each iteration with sigma specified by blur
+        @param target_class: Options: ['ELM' | 'pre-ELM']
+        @param iterations: number of times to update input.
+        @return: np.array of every 10th iteration of optimizer
+        """
+        # set up keys from arguments
+        target_class = str(target_class)
+        try:
+            label = {'ELM': torch.tensor([1], device='cpu', dtype=torch.float32),
+                     'PRE-ELM': torch.tensor([0], device='cpu', dtype=torch.float32),
+                     '1': torch.tensor([1], device='cpu', dtype=torch.float32),
+                     '0': torch.tensor([0], device='cpu', dtype=torch.float32)}[target_class.upper()]
+            print(f'Target class: {target_class}; Label: {label.item()}')
+        except KeyError:
+            raise 'Target classes are "ELM" or "pre-ELM"'
+
+        #Return new model truncated at self.layer
+        for i, l in enumerate(self.model.children(), start=1):
+            if l is self.model.layers.get(self.layer):
+                break
+
+        newmodel = nn.Sequential(*(list(self.model.children())[:i])).to(self.device)
+        newmodel.eval()
+
+        # generate initial random input
+        np.random.seed(random_state)
+        # generated = np.random.uniform(0, 10, size=(self.args.signal_window_size, 8, 8))
+        # # Top two rows of BES are capped at 10, bottom 6 are capped at 5
+        # generated[:, 4:, :] /= 2
+        # generated = torch.tensor(generated, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)\
+        #     .requires_grad_()
+        # generated_i = generated
+
+        # get test batch with elm or pre elm
+        if input_block is None:
+            for batch in iter(self.test_loader):
+                if label in batch[1]:
+
+                    offset = np.random.randint(0, len(batch[1]))
+                    g_idx = np.argmax(batch[1] == label)
+                    if batch[1][g_idx - offset] != label:
+                        continue
+
+                    generated = batch[0][g_idx - offset].unsqueeze(0).to(self.device)
+                    generated_i = generated
+
+                    # check if model prediction is true positive/negative
+                    model_output = self.model(generated)
+                    if model_output >= self.args.threshold and label == 1:
+                        break
+                    elif model_output < self.args.threshold and label == 1:
+                        continue
+                    elif model_output < self.args.threshold and label == 0:
+                        break
+                    elif model_output >= self.args.threshold and label == 0:
+                        continue
+        else:
+            generated = input_block.reshape(-1, 1, self.args.signal_window_size, 8, 8).requires_grad_()
+            generated_i = input_block.view(-1, 1, self.args.signal_window_size, 8, 8)
+
+        generated_inputs = []
+        model_outs = []
+        for i in range(1, iterations):
+            # Define optimizer for the image
+            optimizer = SGD([generated], lr=initial_lr, weight_decay=l2_weight)
+            # Forward pass
+            output = newmodel(generated)
+
+            # Target specific class
+            loss_fn = nn.BCEWithLogitsLoss()
+            class_loss = loss_fn(output.view(-1), label)
+
+            if i % 10 == 0 or i == iterations - 1:
+                print(f'Iteration: {i}, Loss {class_loss.item():.2f} model output {torch.sigmoid(output).item():.2f}')
+            # Zero grads
+            newmodel.zero_grad()
+            # Backward
+            class_loss.backward()
+            # Update image
+            optimizer.step()
+
+            if i % 10 == 0 or i == (iterations - 1):
+                # append image to list
+                generated_inputs.append(generated)
+                model_outs.append(output)
+
+            if blur:
+                generated = torch.tensor(gaussian_filter(generated.squeeze().detach().numpy(), blur)).unsqueeze(
+                    0).unsqueeze(0).requires_grad_()
+
+        return tuple((im.detach().numpy().squeeze(), torch.sigmoid(model_out_).item(),
+                      generated_i.detach().numpy().squeeze()) for im, model_out_ in zip(generated_inputs, model_outs))
+
 
 def make_animation(viz: Visualizations, elm_id: int = 0) -> None:
     layers = list(viz.model.layers.keys())[:-1]
@@ -1205,34 +1304,8 @@ if __name__ == "__main__":
 
     logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
                                                                                    f"{args.filename_suffix}.log"))
-    vae_viz = VAEVisualization()
-    vae_viz.show_reconstruction()
-    exit()
     viz = Visualizations()
-    elm_idx = [0]
-    pca = PCA(viz, layer='fc2', elm_index=elm_idx)
-    pca_with_csi(pca)
+    pca = PCA(viz, layer='fc2', elm_index=[0])
+    pca.perform_PCA()
+    pca.generate_csi(0)
     exit(0)
-    pred_dict1 = pca.elm_predictions[0].copy()
-
-    pca.plot_pca(plot_type='grid')
-    for i, idx in enumerate(elm_idx):
-        elm = pca.elm_predictions[idx]
-        signals = elm['signals']
-        labels = elm['labels']
-        stop = 0
-        for start in range(0, len(signals), pca.args.signal_window_size):
-            stop += pca.args.signal_window_size
-            if stop <= len(labels):
-                model_out = viz.generate_csi(target_class=int(labels[stop]), iterations=30)
-                signals[start:stop] = model_out[-1][0]
-            else:
-                model_out = viz.generate_csi(target_class=int(labels[-1]), iterations=30)
-                signals[start:] = model_out[-1][0][:len(labels) - start]
-        elm['micro_predictions'] = labels
-    print(pca.elm_predictions == pred_dict1, elm == pred_dict1, )
-    pca.perform_PCA()
-    # pca.plot_pca(plot_type='grid')
-    pca.plot_pca(plot_type='compare')
-    pca.perform_PCA()
-    exit()

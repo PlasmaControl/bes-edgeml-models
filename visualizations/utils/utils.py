@@ -75,7 +75,7 @@ def get_model(args: argparse.Namespace,
     model.load_state_dict(state_dict)
     logger.info(f'Loaded {model_name} state dict.')
 
-    return model
+    return model.to(args.device)
 
 
 def generate_data(type: str, add_noise=False):

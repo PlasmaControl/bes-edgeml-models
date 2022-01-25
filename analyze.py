@@ -65,14 +65,14 @@ def predict(args: argparse.Namespace, test_data: tuple, model: object, hook_laye
     activations = []
     def get_activation():
         def hook(model, input, output):
-            o = output.detach().squeeze().tolist()
+            o = output.cpu().detach().squeeze().tolist()
             activations.append(o)
         return hook
 
     (act_layer, weight_layer) = get_layer(model, hook_layer)
 
     act_layer.register_forward_hook(get_activation())
-    weights = weight_layer.weight.detach().squeeze().numpy()
+    weights = weight_layer.weight.cpu().detach().squeeze().numpy()
     ### ------------ /Forward Hook ---------- ###
 
     for i_elm in range(num_elms):
