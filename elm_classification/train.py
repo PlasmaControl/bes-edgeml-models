@@ -257,6 +257,7 @@ def train_loop(
         criterion=criterion,
         optimizer=optimizer,
         sws=args.signal_window_size,
+        scales=args.scales,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
         use_cwt=args.use_cwt
