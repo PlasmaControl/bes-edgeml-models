@@ -5,6 +5,7 @@ import pickle
 import argparse
 from typing import Union, Tuple, List, Dict, Any, Set
 import logging
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -15,6 +16,7 @@ from sklearn.metrics import roc_auc_score
 from options.train_arguments import TrainArguments
 from src import utils, run, dataset
 from src.train_VAE import ELBOLoss
+from visualization import PCA, Visualizations
 
 LOGGER = logging.getLogger('__main__')
 sys.excepthook = utils.log_exceptions(LOGGER)
@@ -243,7 +245,29 @@ if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
     LOGGER = utils.make_logger(script_name=__name__, log_file=os.path.join(args.log_dir,
                                                                            f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
-    data_cls = utils.create_data(args.data_preproc)
-    data_obj = data_cls(args, LOGGER)
-    train_loop(args, data_obj,
-               test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
+    args.output_dir = 'outputs'
+    args.test_data_info = False
+    lookaheads = np.arange(0, 1001, 100)
+    for j, x in enumerate(lookaheads):
+        args.label_look_ahead = x
+        data_cls = utils.create_data(args.data_preproc)
+        data_obj = data_cls(args, LOGGER)
+        train_loop(args, data_obj,
+                   test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
+
+        viz = Visualizations(args, LOGGER)
+        layers = list(viz.model.layers.keys())[:-1]
+        if j == 0:
+            evrs = np.empty((len(layers), len(lookaheads)))
+
+        for i, layer in enumerate(layers):
+            pca = PCA(viz, layer=layer, elm_index=[0])
+            pca.perform_PCA()
+            evrs[i][j] = pca.pca_dict.get('evr')[1]
+
+    import pandas as pd
+
+    df = pd.DataFrame(evrs.T, columns=layers, index=lookaheads)
+    df.index.name = 'Look Ahead'
+    df.plot(title='EVR of PC2 vs Label Lookaheads')
+    plt.show()

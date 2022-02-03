@@ -61,7 +61,7 @@ def get_model(args: argparse.Namespace,
     _, model_cpt_path = src.utils.create_output_paths(args)
     gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
     model_name = args.model_name + gen_type_suffix
-    accepted_preproc = ['wavelet']
+    accepted_preproc = ['wavelet', 'unprocessed']
 
     model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
                                                   f'{gen_type_suffix}'

@@ -453,7 +453,7 @@ def get_layer(model: object, layer: str):
     layer_dict = model.layers
 
     layer_idx = list(layer_dict.keys()).index(layer)
-    weight_idx = layer_idx + 1
+    weight_idx = layer_idx + 1 if layer_idx != len(layer_dict) - 1 else layer_idx
 
     act_layer = layer_dict[layer]
     weight_layer = list(layer_dict.items())[weight_idx][1]
