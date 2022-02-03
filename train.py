@@ -252,14 +252,15 @@ if __name__ == "__main__":
         args.label_look_ahead = x
         data_cls = utils.create_data(args.data_preproc)
         data_obj = data_cls(args, LOGGER)
-        train_loop(args, data_obj,
-                   test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
+        if not os.path.isfile(os.path.join(args.test_data_dir, f"test_data_lookahead_{args.label_look_ahead}_"
+                                                               f"{args.data_preproc}.pkl")):
+            train_loop(args, data_obj,
+                       test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
 
         viz = Visualizations(args, LOGGER)
         layers = list(viz.model.layers.keys())[:-1]
         if j == 0:
             evrs = np.empty((len(layers), len(lookaheads)))
-
         for i, layer in enumerate(layers):
             pca = PCA(viz, layer=layer, elm_index=[0])
             pca.perform_PCA()
