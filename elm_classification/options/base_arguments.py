@@ -55,6 +55,13 @@ class BaseArguments:
             help="if true, calculate batch wise CWT and create additional features.",
         )
         parser.add_argument(
+            "--scales",
+            nargs="+",
+            type=int,
+            default=None,
+            help="scales to be used for CWT.",
+        )
+        parser.add_argument(
             "--use_fft",
             action="store_true",
             default=False,
@@ -305,9 +312,7 @@ class BaseArguments:
 
         return parser
 
-    def _gather_args(
-        self, arg_list: Union[list, None] = None
-    ):  # implement `arg_list`
+    def _gather_args(self, arg_list: Union[list, None] = None):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
