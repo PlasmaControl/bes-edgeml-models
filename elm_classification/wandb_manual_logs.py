@@ -31,8 +31,8 @@ def main(
 
 if __name__ == "__main__":
     main(
-        sws=64,
+        sws=512,
         la=0,
-        pkl_fname="multi_features_ds_dwt_no_pooling.pkl",
-        suffix="_dwt_no_pooling",
+        pkl_fname="multi_features_batchwise_cwt.pkl",
+        suffix="_batchwise_cwt",
     )
