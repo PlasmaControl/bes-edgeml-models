@@ -12,47 +12,9 @@ import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 import pywt
 
-from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
 from models import multi_features_model
-
-
-def get_multi_features(args, train_data, valid_data):
-    print(f"Train data shape: {train_data[0].shape}")
-    print(f"Valid data shape: {valid_data[0].shape}")
-    train_data_cwt = list(train_data)
-    valid_data_cwt = list(valid_data)
-    max_scale = 1024
-    num = int(np.log2(max_scale)) + 1
-    widths = np.round(
-        np.geomspace(1, max_scale, num=num, endpoint=True)
-    ).astype(int)
-    train_data_cwt[0], _ = pywt.cwt(
-        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
-    valid_data_cwt[0], _ = pywt.cwt(
-        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
-
-    train_data_cwt = tuple(train_data_cwt)
-    valid_data_cwt = tuple(valid_data_cwt)
-    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
-    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
-
-    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
-    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
-
-    assert (
-        train_data[0].shape[0] == train_data_cwt[0].shape[0]
-    ), "CWT train data leading dimension does not match with the raw data!"
-    assert (
-        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
-    ), "CWT valid data leading dimension does not match with the raw data!"
-
-    return train_data_cwt, valid_data_cwt
 
 
 def train_loop(
@@ -80,14 +42,8 @@ def train_loop(
     valid_loss = []
     roc_scores = []
     f1_scores = []
-    test_data_path, model_ckpt_path = utils.create_output_paths(
-        args, infer_mode=False
-    )
+    test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
-    # if args.multi_features:
-    #     test_data_file_cwt = os.path.join(
-    #         test_data_path, "cwt_" + test_datafile_name
-    #     )
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
@@ -108,11 +64,6 @@ def train_loop(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
 
-    # if args.multi_features:
-    #     train_data_cwt, valid_data_cwt = get_multi_features(
-    #         args, train_data, valid_data
-    #     )
-
     # dump test data into a file
     if not args.dry_run:
         with open(test_data_file, "wb") as f:
@@ -125,17 +76,6 @@ def train_loop(
                 },
                 f,
             )
-        # if args.multi_features:
-        #     with open(test_data_file_cwt, "wb") as f:
-        #         pickle.dump(
-        #             {
-        #                 "signals": valid_data_cwt[0],
-        #                 "labels": valid_data_cwt[1],
-        #                 "sample_indices": valid_data_cwt[2],
-        #                 "window_start": valid_data_cwt[3],
-        #             },
-        #             f,
-        #         )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -144,18 +84,6 @@ def train_loop(
     valid_dataset = dataset.ELMDataset(
         args, *valid_data, logger=LOGGER, phase="validation"
     )
-
-    # if args.multi_features:
-    #     train_dataset_cwt = dataset.ELMDataset(
-    #         args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
-    #     )
-    #     valid_dataset_cwt = dataset.ELMDataset(
-    #         args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
-    #     )
-    #
-    #     # create a combined dataset
-    #     train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
-    #     valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -177,15 +105,17 @@ def train_loop(
     )
 
     # model
-    if args.use_cwt:
-        raw_model = multi_features_model.RawFeatureModel(args)
-        fft_model = multi_features_model.FFTFeatureModel(args)
-        cwt_model = multi_features_model.CWTFeatureModel(args)
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args, raw_model, fft_model, cwt_model)
-    else:
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args)
+    raw_model = (
+        multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None
+    )
+    fft_model = (
+        multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None
+    )
+    cwt_model = (
+        multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None
+    )
+    model_cls = utils.create_model(args.model_name)
+    model = model_cls(args, raw_model, fft_model, cwt_model)
 
     device = torch.device(args.device)
     model = model.to(device)
@@ -256,20 +186,15 @@ def train_loop(
         device=device,
         criterion=criterion,
         optimizer=optimizer,
-        sws=args.signal_window_size,
-        scales=args.scales,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
-        use_cwt=args.use_cwt
     )
 
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
         start_time = time.time()
         # train
-        avg_loss = engine.train(
-            train_loader, epoch, print_every=args.train_print_every
-        )
+        avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
         train_loss.append(avg_loss)
 
         # evaluate
@@ -298,9 +223,7 @@ def train_loop(
 
         if f1 > best_score:
             best_score = f1
-            LOGGER.info(
-                f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
-            )
+            LOGGER.info(f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model")
             if not args.dry_run:
                 # save the model if best f1 score is found
                 model_save_path = os.path.join(
@@ -315,9 +238,7 @@ def train_loop(
 
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
-            LOGGER.info(
-                f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
-            )
+            LOGGER.info(f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model")
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)
     roc_scores = np.array(roc_scores)
@@ -330,9 +251,7 @@ def train_loop(
         / "training_metrics"
         / f"{args.model_name}{args.filename_suffix}.pkl"
     )
-    outputs_file.parent.mkdir(
-        parents=True, exist_ok=True
-    )  # make dir. for output file
+    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
 
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
