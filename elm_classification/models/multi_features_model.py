@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from custom_wavelet import transform
 
+
 class _BaseFeatureModel(nn.Module):
     def __init__(self, args: argparse.Namespace):
         super(_BaseFeatureModel, self).__init__()
@@ -14,19 +15,19 @@ class _BaseFeatureModel(nn.Module):
         assert np.ceil(np.log2(self.args.signal_window_size)) == np.floor(
             np.log2(self.args.signal_window_size)
         ), "Size of signal window should be a power of 2."
-        assert self.args.maxpool_size in [
+        assert self.args.mf_maxpool_size in [
             1,
             2,
             4,
         ], "Max pool size can only be 1 (no pooling), 2, and 4."
-        if self.args.maxpool_size > 1:
+        if self.args.mf_maxpool_size > 1:
             self.maxpool = nn.MaxPool3d(
-                kernel_size=[1, self.args.maxpool_size, self.args.maxpool_size],
+                kernel_size=[1, self.args.mf_maxpool_size, self.args.mf_maxpool_size],
             )
         else:
             self.maxpool = None
-        self.relu = nn.LeakyReLU(negative_slope=self.args.relu_negative_slope)
-        self.dropout = nn.Dropout3d(p=self.args.dropout_rate)
+        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_relu_negative_slope)
+        self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
         self.num_filters = None
         self.conv = None
 
@@ -42,7 +43,7 @@ class _BaseFeatureModel(nn.Module):
 
 
 class RawFeatureModel(_BaseFeatureModel):
-    def __init__(self, *pargs, **kwargs):
+    def __init__(self, args):
         """
         Use the raw BES channels values as features. This function takes in a 5-dimensional
         tensor of size: `(N, 1, signal_window_size, 8, 8)`, N=batch_size and
@@ -55,19 +56,10 @@ class RawFeatureModel(_BaseFeatureModel):
         -----
             args (argparse.Namespace): Command line arguments containing the information
                 about signal_window.
-            dropout_rate (float, optional): Fraction of total hidden units that will
-                be turned off for drop out. Defaults to 0.2.
-            negative_slope (float, optional): Slope of LeakyReLU activation for negative
-                `x`. Defaults to 0.02.
-            maxpool_size (int, optional): Size of the kernel used for maxpooling. Use
-                0 to skip maxpooling. Defaults to 2.
-            num_filters (int, optional): Dimensionality of the output space.
-                Essentially, it gives the number of output kernels after convolution.
-                Defaults to 10.
         """
-        super(RawFeatureModel, self).__init__()
+        super(RawFeatureModel, self).__init__(args)
         self.num_filters = self.args.raw_num_filters
-        spatial_dim = int(8 // self.args.maxpool_size)
+        spatial_dim = int(8 // self.args.mf_maxpool_size)
         filter_size = (self.args.signal_window_size, spatial_dim, spatial_dim)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
@@ -80,10 +72,7 @@ class RawFeatureModel(_BaseFeatureModel):
 
 
 class FFTFeatureModel(_BaseFeatureModel):
-    def __init__(
-        self,
-        *pargs, **kwargs
-    ):
+    def __init__(self, args):
         """
         Use the raw BES channels values as input and perform a Fast Fourier Transform
         to input signals. This function takes in a 5-dimensional
@@ -99,15 +88,8 @@ class FFTFeatureModel(_BaseFeatureModel):
         -----
             args (argparse.Namespace): Command line arguments containing the information
                 about signal_window.
-            dropout_rate (float, optional): Fraction of total hidden units that will
-                be turned off for drop out. Defaults to 0.2.
-            negative_slope (float, optional): Slope of LeakyReLU activation for negative
-                `x`. Defaults to 0.02.
-            num_filters (int, optional): Dimensionality of the output space.
-                Essentially, it gives the number of output kernels after convolution.
-                Defaults to 10.
         """
-        super(FFTFeatureModel, self).__init__()
+        super(FFTFeatureModel, self).__init__(args)
         self.num_filters = self.args.fft_num_filters
         temporal_size = int(self.args.signal_window_size // 2) + 1
         filter_size = (temporal_size, 8, 8)
@@ -125,16 +107,11 @@ class FFTFeatureModel(_BaseFeatureModel):
 
 
 class CWTFeatureModel(_BaseFeatureModel):
-    def __init__(
-        self,
-        *pargs,
-            **kwargs
-    ):
+    def __init__(self, args):
         """
         Use features from the output of continuous wavelet transform. The model architecture
         is similar to the `RawFeatureModel`. This model takes in a 6-dimensional
-        tensor of size: `(N, 1, signal_window_size, n_scales, 8, 8)`, where `N`=batch_size, and
-        `n_scales`=number of different scales used (which are equal to `signal_window_size`).
+        tensor of size: `(N, 1, signal_window_size, 8, 8)`, where `N`=batch_size.
         For each signal block, only the scales and BES channels for the leading time
         steps are used as model input which is a 5-dimensional tensor of size (`N, 1, n_scales, 8, 8)`.
         The model then performs a 3-d convolution with a filter size identical to
@@ -146,19 +123,10 @@ class CWTFeatureModel(_BaseFeatureModel):
         -----
             args (argparse.Namespace): Command line arguments containing the information
                 about signal_window.
-            dropout_rate (float, optional): Fraction of total hidden units that will
-                be turned off for drop out. Defaults to 0.2.
-            negative_slope (float, optional): Slope of LeakyReLU activation for negative
-                `x`. Defaults to 0.02.
-            maxpool_size (int, optional): Size of the kernel used for maxpooling. Use
-                0 to skip maxpooling. Defaults to 2.
-            num_filters (int, optional): Dimensionality of the output space.
-                Essentially, it gives the number of output kernels after convolution.
-                Defaults to 10.
         """
-        super(CWTFeatureModel, self).__init__()
-        self.num_filters = self.args.cwt_num_filters
-        filter_size = (len(args.scales), 8, 8)
+        super(CWTFeatureModel, self).__init__(args)
+        self.num_filters = self.args.wt_num_filters
+        filter_size = (len(self.args.scales), 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
         )
@@ -166,10 +134,13 @@ class CWTFeatureModel(_BaseFeatureModel):
     def forward(self, x):
         if self.args.scales is not None:
             # get CWT batch wise
-            x_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, x)
-            # x_cwt = x_cwt.to(self.device)
+            x_cwt = transform.continuous_wavelet_transform(
+                self.args.signal_window_size, self.args.scales, x, self.args.device
+            )
         else:
-            raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
+            raise ValueError(
+                "Using continuous wavelet transform but iterable containing scales is not parsed!"
+            )
         x_cwt = self._conv_dropout_relu_flatten(x_cwt)
 
         return x_cwt
@@ -215,20 +186,14 @@ class MultiFeaturesModel(nn.Module):
         self.fc1 = nn.Linear(in_features=input_features, out_features=128)
         self.fc2 = nn.Linear(in_features=128, out_features=32)
         self.fc3 = nn.Linear(in_features=32, out_features=1)
-        self.dropout = nn.Dropout(p=self.args.dropout_rate)
-        self.relu = nn.LeakyReLU(negative_slope=self.args.relu_negative_slope)
+        self.dropout = nn.Dropout(p=self.args.mf_dropout_rate)
+        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_relu_negative_slope)
 
     def forward(self, x):
         # extract raw and cwt processed signals
-        raw_features = (
-            self.raw_features_model(x) if self.raw_features_model else None
-        )
-        fft_features = (
-            self.fft_features_model(x) if self.fft_features_model else None
-        )
-        cwt_features = (
-            self.cwt_features_model(x) if self.cwt_features_model else None
-        )
+        raw_features = self.raw_features_model(x) if self.raw_features_model else None
+        fft_features = self.fft_features_model(x) if self.fft_features_model else None
+        cwt_features = self.cwt_features_model(x) if self.cwt_features_model else None
 
         active_features_list = [
             features
