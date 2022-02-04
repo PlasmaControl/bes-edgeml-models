@@ -2,11 +2,9 @@ import time
 from typing import Tuple, Union, Callable
 
 import numpy as np
-# import pywt
 import torch
 
 from . import utils
-from custom_wavelet import transform
 
 class Run:
     def __init__(
@@ -15,11 +13,8 @@ class Run:
         device: torch.device,
         criterion,
         optimizer: torch.optim.Optimizer,
-        sws: int,
-        scales: Union[np.ndarray, list, None] = None,
         use_focal_loss: bool = False,
         use_rnn: bool = False,
-        use_cwt: bool = False,
     ):
         self.model = model
         self.criterion = criterion
@@ -27,9 +22,6 @@ class Run:
         self.device = device
         self.use_focal_loss = use_focal_loss
         self.use_rnn = use_rnn
-        self.use_cwt = use_cwt
-        self.sws = sws
-        self.scales = scales
 
     def train(
         self,
@@ -46,7 +38,6 @@ class Run:
         self.model.train()
 
         start = end = time.time()
-        images_cwt = None
         for batch_idx, (images, labels) in enumerate(data_loader):
             # data loading time
             data_time.update(time.time() - end)
@@ -54,13 +45,13 @@ class Run:
             # zero out all the accumulated gradients
             self.optimizer.zero_grad()
             
-            if self.use_cwt:
-                if self.scales is not None:
-                    # get CWT batch wise
-                    images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
-                    images_cwt = images_cwt.to(self.device)
-                else:
-                    raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
+            # if self.use_cwt:
+            #     if self.scales is not None:
+            #         # get CWT batch wise
+            #         images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
+            #         images_cwt = images_cwt.to(self.device)
+            #     else:
+            #         raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
                 
             # send the data to device
             images = images.to(self.device)
@@ -69,10 +60,10 @@ class Run:
             batch_size = images.size(0)
 
             # forward pass
-            if self.use_cwt:
-                y_preds = self.model(images, images_cwt)
-            else:
-                y_preds = self.model(images)
+            # if self.use_cwt:
+            #     y_preds = self.model(images, images_cwt)
+            # else:
+            y_preds = self.model(images)
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
@@ -131,13 +122,13 @@ class Run:
             # measure data loading time
             data_time.update(time.time() - end)
             
-            if self.use_cwt:
-                if self.scales is not None:
-                    # get CWT batch wise
-                    images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
-                    images_cwt = images_cwt.to(self.device)
-                else:
-                    raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
+            # if self.use_cwt:
+            #     if self.scales is not None:
+            #         # get CWT batch wise
+            #         images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
+            #         images_cwt = images_cwt.to(self.device)
+            #     else:
+            #         raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
                 
             # send the data to device
             images = images.to(self.device)
@@ -147,10 +138,10 @@ class Run:
 
             # compute loss with no backprop
             with torch.no_grad():
-                if self.use_cwt:
-                    y_preds = self.model(images, images_cwt)
-                else:
-                    y_preds = self.model(images)
+                # if self.use_cwt:
+                #     y_preds = self.model(images, images_cwt)
+                # else:
+                y_preds = self.model(images)
 
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
@@ -196,17 +187,3 @@ class Run:
             probas ** gamma * loss,
         )
         return loss
-
-    # @staticmethod
-    # def _get_cwt(x: torch.Tensor):
-    #     x = x.numpy()
-    #     x = x[:, :, -1, ...]
-    #     max_scale = self.sws
-    #     num = int(np.log2(max_scale)) + 1
-    #     widths = np.round(np.geomspace(1, max_scale, num=num, endpoint=True)).astype(
-    #         int
-    #     )
-    #     x, _ = pywt.cwt(x, scales=widths, wavelet="morl", axis=1)
-    #     x = np.transpose(x, (1, 2, 0, 3, 4))
-    #     x = torch.as_tensor(x, dtype=torch.float32)
-    #     return x
