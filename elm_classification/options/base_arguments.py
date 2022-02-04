@@ -49,27 +49,6 @@ class BaseArguments:
             "sets.",
         )
         parser.add_argument(
-            "--use_cwt",
-            action="store_true",
-            default=False,
-            help="if true, calculate batch wise CWT and create additional features.",
-        )
-        parser.add_argument(
-            "--scales",
-            nargs="+",
-            type=int,
-            default=None,
-            help="scales to be used for CWT.",
-        )
-        parser.add_argument(
-            "--use_fft",
-            action="store_true",
-            default=False,
-            help="if true, create additional features from FFT. As of version 1.7.0, "
-            "PyTorch FFT function does not work on systems that do not support "
-            "Intel MKL library(like PPC systems).",
-        )
-        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
@@ -117,18 +96,6 @@ class BaseArguments:
             default=0,
             help="seed of the PRNG for reproducibity of results.",
         )
-        # parser.add_argument(
-        #     "--kfold",
-        #     action="store_true",
-        #     default=False,
-        #     help="if true, use K-fold cross-validation other makes standard train-test split.",
-        # )
-        # parser.add_argument(
-        #     "--n_folds",
-        #     type=int,
-        #     help="number of folds for k-fold cross validation. Only passed when "
-        #     "`kfold` is set to True.",
-        # )
         parser.add_argument(
             "--max_elms",
             type=int,
@@ -245,13 +212,12 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
-
         # arguments for `train_ds.py` and `multi_features_ds_model.py`
         parser.add_argument(
             "--mf_maxpool_size",
             type=int,
-            default=2,
-            help="spatial maxpool: 1|2(default)|4",
+            default=1,
+            help="spatial maxpool: 1(no pooling)|2|4",
         )
         parser.add_argument(
             "--mf_time_slice_interval",
@@ -266,7 +232,7 @@ class BaseArguments:
             help="Dropout rate",
         )
         parser.add_argument(
-            "--mf_negative_slope",
+            "--mf_relu_negative_slope",
             type=float,
             default=0.02,
             help="RELU negative slope",
@@ -290,10 +256,17 @@ class BaseArguments:
             help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
         )
         parser.add_argument(
-            "--dwt_num_filters",
+            "--wt_num_filters",
             type=int,
             default=16,
-            help="Number of features for DWTFeatureModel: int >= 0",
+            help="Number of features for D(C)WTFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--scales",
+            nargs="+",
+            type=int,
+            default=None,
+            help="Scales to be used for CWT.",
         )
         parser.add_argument(
             "--dwt_wavelet",
