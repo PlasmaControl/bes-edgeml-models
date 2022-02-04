@@ -1,25 +1,48 @@
 import argparse
-from typing import Tuple, Union
+from typing import Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-# class _BaseFeatureModel(nn.Module):
-#     def __init__(self, args:argparse.Namespace):
-#         pass
-#     super(_BaseFeatureModel, self).__init__()
-#     self.args = args
+from custom_wavelet import transform
 
-class RawFeatureModel(nn.Module):
-    def __init__(
-        self,
-        args: argparse.Namespace,
-        dropout_rate: float = 0.4,
-        negative_slope: float = 0.02,
-        maxpool_size: int = 2,
-        num_filters: int = 48,
-    ):
+class _BaseFeatureModel(nn.Module):
+    def __init__(self, args: argparse.Namespace):
+        super(_BaseFeatureModel, self).__init__()
+        self.args = args
+        assert np.ceil(np.log2(self.args.signal_window_size)) == np.floor(
+            np.log2(self.args.signal_window_size)
+        ), "Size of signal window should be a power of 2."
+        assert self.args.maxpool_size in [
+            1,
+            2,
+            4,
+        ], "Max pool size can only be 1 (no pooling), 2, and 4."
+        if self.args.maxpool_size > 1:
+            self.maxpool = nn.MaxPool3d(
+                kernel_size=[1, self.args.maxpool_size, self.args.maxpool_size],
+            )
+        else:
+            self.maxpool = None
+        self.relu = nn.LeakyReLU(negative_slope=self.args.relu_negative_slope)
+        self.dropout = nn.Dropout3d(p=self.args.dropout_rate)
+        self.num_filters = None
+        self.conv = None
+
+    def _conv_dropout_relu_flatten(self, x: torch.Tensor) -> torch.Tensor:
+        if self.maxpool:
+            x = self.maxpool(x)
+        if self.conv is not None:
+            x = self.relu(self.dropout3d(self.conv(x)))
+            x = torch.flatten(x, 1)
+            return x
+        else:
+            raise NotImplementedError("Convolution layer is not implemented.")
+
+
+class RawFeatureModel(_BaseFeatureModel):
+    def __init__(self, *pargs, **kwargs):
         """
         Use the raw BES channels values as features. This function takes in a 5-dimensional
         tensor of size: `(N, 1, signal_window_size, 8, 8)`, N=batch_size and
@@ -43,33 +66,23 @@ class RawFeatureModel(nn.Module):
                 Defaults to 10.
         """
         super(RawFeatureModel, self).__init__()
-        pool_size = [1, maxpool_size, maxpool_size]
-        self.args = args
-        spatial_dim = int(8 // maxpool_size)
+        self.num_filters = self.args.raw_num_filters
+        spatial_dim = int(8 // self.args.maxpool_size)
         filter_size = (self.args.signal_window_size, spatial_dim, spatial_dim)
-        self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=num_filters, kernel_size=filter_size
+            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
         )
-        self.relu = nn.LeakyReLU(negative_slope=negative_slope)
-        self.dropout3d = nn.Dropout3d(p=dropout_rate)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.maxpool(x)
-        x = self.dropout3d(self.conv(x))
-        x = self.relu(x)
-        x = torch.flatten(x, 1)
+        x = self._conv_dropout_relu_flatten(x)
 
         return x
 
 
-class FFTFeatureModel(nn.Module):
+class FFTFeatureModel(_BaseFeatureModel):
     def __init__(
         self,
-        args: argparse.Namespace,
-        dropout_rate: float = 0.4,
-        negative_slope: float = 0.02,
-        num_filters: int = 48,
+        *pargs, **kwargs
     ):
         """
         Use the raw BES channels values as input and perform a Fast Fourier Transform
@@ -95,33 +108,27 @@ class FFTFeatureModel(nn.Module):
                 Defaults to 10.
         """
         super(FFTFeatureModel, self).__init__()
-        self.args = args
+        self.num_filters = self.args.fft_num_filters
         temporal_size = int(self.args.signal_window_size // 2) + 1
         filter_size = (temporal_size, 8, 8)
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=num_filters, kernel_size=filter_size
+            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
         )
-        self.relu = nn.LeakyReLU(negative_slope=negative_slope)
-        self.dropout3d = nn.Dropout3d(p=dropout_rate)
 
     def forward(self, x):
         # apply FFT to the input along the time dimension
         x = x.to(self.args.device)  # needed for PowerPC architecture
         x = torch.abs(torch.fft.rfft(x, dim=2))
-        x = self.dropout3d(self.conv(x))
-        x = self.relu(x)
-        x = torch.flatten(x, 1)
+        x = self._conv_dropout_relu_flatten(x)
 
         return x
 
 
-class CWTFeatureModel(nn.Module):
+class CWTFeatureModel(_BaseFeatureModel):
     def __init__(
         self,
-        args: argparse.Namespace,
-        dropout_rate: float = 0.4,
-        negative_slope: float = 0.02,
-        num_filters: int = 48,
+        *pargs,
+            **kwargs
     ):
         """
         Use features from the output of continuous wavelet transform. The model architecture
@@ -150,20 +157,22 @@ class CWTFeatureModel(nn.Module):
                 Defaults to 10.
         """
         super(CWTFeatureModel, self).__init__()
-        self.args = args
+        self.num_filters = self.args.cwt_num_filters
         filter_size = (len(args.scales), 8, 8)
         self.conv = nn.Conv3d(
-            in_channels=1, out_channels=num_filters, kernel_size=filter_size
+            in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
         )
-        self.relu = nn.LeakyReLU(negative_slope=negative_slope)
-        self.dropout3d = nn.Dropout3d(p=dropout_rate)
 
     def forward(self, x):
-        x = self.dropout3d(self.conv(x))
-        x = self.relu(x)
-        x = torch.flatten(x, 1)
+        if self.args.scales is not None:
+            # get CWT batch wise
+            x_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, x)
+            # x_cwt = x_cwt.to(self.device)
+        else:
+            raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
+        x_cwt = self._conv_dropout_relu_flatten(x_cwt)
 
-        return x
+        return x_cwt
 
 
 class MultiFeaturesModel(nn.Module):
@@ -173,8 +182,6 @@ class MultiFeaturesModel(nn.Module):
         raw_features_model: Union[RawFeatureModel, None] = None,
         fft_features_model: Union[FFTFeatureModel, None] = None,
         cwt_features_model: Union[CWTFeatureModel, None] = None,
-        dropout_rate: float = 0.4,
-        negative_slope: float = 0.02,
     ):
         """Encapsulate all the feature models to create a composite model that
         uses all the feature maps. It takes in the class instances of
@@ -197,24 +204,38 @@ class MultiFeaturesModel(nn.Module):
         self.raw_features_model = raw_features_model
         self.fft_features_model = fft_features_model
         self.cwt_features_model = cwt_features_model
-        input_features = 144 if self.args.use_fft else 96
+        input_features = 0
+        for model in [
+            self.raw_features_model,
+            self.fft_features_model,
+            self.cwt_features_model,
+        ]:
+            if model is not None:
+                input_features += model.num_filters
         self.fc1 = nn.Linear(in_features=input_features, out_features=128)
         self.fc2 = nn.Linear(in_features=128, out_features=32)
         self.fc3 = nn.Linear(in_features=32, out_features=1)
-        self.dropout = nn.Dropout(p=dropout_rate)
-        self.relu = nn.LeakyReLU(negative_slope=negative_slope)
+        self.dropout = nn.Dropout(p=self.args.dropout_rate)
+        self.relu = nn.LeakyReLU(negative_slope=self.args.relu_negative_slope)
 
-    def forward(self, x_raw, x_cwt):
+    def forward(self, x):
         # extract raw and cwt processed signals
-        if self.args.use_fft:
-            raw_features = self.raw_features_model(x_raw)
-            fft_features = self.fft_features_model(x_raw)
-            cwt_features = self.cwt_features_model(x_cwt)
-            x = torch.cat([raw_features, fft_features, cwt_features], dim=1)
-        else:
-            raw_features = self.raw_features_model(x_raw)
-            cwt_features = self.cwt_features_model(x_cwt)
-            x = torch.cat([raw_features, cwt_features], dim=1)
+        raw_features = (
+            self.raw_features_model(x) if self.raw_features_model else None
+        )
+        fft_features = (
+            self.fft_features_model(x) if self.fft_features_model else None
+        )
+        cwt_features = (
+            self.cwt_features_model(x) if self.cwt_features_model else None
+        )
+
+        active_features_list = [
+            features
+            for features in [raw_features, fft_features, cwt_features]
+            if features is not None
+        ]
+        x = torch.cat(active_features_list, dim=1)
 
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
@@ -228,21 +249,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
+    parser.add_argument("--scales", nargs="+", type=int)
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(
         [
             "--signal_window_size",
             "16",
-        ],  # ["--device", "cpu"]
+            "--scales",
+            "1",
+            "2",
+            "4",
+            "8",
+            "16",
+        ],
     )
     shape_raw = (16, 1, 16, 8, 8)
-    shape_cwt = (16, 1, 16, 16, 8, 8)
+    shape_cwt = (16, 1, 5, 8, 8)
     x_raw = torch.randn(*shape_raw)
     x_cwt = torch.randn(*shape_cwt)
 
-    device = torch.device(
-        "cpu"
-    )  # "cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")  # "cuda" if torch.cuda.is_available() else "cpu")
     x_raw = x_raw.to(device)
     x_cwt = x_cwt.to(device)
     raw_model = RawFeatureModel(args)
