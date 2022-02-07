@@ -721,6 +721,12 @@ class PCA():
             fig.update_layout(title="PC_1 and PC_2 and PC_3",
                               scene=dict(xaxis_title="PC 1", yaxis_title="PC 2", zaxis_title="PC 3"),
                               font=dict(family="Courier New, monospace", size=18, color="RebeccaPurple"))
+
+            fig.add_annotation(text=f'Lookahead: {self.args.label_look_ahead}'
+                                    f'PC1 EVR: {self.pca_dict.get("evr")[0]}'
+                                    f'PC2 EVR: {self.pca_dict.get("evr")[1]}', align='left', showarrow=False,
+                               xref='paper', yref='paper', x=1.1, y=0.8, bordercolor='black', borderwidth=1)
+
             fig.show()
 
         if plot_type == 'grid':
@@ -784,7 +790,7 @@ class PCA():
             # normalize arrays to 1
             # pc_arr /= pc_arr.max()
             # p_arr /= p_arr.max()
-            ch_22_arr /= ch_22_arr.max()
+            # ch_22_arr /= ch_22_arr.max()
 
             df = pd.DataFrame(
                     {'ELM_ID': id_arr, 'Time': pc_arr[:, 0], 'Label': l_arr.astype(str), 'BES_CH_22': ch_22_arr,
@@ -1403,9 +1409,12 @@ if __name__ == "__main__":
     logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
                                                                                    f"{args.filename_suffix}.log"))
 
-    # pca.random_sample(component=1, s_samples=(20, 10))
-    # pca.plot_pca(plot_type='3d')
-    # cluster_hierarchical(viz=viz, layer='fc2')
-    # pca.perform_PCA()
-    # make_gen_csi(pca, component=0, blur=0.05, l2_weight=0.01, normalize_output=True)
+    lookaheads = np.arange(0, 1001, 1000)
+    for lah in lookaheads:
+        args.label_look_ahead = lah
+        viz = Visualizations(cl_args=args)
+        pca = PCA(viz, layer='conv', elm_index=[5])
+        pca.perform_PCA()
+        pca.plot_pca(plot_type='compare')
+
     exit()
