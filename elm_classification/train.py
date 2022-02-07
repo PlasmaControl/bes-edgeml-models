@@ -10,7 +10,6 @@ import torch.nn as nn
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
-import pywt
 
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
@@ -114,14 +113,18 @@ def train_loop(
     cwt_model = (
         multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None
     )
+    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
+
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args, raw_model, fft_model, cwt_model)
 
     device = torch.device(args.device)
     model = model.to(device)
-    LOGGER.info("-" * 50)
-    LOGGER.info(f"       Training with model: {args.model_name}       ")
-    LOGGER.info("-" * 50)
+    LOGGER.info("-" * 100)
+    LOGGER.info(
+        f"Training with model `{args.model_name}` with features from {features}"
+    )
+    LOGGER.info("-" * 100)
 
     # display model details
     if desc:
