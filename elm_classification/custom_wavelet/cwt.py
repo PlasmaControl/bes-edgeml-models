@@ -77,7 +77,7 @@ class CWT(nn.Module):
     def __init__(
         self,
         scales: Union[np.ndarray, list],
-        dt: float = 10 / 32,
+        dt: float = 1 / 2,
         wavelet: Morlet = Morlet(),
     ):
         super(CWT, self).__init__()
@@ -91,7 +91,7 @@ class CWT(nn.Module):
     def _build_filters(self):
         for scale_idx, scale in enumerate(self.scales):
             # number of points needed to capture wavelet (arbitrary)
-            M = 10 * scale / self.dt
+            M = scale / self.dt
             # Times to use, centred at zero
             t = torch.arange((-M + 1) / 2.0, (M + 1) / 2.0) * self.dt
             if len(t) % 2 == 0:
