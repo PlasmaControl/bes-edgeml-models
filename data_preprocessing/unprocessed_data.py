@@ -13,8 +13,11 @@ except ImportError:
 
 
 class UnprocessedData(BaseData):
-    def _preprocess_data(self, elm_indices: np.ndarray = None, shuffle_sample_indices: bool = False, ) -> Tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _preprocess_data(
+        self,
+        elm_indices: np.ndarray = None,
+        shuffle_sample_indices: bool = False,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
 
@@ -50,6 +53,7 @@ class UnprocessedData(BaseData):
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
             _labels = np.array(elm_event["labels"], dtype=np.float32)
+
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
@@ -58,15 +62,34 @@ class UnprocessedData(BaseData):
 
             if self.args.truncate_inputs:
                 active_elm_indices = np.where(_labels > 0)[0]
-                elm_end_index = (active_elm_indices[-1] + self.args.truncate_buffer)
+                elm_end_index = (
+                    active_elm_indices[-1] + self.args.truncate_buffer
+                )
                 _signals = _signals[:elm_end_index, ...]
                 _labels = _labels[:elm_end_index]
 
-            # get all the allowed indices till current time step
-            indices_data = self._get_valid_indices(_signals=_signals, _labels=_labels,
-                    window_start_indices=window_start, elm_start_indices=elm_start, elm_stop_indices=elm_stop,
-                    valid_t0=valid_t0, labels=labels, signals=signals, )
-            (signals, labels, valid_t0, window_start, elm_start, elm_stop,) = indices_data
+            if len(_labels) < 2000:
+                continue
+            else:
+                # get all the allowed indices till current time step
+                indices_data = self._get_valid_indices(
+                    _signals=_signals,
+                    _labels=_labels,
+                    window_start_indices=window_start,
+                    elm_start_indices=elm_start,
+                    elm_stop_indices=elm_stop,
+                    valid_t0=valid_t0,
+                    labels=labels,
+                    signals=signals,
+                )
+                (
+                    signals,
+                    labels,
+                    valid_t0,
+                    window_start,
+                    elm_start,
+                    elm_stop,
+                ) = indices_data
 
         _labels = np.array(labels)
 
@@ -81,14 +104,23 @@ class UnprocessedData(BaseData):
         if shuffle_sample_indices:
             np.random.shuffle(sample_indices)
 
-        self.logger.info("Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:")
-        for tensor in [signals, labels, valid_indices, sample_indices, window_start, ]:
+        self.logger.info(
+            "Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:"
+        )
+        for tensor in [
+            signals,
+            labels,
+            valid_indices,
+            sample_indices,
+            window_start,
+        ]:
             tmp = f" shape {tensor.shape}, dtype {tensor.dtype},"
             tmp += f" min {np.min(tensor):.3f}, max {np.max(tensor):.3f}"
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
             self.logger.info(tmp)
         return signals, labels, sample_indices, window_start
+
 
 # if __name__ == "__main__":
 #     import os
@@ -101,7 +133,7 @@ class UnprocessedData(BaseData):
 #     args, _ = BaseArguments().parse()
 
 #     # create the logger object
-#     logger = utils.make_logger(
+#     logger = utils.get_logger(
 #         script_name=__name__,
 #         stream_handler=True,
 #         # log_file=f"output_logs.log",

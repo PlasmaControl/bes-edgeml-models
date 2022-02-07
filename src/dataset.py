@@ -4,7 +4,6 @@ from typing import Callable
 
 import torch
 import numpy as np
-import albumentations as A
 
 
 class ELMDataset(torch.utils.data.Dataset):
@@ -61,5 +60,16 @@ class ELMDataset(torch.utils.data.Dataset):
         return signal_window, label
 
 
-def get_transforms(args):
-    return A.Compose([A.Resize(args.size, args.size)])
+class ConcatDatasets(torch.utils.data.Dataset):
+    def __init__(self, *datasets):
+        """PyTorch dataset to concat different datasets and feed them through
+        dataloader. It can be used to concatenate different features from
+        different datasets.
+        """
+        self.datasets = datasets
+
+    def __len__(self):
+        return min(len(d) for d in self.datasets)
+
+    def __getitem__(self, i):
+        return tuple(d[i] for d in self.datasets)

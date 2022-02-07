@@ -1,14 +1,20 @@
 import argparse
 from typing import Tuple, Union
-from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 
 
 class FeatureModel(nn.Module):
-    def __init__(self, args: argparse.Namespace, fc_units: Union[int, Tuple[int, int]] = (40, 20),
-            dropout_rate: float = 0.4, negative_slope: float = 0.02, maxpool_size: int = 2, num_filters: int = 10, ):
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        fc_units: Union[int, Tuple[int, int]] = (40, 20),
+        dropout_rate: float = 0.4,
+        negative_slope: float = 0.02,
+        maxpool_size: int = 2,
+        num_filters: int = 10,
+    ):
         """
         8x8 + time feature blocks followed by fully-connected layers. This function
         takes in a 4-dimensional tensor of size: `(1, signal_window_size, 8, 8)`
@@ -34,18 +40,20 @@ class FeatureModel(nn.Module):
         super(FeatureModel, self).__init__()
         pool_size = [1, maxpool_size, maxpool_size]
         self.args = args
-        filter_size = (int(self.args.signal_window_size), 4, 4)
+        filter_size = (self.args.signal_window_size, 4, 4)
         self.maxpool = nn.MaxPool3d(kernel_size=pool_size)
-        self.conv = nn.Conv3d(in_channels=1, out_channels=num_filters, kernel_size=filter_size)
+        self.conv = nn.Conv3d(
+            in_channels=1, out_channels=num_filters, kernel_size=filter_size
+        )
         self.relu = nn.LeakyReLU(negative_slope=negative_slope)
         self.dropout3d = nn.Dropout3d(p=dropout_rate)
         input_features = 10
-        self.fc1 = nn.Linear(in_features=input_features, out_features=fc_units[0])
+        self.fc1 = nn.Linear(
+            in_features=input_features, out_features=fc_units[0]
+        )
         self.fc2 = nn.Linear(in_features=fc_units[0], out_features=fc_units[1])
         self.fc3 = nn.Linear(in_features=fc_units[1], out_features=1)
         self.dropout = nn.Dropout(p=dropout_rate)
-
-        self.layers = OrderedDict([('conv', self.conv), ('fc1', self.fc1), ('fc2', self.fc2), ('fc3', self.fc3)])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.maxpool(x)
@@ -66,18 +74,28 @@ if __name__ == "__main__":
     parser.add_argument("--data_preproc", type=str, default="unprocessed")
     parser.add_argument("--signal_window_size", type=int)
     parser.add_argument("--device", default="cpu")
-    args = parser.parse_args(["--signal_window_size", "512", ],  # ["--device", "cpu"]
+    args = parser.parse_args(
+        [
+            "--signal_window_size",
+            "512",
+        ],  # ["--device", "cpu"]
     )
     shape = (16, 1, 512, 8, 8)
     x = torch.ones(*shape)
-    device = torch.device("cpu")  # "cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cpu"
+    )  # "cuda" if torch.cuda.is_available() else "cpu")
     x = x.to(device)
     model = FeatureModel(args)
     print(summary(model, input_size=shape, device="cpu"))
 
     for param in list(model.named_parameters()):
-        print(f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}")
-    print(f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+        print(
+            f"param name: {param[0]},\nshape: {param[1].shape}, requires_grad: {param[1].requires_grad}"
+        )
+    print(
+        f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+    )
     y = model(x)
     # print(y)
     print(y.shape)
