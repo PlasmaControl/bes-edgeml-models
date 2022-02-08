@@ -1,4 +1,6 @@
 import logging
+from collections import OrderedDict
+
 import torch
 from torch.utils.data import DataLoader
 import argparse
@@ -74,6 +76,8 @@ def get_model(args: argparse.Namespace,
     state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
     model.load_state_dict(state_dict)
     logger.info(f'Loaded {model_name} state dict.')
+
+    model.layers = OrderedDict([child for child in model.named_modules() if hasattr(child[1], 'weight')])
 
     return model.to(args.device)
 

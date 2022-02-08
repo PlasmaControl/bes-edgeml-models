@@ -1,5 +1,6 @@
 import sys
 import argparse
+from typing import Union
 
 
 class BaseArguments:
@@ -16,44 +17,34 @@ class BaseArguments:
         """Define the options common for training and testing."""
         # basic parameters
         parser.add_argument("--input_file", type=str, default="labeled-elm-events-large.hdf5",
-                help="path to the input hdf5 file.", )
+                            help="path to the input hdf5 file.", )
         parser.add_argument("--model_name", type=str, required=True, help="name of the model to be used for training, "
                                                                           "[feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].", )
         parser.add_argument("--model_ckpts", type=str, default="model_checkpoints",
-                help="path to the pretrained weights of the saved models.", )
-        parser.add_argument("--use_all_data", action="store_true", default=False,
-                help="if true, don't split the data into training, testing and validation "
-                     "sets.", )
-        parser.add_argument("--data_dir", type=str, default="data", help="path to the input data.", )
-        parser.add_argument("--test_data_dir", type=str, default="data/test_data", help="path to save the test data.", )
-        parser.add_argument("--log_dir", type=str, default="logs", help="path to save the logs.", )
-        parser.add_argument("--add_tensorboard", action="store_true", default=False,
-                help="if true, write loss summary to a tensorboard log file.", )
+                            help="path to the pretrained weights of the saved models.", )
         parser.add_argument("--viz", nargs='?', const=True, default=False, choices=['show_autograd'],
                             help="Create a torchviz conceptual graph of a model. Specify "
                                  "`show_autograd` to view what pytorch saves for backward pass.")
         parser.add_argument("--save_pdf", type=str, help="Save figure to pdf. Specify file location.")
         parser.add_argument('--generated', action='store_true', default=False,
                             help='Use generated option if using generated data.')
+
+        parser.add_argument("--vae_beta", type=int, default=1.0,
+                            help="Disentanglement parameter strength for VAE loss criterion.", )
+
+        parser.add_argument("--use_all_data", action="store_true", default=False,
+                            help="if true, don't split the data into training, testing and validation "
+                                 "sets.", )
+        parser.add_argument("--data_dir", type=str, default="data", help="path to the input data.", )
+        parser.add_argument("--test_data_dir", type=str, default="data/test_data", help="path to save the test data.", )
+        parser.add_argument("--log_dir", type=str, default="logs", help="path to save the logs.", )
+        parser.add_argument("--add_tensorboard", action="store_true", default=False,
+                            help="if true, write loss summary to a tensorboard log file.", )
         parser.add_argument("--device", type=str, default="cpu", help="device to use, [cuda | cpu].", )
         parser.add_argument("--dry_run", action="store_true", default=False,
                             help="if true, train (test) the model without saving anything.", )
         parser.add_argument("--n_epochs", type=int, default=10, help="total number of epochs for training.", )
-        parser.add_argument("--vae_beta", type=int, default=1.0,
-                            help="Disentanglement parameter strength for VAE loss criterion.", )
         parser.add_argument("--seed", type=int, default=0, help="seed of the PRNG for reproducibity of results.", )
-        # parser.add_argument(
-        #     "--kfold",
-        #     action="store_true",
-        #     default=False,
-        #     help="if true, use K-fold cross-validation other makes standard train-test split.",
-        # )
-        # parser.add_argument(
-        #     "--n_folds",
-        #     type=int,
-        #     help="number of folds for k-fold cross validation. Only passed when "
-        #     "`kfold` is set to True.",
-        # )
         parser.add_argument("--max_elms", type=int, default=-1,
                 help="total number of elm events to be used. Use -1 to use all of them.", )
         parser.add_argument("--filename_suffix", type=str, default="",
@@ -72,9 +63,6 @@ class BaseArguments:
                      "technique for training, "
                      "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
                      "balance | rnn | gaussian_noise].", )
-        parser.add_argument("--use_gradients", action="store_true", default=False,
-                help="if true, take first and second order derivatives of the signals "
-                     "along radial, z and time dimensions.", )
         parser.add_argument("--signal_window_size", type=int, default=16,
                 help="number of time data points to use for the input. "
                      "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
@@ -86,17 +74,22 @@ class BaseArguments:
         parser.add_argument("--fraction_valid", type=float, default=0.15, help="size of the validation dataset.", )
         parser.add_argument("--fraction_test", type=float, default=0.1, help="size of the test dataset.", )
         parser.add_argument("--truncate_inputs", action="store_true", default=False,
-                help="if true, truncates the time dimension upto `truncate_buffer` "
-                     "time frames beyond the first frame beyond active elm events", )
+                            help="if true, truncates the time dimension upto `truncate_buffer` "
+                                 "time frames beyond the first frame beyond active elm events", )
         parser.add_argument("--truncate_buffer", type=int, default=75,
-                help="number of frames beyond first active elm event to consider when "
-                     "`truncate_inputs` is passed. ", )
+                            help="number of frames beyond first active elm event to consider when "
+                                 "`truncate_inputs` is passed. ", )
         parser.add_argument("--normalize_data", action="store_true", default=False,
-                help="if true, normalizes the data in spatial dimensions. Divides the "
-                     "channels 1 to 32 by 10 and channels 33 to 64 by 5.", )
+                            help="if true, normalizes the data in spatial dimensions. Divides the "
+                                 "channels 1 to 32 by 10 and channels 33 to 64 by 5.", )
         parser.add_argument("--interpolate_size", type=int, required="interpolate" in sys.argv,
                             help="final size of the spatial dimensions of the input if interpolation is done. "
                                  "Must be passed if `data_preproc` == `interpolate`.", )
+        parser.add_argument('--balance_data', nargs='?', const='clip_outside', default=False,
+                            choices=['clip_outside', 'clip_inside', 'even'],
+                            help='Balance ELM and pre-ELM class data. Removes data points from the start, end, '
+                                 'or evenly throughout.')
+
         parser.add_argument("--mu", type=float, required="gaussian_noise" in sys.argv,
                             help="mean of the Gaussian noise. Must be passed "
                                  "when `gaussian_noise` is passed as `data_preproc`.", )
@@ -106,15 +99,32 @@ class BaseArguments:
         parser.add_argument("--shuffle_sample_indices", action="store_true", default=False,
                             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
                                  "and `label_look_ahead`.", )
-        parser.add_argument('--balance_data', nargs='?', const='clip_outside', default=False,
-                            choices=['clip_outside', 'clip_inside', 'even'],
-                            help='Balance ELM and pre-ELM class data. Removes data points from the start, end, '
-                                 'or evenly throughout.')
+        parser.add_argument("--use_gradients", action="store_true", default=False, help="Use time gradients.", )
+        # arguments for `train_ds.py` and `multi_features_ds_model.py`
+        parser.add_argument("--mf_maxpool_size", type=int, default=1, help="spatial maxpool: 1(no pooling)|2|4", )
+        parser.add_argument("--mf_time_slice_interval", type=int, default=1,
+                            help="Time slice interval (data[::interval]): power of 2: 1(default)|2|4|8 ...", )
+        parser.add_argument("--mf_dropout_rate", type=float, default=0.4, help="Dropout rate", )
+        parser.add_argument("--mf_relu_negative_slope", type=float, default=0.02, help="RELU negative slope", )
+        parser.add_argument("--raw_num_filters", type=int, default=16,
+                            help="Number of features for RawFeatureModel: int >= 0", )
+        parser.add_argument("--fft_num_filters", type=int, default=16,
+                            help="Number of features for FFTFeatureModel: int >= 0", )
+        parser.add_argument("--fft_nfft", type=int, default=0,
+                            help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size", )
+        parser.add_argument("--wt_num_filters", type=int, default=16,
+                            help="Number of features for D(C)WTFeatureModel: int >= 0", )
+        parser.add_argument("--scales", nargs="+", type=int, default=None, help="Scales to be used for CWT.", )
+        parser.add_argument("--dwt_wavelet", type=str, default="db4",
+                            help="Wavelet string for DWTFeatureModel: default `db4`", )
+        parser.add_argument("--dwt_level", type=int, default=3,
+                            help="Wavelet decomposition level: int >= 1; default=3", )
+
         self.initialized = True
 
         return parser
 
-    def _gather_args(self):
+    def _gather_args(self, arg_list: Union[list, None] = None):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -122,7 +132,10 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        args = parser.parse_args()
+        if arg_list is None:
+            args = parser.parse_args()
+        else:
+            args = parser.parse_args(arg_list)
 
         return args, parser
 
@@ -142,9 +155,12 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self, verbose: bool = False):
+    def parse(self, verbose: bool = False, arg_list: Union[list, None] = None):  # implement `arg_list`
         """Parse the arguments."""
-        args, parser = self._gather_args()
+        if arg_list is None:
+            args, parser = self._gather_args()
+        else:
+            args, parser = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)
 

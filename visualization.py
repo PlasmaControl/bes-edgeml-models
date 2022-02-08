@@ -1409,7 +1409,7 @@ if __name__ == "__main__":
     logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
                                                                                    f"{args.filename_suffix}.log"))
 
-    lookaheads = np.arange(0, 1001, 1000)
+    lookaheads = np.arange(0, 100, 1000)
     for lah in lookaheads:
         args.label_look_ahead = lah
         viz = Visualizations(cl_args=args)

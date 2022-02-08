@@ -5,10 +5,12 @@ import math
 import argparse
 import importlib
 from typing import Union, Tuple
+from traceback import print_tb
 from pathlib import Path
 
 import torch
 from torchinfo import summary
+from torchviz import make_dot
 
 
 class MetricMonitor:
@@ -19,10 +21,10 @@ class MetricMonitor:
 
     def reset(self):
         """Reset all the parameters to zero."""
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+        self.val: float = 0
+        self.avg: float = 0
+        self.sum: float = 0
+        self.count: float = 0
 
     def update(self, val, n: int = 1):
         """Update the value of the metrics and calculate their
@@ -39,11 +41,8 @@ class MetricMonitor:
 
 
 # log the model and data preprocessing outputs
-def get_logger(
-    script_name: str,
-    log_file: Union[str, None] = None,
-    stream_handler: bool = True,
-) -> logging.getLogger:
+def make_logger(script_name: str, log_file: Union[str, None] = None,
+                stream_handler: bool = True, ) -> logging.getLogger:
     """Initiate the logger to log the progress into a file.
 
     Args:
@@ -81,6 +80,14 @@ def get_logger(
         logger.addHandler(s_handler)
 
     return logger
+
+
+def log_exceptions(logger):
+    def my_handler(type, value, tb):
+        print_tb(tb)
+        logger.exception(f' {type.__name__}: {value}')
+
+    return my_handler
 
 
 def as_minutes_seconds(s: int) -> str:
@@ -140,43 +147,52 @@ def create_data(data_name: str):
     return data_class
 
 
-def create_output_paths(
-    args: argparse.Namespace, infer_mode: bool = False
-) -> Tuple[str]:
-    test_data_path = os.path.join(
-        args.test_data_dir, f"signal_window_{args.signal_window_size}"
-    )
-    model_ckpt_path = os.path.join(
-        args.model_ckpts, f"signal_window_{args.signal_window_size}"
-    )
-    if not os.path.exists(test_data_path):  # moved outside of previous `else` clause
-        os.makedirs(test_data_path, exist_ok=True)
-    if not os.path.exists(model_ckpt_path):  # moved outside of previous `else` clause
-        os.makedirs(model_ckpt_path, exist_ok=True)
+def create_output_paths(args: argparse.Namespace, infer_mode: bool = False) -> Tuple[str]:
+    if args.signal_window_size == 8:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_8")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_8")
+    elif args.signal_window_size == 16:
+        test_data_path = os.path.join(args.test_data_dir, "signal_window_16")
+        model_ckpt_path = os.path.join(args.model_ckpts, "signal_window_16")
+    else:
+        test_data_path = os.path.join(args.test_data_dir, f"signal_window_{args.signal_window_size}")
+        model_ckpt_path = os.path.join(args.model_ckpts, f"signal_window_{args.signal_window_size}")
+        if not os.path.exists(test_data_path):
+            os.makedirs(test_data_path, exist_ok=True)
+        if not os.path.exists(model_ckpt_path):
+            os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
-        base_path = os.path.join(
-            args.output_dir,
-            f"signal_window_{args.signal_window_size}",
-        )
-        look_ahead_path = os.path.join(
-            base_path, f"label_look_ahead_{args.label_look_ahead}"
-        )
-        clf_report_path = os.path.join(
-            look_ahead_path, "classification_reports"
-        )
-        plot_path = os.path.join(look_ahead_path, "plots")
-        roc_path = os.path.join(look_ahead_path, "roc")
-        paths = [clf_report_path, plot_path, roc_path]
-        for p in paths:
-            if not os.path.exists(p):
-                os.makedirs(p, exist_ok=True)
-        return (
-            test_data_path,
-            model_ckpt_path,
-            clf_report_path,
-            plot_path,
-            roc_path,
-        )
+        if args.signal_window_size == 8:
+            base_path = os.path.join(args.output_dir, "signal_window_8")
+            look_ahead_path = os.path.join(base_path, f"label_look_ahead_{args.label_look_ahead}")
+            clf_report_path = os.path.join(look_ahead_path, "classification_reports")
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
+        elif args.signal_window_size == 16:
+            base_path = os.path.join(args.output_dir, "signal_window_16")
+            look_ahead_path = os.path.join(base_path, f"label_look_ahead_{args.label_look_ahead}")
+            clf_report_path = os.path.join(look_ahead_path, "classification_reports")
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
+        else:
+            base_path = os.path.join(args.output_dir, f"signal_window_{args.signal_window_size}", )
+            look_ahead_path = os.path.join(base_path, f"label_look_ahead_{args.label_look_ahead}")
+            clf_report_path = os.path.join(look_ahead_path, "classification_reports")
+            plot_path = os.path.join(look_ahead_path, "plots")
+            roc_path = os.path.join(look_ahead_path, "roc")
+            paths = [clf_report_path, plot_path, roc_path]
+            for p in paths:
+                if not os.path.exists(p):
+                    os.makedirs(p, exist_ok=True)
+        return (test_data_path, model_ckpt_path, clf_report_path, plot_path, roc_path,)
     return test_data_path, model_ckpt_path
 
 
@@ -202,3 +218,43 @@ def create_model(model_name: str):
             model = cls
 
     return model
+
+
+def model_viz(model: object, x: torch.Tensor, show_autograd: bool = False):
+    dot = make_dot(model(x), params=dict(model.named_parameters()), show_attrs=show_autograd, show_saved=show_autograd)
+    dot.render(f'visualizations/torchviz_diagrams/{model.args.model_name}{"_w_autograd" if show_autograd else ""}',
+               format='png', view=True)
+
+
+def get_lr_scheduler(args: argparse.Namespace, optimizer: torch.optim.Optimizer,
+                     dataloader: torch.utils.data.DataLoader, ):
+    # learning rate scheduler
+    if args.scheduler == "ReduceLROnPlateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=args.lr_plateau_mode,
+                                                               factor=args.decay_factor, patience=args.patience,
+                                                               verbose=True, )
+    elif args.scheduler == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.T_max, eta_min=args.eta_min,
+                                                               verbose=False)
+    elif args.scheduler == "CyclicLR":
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr,
+                                                      mode=args.cyclic_mode, cycle_momentum=args.cycle_momentum,
+                                                      verbose=False, )
+    elif args.scheduler == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, epochs=args.n_epochs,
+                                                        steps_per_epoch=len(dataloader), max_lr=args.max_lr,
+                                                        pct_start=args.pct_start, anneal_strategy=args.anneal_policy, )
+    else:
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.decay_factor, verbose=True)
+
+    return scheduler
+
+
+def get_optimizer(args: argparse.ArgumentParser, model: object) -> torch.optim.Optimizer:
+    if args.optimizer == "SGD":
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    elif args.optimizer == "Adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    return optimizer

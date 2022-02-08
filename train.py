@@ -6,25 +6,27 @@ import argparse
 from typing import Union, Tuple, List, Dict, Any, Set
 import logging
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
+
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
+from torch.utils.tensorboard import SummaryWriter
 
 from options.train_arguments import TrainArguments
-from src import utils, run, dataset
+from src import utils, trainer, dataset
+from visualization import Visualizations, PCA
 from src.train_VAE import ELBOLoss
-from visualization import PCA, Visualizations
+from models import multi_features_model
 
 LOGGER = logging.getLogger('__main__')
 sys.excepthook = utils.log_exceptions(LOGGER)
 
 
-# TODO: Take care of K-fold cross-validation and `kfold` and `n_folds` args.
 def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: str, fold: Union[int, None] = None,
-               desc: bool = True, ) -> Dict[str, Dict[str, Union[List[Any], List[Union[float, Any]]]]]:
+        desc: bool = False, ) -> None:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
 
@@ -38,24 +40,11 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    # if (not args.kfold) and (fold is not None):
-    #     LOGGER.info(
-    #         f"K-fold is set to {args.kfold} but fold index is passed!"
-    #         " Proceeding without using K-fold."
-    #     )
-    #     fold = None
     # containers to hold train and validation losses
-
-    valid_loss = []
-    valid_mse_loss = []
-    valid_likelihood_loss = []
-    valid_kl_loss = []
-
     train_loss = []
-    train_mse_loss = []
-    train_kl_loss = []
-    train_likelihood_loss = []
-
+    valid_loss = []
+    roc_scores = []
+    f1_scores = []
     test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
@@ -87,7 +76,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
                          "window_start": valid_data[3], }, f, )
 
     # create image transforms
-    if ((args.model_name.startswith("feature")) or (args.model_name.startswith("cnn")) or (
+    if (("feature" in args.model_name) or (args.model_name.startswith("cnn")) or (
             args.model_name.startswith("rnn")) or (args.model_name.upper().startswith("VAE"))):
         transforms = None
     else:
@@ -100,20 +89,28 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
-                                               num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
 
     valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False,
-                                               num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
 
     # model
+    raw_model = (multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
+
     model_cls = utils.create_model(args.model_name)
-    model = model_cls(args)
+    if 'MULTI' in args.model_name.upper():
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model = model_cls(args)
 
     device = torch.device(args.device)  # "cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    LOGGER.info("-" * 50)
-    LOGGER.info(f"       Training with model: {args.model_name}       ")
-    LOGGER.info("-" * 50)
+    LOGGER.info("-" * 100)
+    LOGGER.info(f"Training with model `{args.model_name}` with features from {features}")
+    LOGGER.info("-" * 100)
 
     # display model details
     if desc:
@@ -129,7 +126,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
                 input_size = (args.batch_size, args.signal_window_size, 64)
             else:
                 input_size = (args.batch_size, 1, args.signal_window_size, 8, 8,)
-        x = torch.randn(*input_size)
+        x = torch.rand(*input_size)
         x = x.to(device)
         utils.model_details(model, x, input_size)
         # make torchviz visualisation of model.
@@ -145,7 +142,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # get the lr scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2,
-                                                           verbose=True, )
+            verbose=True, )
 
     # loss function
     is_vae = args.model_name.lower().startswith('vae')
@@ -157,8 +154,18 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
-    engine = run.Run(model, device=device, criterion=criterion, optimizer=optimizer, use_focal_loss=args.focal_loss,
-                     use_rnn=use_rnn, clip_grad=args.clip_grad)
+    engine = trainer.Run(model, device=device, criterion=criterion, optimizer=optimizer, use_focal_loss=args.focal_loss,
+            use_rnn=use_rnn, )
+
+    valid_loss = []
+    valid_mse_loss = []
+    valid_likelihood_loss = []
+    valid_kl_loss = []
+
+    train_loss = []
+    train_mse_loss = []
+    train_kl_loss = []
+    train_likelihood_loss = []
 
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
@@ -198,47 +205,52 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
             writer.close()
         # scoring
         if is_vae:
-            roc_score = -1
+            f1 = -1
         else:
             roc_score = roc_auc_score(valid_labels, preds)
+            roc_scores.append(roc_score)
+            thresh = 0.35
+            f1 = f1_score(valid_labels, (preds > thresh).astype(int))
+            f1_scores.append(f1)
         elapsed = time.time() - start_time
 
         LOGGER.info(
-            f"Epoch: {epoch + 1}, \tavg train loss: {train_avg_loss:.4f}, \tavg validation loss: {val_avg_loss:.4f}")
+                f"Epoch: {epoch + 1}, \tavg train loss: {train_avg_loss:.4f}, \tavg validation loss: {val_avg_loss:.4f}")
         LOGGER.info(f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}")
 
-        if roc_score > best_score:
-            best_score = roc_score
+        if f1 > best_score:
+            best_score = f1
             LOGGER.info(f"Epoch: {epoch + 1}, \tSave Best Score: {best_score:.4f} Model")
             if not args.dry_run:
                 # save the model if best ROC is found
                 model_save_path = os.path.join(model_ckpt_path, f"{args.model_name}_lookahead_{args.label_look_ahead}_"
                                                                 f"{args.data_preproc}"
-                                                                f"{'_' + args.balance_data if args.balance_data else ''}.pth", )
+                                                                f"{'_' + args.balance_data if args.balance_data else ''}"
+                                                                f"{'_' + args.filename_suffix if args.filename_suffix else ''}.pth", )
                 torch.save({"model": model.state_dict(), "preds": preds}, model_save_path, )
                 LOGGER.info(f"Model saved to: {model_save_path}")
 
         if val_avg_loss < best_loss:
             best_loss = val_avg_loss
             LOGGER.info(f"Epoch: {epoch + 1}, \tSave Best Loss: {best_loss:.4f} Model")
-            if not args.dry_run:
-                # save the model if best loss is found
-                model_save_path = os.path.join(model_ckpt_path, f"{args.model_name}_lookahead_{args.label_look_ahead}_"
-                                                                f"{args.data_preproc}"
-                                                                f"{'_' + args.balance_data if args.balance_data else ''}.pth", )
-                torch.save({"model": model.state_dict(), "preds": preds}, model_save_path, )
-                LOGGER.info(f"Model saved to: {model_save_path}")
 
-    # # save the predictions in the valid dataframe  # valid_folds["preds"] = torch.load(  #     os.path.join(  #         args.model_dir, f"{args.model_name}_fold{fold}_best_roc.pth"  #     ),  #     map_location=torch.device("cpu"),  # )["preds"]
+    train_loss = np.array(train_loss)
+    valid_loss = np.array(valid_loss)
+    roc_scores = np.array(roc_scores)
+    f1_scores = np.array(f1_scores)
 
-    # return valid_folds
+    outputs_file = (
+                Path("outputs") / f"signal_window_{args.signal_window_size}" / f"label_look_ahead_{args.label_look_ahead}" / "training_metrics" / f"{args.model_name}{args.filename_suffix}.pkl")
+    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
 
-    # Plot training and validation loss
+    with open(outputs_file.as_posix(), "wb") as f:
+        pickle.dump({"train_loss": train_loss, "valid_loss": valid_loss, "roc_scores": roc_scores,
+                     "f1_scores": f1_scores, }, f, )
 
-    return {'training': {'loss': train_loss, 'kl_loss': train_kl_loss, 'log_likelihood_loss': train_likelihood_loss,
-            'mse_loss': train_mse_loss},
-            'validation': {'loss': valid_loss, 'kl_loss': valid_kl_loss, 'log_likelihood_loss': valid_likelihood_loss,
-                    'mse_loss': valid_mse_loss}}
+    return dict(training={'loss': train_loss, 'kl_loss': train_kl_loss, 'log_likelihood_loss': train_likelihood_loss,
+                          'mse_loss': train_mse_loss},
+                validation={'loss': valid_loss, 'kl_loss': valid_kl_loss, 'log_likelihood_loss': valid_likelihood_loss,
+                            'mse_loss': valid_mse_loss})
 
 
 if __name__ == "__main__":
