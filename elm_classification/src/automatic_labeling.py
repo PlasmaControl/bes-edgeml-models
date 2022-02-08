@@ -13,8 +13,6 @@ import utils
 
 sns.set_palette("deep")
 
-plt.style.use("/home/lakshya/plt_custom.mplstyle")
-
 if __name__ == "__main__":
     output_dir = "automatic_labels"
     args, parser = TestArguments().parse(verbose=True)

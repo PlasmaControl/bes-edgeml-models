@@ -898,7 +898,7 @@ if __name__ == "__main__":
         "--data_dir",
         # (Path.home() / "Documents/Projects/data").as_posix(),
         (
-                Path.home() / "research/bes_edgeml_models/elm_classification/data"
+            Path.home() / "research/bes_edgeml_models/elm_classification/data"
         ).as_posix(),
         "--input_file",
         "labeled-elm-events-large.hdf5",
