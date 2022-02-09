@@ -149,6 +149,12 @@ class BaseArguments:
             "worker processes. Default: 0 meaning the data loading step will be done by "
             "the main process.",
         )
+        parser.add_argument(
+            "--distributed",
+            type=int,
+            default=1,
+            help="data parallel distributed training: -1 all GPUs|1 single GPU (default)|N gpus",
+        )
 
         # data preparation parameters
         parser.add_argument(
@@ -340,8 +346,9 @@ class BaseArguments:
 
         print(message)
 
-    def parse(
-        self, verbose: bool = False, arg_list: Union[list, None] = None
+    def parse(self,
+              verbose: bool = False,
+              arg_list: Union[list, None] = None,
     ):  # implement `arg_list`
         """Parse the arguments."""
         if arg_list is None:

@@ -141,18 +141,17 @@ def create_data(data_name: str):
 
 
 def create_output_paths(
-    args: argparse.Namespace, infer_mode: bool = False
-) -> Tuple[str]:
+    args: argparse.Namespace,
+    infer_mode: bool = False,
+) -> Tuple:
     test_data_path = os.path.join(
         args.test_data_dir, f"signal_window_{args.signal_window_size}"
     )
+    os.makedirs(test_data_path, exist_ok=True)
     model_ckpt_path = os.path.join(
         args.model_ckpts, f"signal_window_{args.signal_window_size}"
     )
-    if not os.path.exists(test_data_path):  # moved outside of previous `else` clause
-        os.makedirs(test_data_path, exist_ok=True)
-    if not os.path.exists(model_ckpt_path):  # moved outside of previous `else` clause
-        os.makedirs(model_ckpt_path, exist_ok=True)
+    os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
         base_path = os.path.join(
             args.output_dir,
@@ -170,14 +169,16 @@ def create_output_paths(
         for p in paths:
             if not os.path.exists(p):
                 os.makedirs(p, exist_ok=True)
-        return (
+        output = (
             test_data_path,
             model_ckpt_path,
             clf_report_path,
             plot_path,
             roc_path,
         )
-    return test_data_path, model_ckpt_path
+    else:
+        output = (test_data_path, model_ckpt_path)
+    return output
 
 
 def get_params(model: object) -> int:
