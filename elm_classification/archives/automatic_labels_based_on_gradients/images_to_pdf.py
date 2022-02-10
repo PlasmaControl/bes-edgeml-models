@@ -16,7 +16,7 @@ def natural_keys(text):
 
 
 if __name__ == "__main__":
-    root_path = "automatic_labels"
+    root_path = "automatic_label_plots"
     files = os.listdir(root_path)
     files = sorted(files, key=natural_keys)
     images = []
@@ -28,7 +28,7 @@ if __name__ == "__main__":
             first_img = img
         else:
             images.append(img)
-    pdf_fname = os.path.join(root_path, "automatic_labels.pdf")
+    pdf_fname = os.path.join(root_path, "automatic_label_plots.pdf")
     first_img.save(
         pdf_fname,
         "PDF",

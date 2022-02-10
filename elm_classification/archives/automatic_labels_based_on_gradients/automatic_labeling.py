@@ -14,7 +14,7 @@ import utils
 sns.set_palette("deep")
 
 if __name__ == "__main__":
-    output_dir = "automatic_labels"
+    output_dir = "automatic_label_plots"
     args, parser = TestArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
     LOGGER = utils.get_logger(script_name=__name__)
