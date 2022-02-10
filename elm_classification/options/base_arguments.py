@@ -19,7 +19,7 @@ class BaseArguments:
         parser.add_argument(
             "--input_file",
             type=str,
-            default="labeled-elm-events-large.hdf5",
+            default="labeled-elm-events.hdf5",
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
