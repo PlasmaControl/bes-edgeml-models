@@ -111,7 +111,7 @@ def train_loop(
         multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None
     )
     cwt_model = (
-        multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None
+        multi_features_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None
     )
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
