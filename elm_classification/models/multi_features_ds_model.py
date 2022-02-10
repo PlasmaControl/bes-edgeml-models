@@ -357,7 +357,7 @@ if __name__ == "__main__":
         help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
     )
     parser.add_argument(
-        "--dwt_num_filters",
+        "--wt_num_filters",
         type=int,
         default=48,
         help="Number of features for DWTFeatureModel: int >= 0",
