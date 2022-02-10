@@ -212,7 +212,7 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
-        # arguments for `train_ds.py` and `multi_features_ds_model.py`
+        # arguments for `multi_features_model.py`
         parser.add_argument(
             "--mf_maxpool_size",
             type=int,
@@ -261,13 +261,13 @@ class BaseArguments:
             default=16,
             help="Number of features for D(C)WTFeatureModel: int >= 0",
         )
-        parser.add_argument(
-            "--scales",
-            nargs="+",
-            type=int,
-            default=None,
-            help="Scales to be used for CWT.",
-        )
+        # parser.add_argument(
+        #     "--scales",
+        #     nargs="+",
+        #     type=int,
+        #     default=None,
+        #     help="Scales to be used for CWT.",
+        # )
         parser.add_argument(
             "--dwt_wavelet",
             type=str,
