@@ -5,6 +5,7 @@ import os
 import time
 import pickle
 import argparse
+import warnings
 from typing import Union
 from pathlib import Path
 
@@ -405,6 +406,12 @@ def train_loop(
 
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", DeprecationWarning)
+    warnings.warn(
+        f"The module {__name__} is deprecated. Use script `train.py` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     # args, parser = TrainArguments().parse(verbose=True)
     # LOGGER = utils.get_logger(
     #     script_name=__name__,
