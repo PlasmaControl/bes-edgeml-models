@@ -1,5 +1,13 @@
+"""DEPRECATED!! All the functionality is migrated to `train.py` script. All the 
+training metrics are calculated in `train.py` and are then manually logged to 
+weights and biases (wandb) using `wandb_manual_logs.py` to make it compatible with 
+traverse (traverse does not support automatic logging to wandb). The following script 
+has not been maintained, do expect bugs!! 
+"""
+
 import argparse
 import os
+import warnings
 import pickle
 import time
 from typing import Union
@@ -463,6 +471,12 @@ def train_loop(
 
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", DeprecationWarning)
+    warnings.warn(
+        f"The module {__name__} is deprecated. Use script `train.py` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     args, parser = TrainArguments().parse(verbose=True)
 
     config = dict(

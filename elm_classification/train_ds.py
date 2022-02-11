@@ -1,5 +1,5 @@
-"""DEPRECATED!! All the functionality is migrated to `train.py` script. It has 
-not been maintained, do expect bugs!!
+"""DEPRECATED!! All the functionality is migrated to `train.py` script. The following 
+script has not been maintained, do expect bugs!!
 """
 import os
 import time
