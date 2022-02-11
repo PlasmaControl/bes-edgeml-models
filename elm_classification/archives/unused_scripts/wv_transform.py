@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 
-plt.style.use("/home/lakshya/plt_custom.mplstyle")
-# sns.set_style("darkgrid")
+sns.set_theme(style="whitegrid", palette="muted", fontscale=1.15)
 
 if __name__ == "__main__":
     signal = np.load("single_elm_event.npy")
