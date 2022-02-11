@@ -1,3 +1,10 @@
+"""Script to put the ML models to training. It gathers the data from the data 
+preprocessing pipeline, creates PyTorch datasets and dataloader and tracks the 
+training parameters like ROC, F1-score, training and validation losses for 
+different epochs and saves them in a file. The saved model as well as the 
+validation set are also saved, these will be used during the inference in 
+`analyze.py`.
+"""
 import os
 import time
 import pickle
@@ -41,7 +48,9 @@ def train_loop(
     valid_loss = []
     roc_scores = []
     f1_scores = []
-    test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
+    test_data_path, model_ckpt_path = utils.create_output_paths(
+        args, infer_mode=False
+    )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
@@ -105,15 +114,23 @@ def train_loop(
 
     # model
     raw_model = (
-        multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None
+        multi_features_model.RawFeatureModel(args)
+        if args.raw_num_filters > 0
+        else None
     )
     fft_model = (
-        multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None
+        multi_features_model.FFTFeatureModel(args)
+        if args.fft_num_filters > 0
+        else None
     )
     cwt_model = (
-        multi_features_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None
+        multi_features_model.DWTFeatureModel(args)
+        if args.wt_num_filters > 0
+        else None
     )
-    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
+    features = [
+        type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f
+    ]
 
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args, raw_model, fft_model, cwt_model)
@@ -197,7 +214,9 @@ def train_loop(
     for epoch in range(args.n_epochs):
         start_time = time.time()
         # train
-        avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every)
+        avg_loss = engine.train(
+            train_loader, epoch, print_every=args.train_print_every
+        )
         train_loss.append(avg_loss)
 
         # evaluate
@@ -212,6 +231,9 @@ def train_loop(
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores.append(roc_score)
+        # hard coding the threshold value for F1 score, smaller value will reduce
+        # the number of false negatives while larger value reduces the number of
+        # false positives
         thresh = 0.35
         f1 = f1_score(valid_labels, (preds > thresh).astype(int))
         f1_scores.append(f1)
@@ -226,7 +248,9 @@ def train_loop(
 
         if f1 > best_score:
             best_score = f1
-            LOGGER.info(f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model")
+            LOGGER.info(
+                f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
+            )
             if not args.dry_run:
                 # save the model if best f1 score is found
                 model_save_path = os.path.join(
@@ -241,7 +265,9 @@ def train_loop(
 
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
-            LOGGER.info(f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model")
+            LOGGER.info(
+                f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
+            )
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)
     roc_scores = np.array(roc_scores)
@@ -254,8 +280,12 @@ def train_loop(
         / "training_metrics"
         / f"{args.model_name}{args.filename_suffix}.pkl"
     )
-    outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
+    outputs_file.parent.mkdir(
+        parents=True, exist_ok=True
+    )  # make dir. for output file
 
+    # save the training parameters in a pickle file, use it for experiment tracking
+    # in weights and biases
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
             {
@@ -283,4 +313,5 @@ if __name__ == "__main__":
         args,
         data_obj,
         test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+        desc=True,
     )

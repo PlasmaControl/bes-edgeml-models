@@ -2,7 +2,6 @@ import os
 import pickle
 
 import wandb
-import numpy as np
 
 wandb.login()
 
