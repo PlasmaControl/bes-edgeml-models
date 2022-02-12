@@ -1,3 +1,12 @@
+"""
+Track the model experimentation using Weights and Biases: https://wandb.ai/site
+
+Create an account and save the API key in the terminal and install their python
+package.
+
+The following script expects a training metrics pickle file containing the keys:
+`train_loss`, `valid_loss`, `roc_scores` and `f1_scores`.
+"""
 import os
 import pickle
 
@@ -8,7 +17,22 @@ wandb.login()
 
 def main(
     sws: int, la: int, pkl_fname: str, suffix: str = "", n_epochs: int = 20
-):
+) -> None:
+    """
+    Function to manually log the outputs of the machine learning training expt.
+    Logging to wandb can be done with a project name in weights and biases with
+    a unique run name for an experiment under the project.
+
+    Args:
+        sws (int): Size of the signal window.
+        la (int): Label lookahead.
+        pkl_fname (str): Name of the pickle file containing training metrics.
+        suffix (str): Any special tag for the given run.
+        n_epochs (int): Number of training epochs. Defaults to 20.
+
+    Returns:
+        None
+    """
     path = f"outputs/signal_window_{sws}/label_look_ahead_{la}/training_metrics"
     with open(os.path.join(path, pkl_fname), "rb") as f:
         metrics = pickle.load(f)
