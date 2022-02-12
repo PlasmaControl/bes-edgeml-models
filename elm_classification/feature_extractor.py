@@ -1,7 +1,7 @@
 """Script to extract features from the convolutional neural network. These
 features can be used as input features for classical machine learning models
 like logistic regression, random forest etc. For instance, we took the features
-out of the 3D convolution layer from the `FeatureModel`.
+out of the 3D convolution layer from the `FeatureModel` in the following script.
 
 See here for more details:
 https://pytorch.org/tutorials/beginner/former_torchies/nnft_tutorial.html#forward-and-backward-function-hooks
