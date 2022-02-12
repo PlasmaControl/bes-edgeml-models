@@ -3,49 +3,59 @@ Helper script to perform the automatic labeling using the trained LSTM
 autoencoder model available at `model_checkpoints/signal_window_16/lstm_ae_sws_16_la_0.pth`.
 Make sure to use all the data from the HDF5 file using the command line argument
 `--use_all_data`.
+
+Kept this script and `lstm_autoencoder.py` a bit standalone so there might be some
+hardcoded parameters.
 """
 import os
 import h5py
-import argparse
 from typing import Union, Tuple
 
 import torch
 import torch.nn as nn
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-from src import utils
-from options.test_arguments import TestArguments
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=0.7)
 
 
-# def load_data():
-#     # output_dir = "automatic_labels"
-#     args, parser = TestArguments().parse(verbose=True)
-#     utils.test_args_compat(args, parser, infer_mode=True)
-#     LOGGER = utils.get_logger(script_name=__name__)
-#     data_cls = utils.create_data(args.data_preproc)
-#     paths = utils.create_output_paths(args, infer_mode=True)
-#     print(paths)
-#     roc_dir = paths[-1]
-#     print(roc_dir)
-#     data_obj = data_cls(args, LOGGER)
-#     all_elms, all_data = data_obj.get_data()
-#     # signals, labels, valid_indices, window_start = all_data
-#     return all_data
+def normalize_data(signal: np.ndarray) -> np.ndarray:
+    """
+    Normalize the data before making the inference.
 
+    Args:
+        signal (np.ndarray): NumPy array containing the BES signal.
 
-def normalize_data(signal: np.ndarray):
+    Returns:
+        Normalized signal.
+    """
     assert signal.shape[1] == 64, "Signal must be reshaped into (-1, 64)"
     signal[:, :32] = signal[:, :32] / np.max(signal[:, :32])
     signal[:, 32:] = signal[:, 32:] / np.max(signal[:, 32:])
     return signal
 
 
-def temporalize(sws: int, signals: np.ndarray, labels: np.ndarray):
+def temporalize(
+    sws: int, signals: np.ndarray, labels: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Traverse the input ELM event based on the size of the signal window. A rolling
+    signal window of size `sws` time steps will be created at a time. The
+    corresponding label for that signal window will be the label for the leading
+    time step.
+
+    For instance, a BES signal of size (1000, 64) will be temporalized to a size
+    (985, 16, 64) for a signal window of 16.
+
+    Args:
+        sws (int): Size of the signal window.
+        signals (np.ndarray): BES signals.
+        labels (np.ndarray): Manual labels.
+
+    Returns:
+        Tuple containing temporalized signals and corresponding manual labels.
+    """
     X_unlabeled = []
     y = []
     for i in range(len(signals) - sws + 1):
@@ -85,6 +95,27 @@ class Encoder(nn.Module):
         n_layers: int,
         dropout: float,
     ):
+        """
+        Encoder part of the autoencoder using LSTM layers to create an
+        intermediate representation. The architecture is loosely based on paper:
+        https://arxiv.org/abs/1502.04681
+
+        It takes an argument `seq_len` which is the length of the input sequence.
+        It is basically the size of the rolling signal window of the BES signal.
+        `n_features` argument takes in the size of the input to the LSTM layer,
+        this is the 64 channels of the BES signal.
+
+        All the dimensional gymnastics are put as line comments at each step in
+        the forward pass.
+
+        Args:
+        -----
+            hidden_dim (int): Size of the hidden dimension.
+            seq_len (int): Length of the input sequence i.e. `--signal_window_size`.
+            n_features (int): Input size to the LSTM layer i.e. 64 BES channels.
+            n_layers (int): Number of layers in the LSTM.
+            dropout (float): Dropout for the LSTM layer, intrinsically ignored if `n_layers = 1`.
+        """
         super(Encoder, self).__init__()
         self.seq_len = seq_len
         self.n_features = n_features
@@ -122,6 +153,29 @@ class Decoder(nn.Module):
         n_layers: int,
         dropout: float,
     ):
+        """
+        Decoder part of the autoencoder using LSTM layers to create an
+        intermediate representation. The architecture is loosely based on paper:
+        https://arxiv.org/abs/1502.04681
+
+        **The arguments and their meaning is mostly similar to that of the encoder.**
+
+        It takes an argument `seq_len` which is the length of the input sequence.
+        It is basically the size of the rolling signal window of the BES signal.
+        `n_features` argument takes in the size of the input to the LSTM layer,
+        this is the 64 channels of the BES signal.
+
+        All the dimensional gymnastics are put as line comments at each step in
+        the forward pass.
+
+        Args:
+        -----
+            hidden_dim (int): Size of the hidden dimension.
+            seq_len (int): Length of the input sequence i.e. `--signal_window_size`.
+            n_features (int): Input size to the LSTM layer i.e. 64 BES channels.
+            n_layers (int): Number of layers in the LSTM.
+            dropout (float): Dropout for the LSTM layer, ignored if `n_layers = 1`.
+        """
         super(Decoder, self).__init__()
         self.seq_len = seq_len
         self.n_features = n_features
@@ -148,28 +202,6 @@ class Decoder(nn.Module):
 
 
 class LSTMAutoencoder(nn.Module):
-    def __init__(self, encoder: Encoder, decoder: Decoder):
-        super(LSTMAutoencoder, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-
-        assert (
-            encoder.hidden_dim == decoder.hidden_dim
-        ), "Hidden dimensions for both encoder and decoder must be equal"
-
-        assert (
-            encoder.n_layers == decoder.n_layers
-        ), "Encoder and decoder should have same number of layers"
-
-    def forward(self, input):
-        # input = torch.unsqueeze(input, 0)
-        # encode
-        hidden = self.encoder(input)
-        # decode
-        y = self.decoder(hidden)
-
-        return y.squeeze(0)
-
     def __init__(self, encoder: Encoder, decoder: Decoder):
         """Autoencoder class that encapsulates both encoder and decoder of the
         LSTM autoencoder.
@@ -200,7 +232,17 @@ class LSTMAutoencoder(nn.Module):
         return y.squeeze(0)
 
 
-def load_model(base_path: str, saved_model_path: str, model: LSTMAutoencoder):
+def load_model(base_path: str, saved_model_path: str, model: LSTMAutoencoder) -> None:
+    """
+    Load model from a checkpoint.
+    Args:
+        base_path (str): Path to the top level directory.
+        saved_model_path (str): Path to the model checkpoint from top level dir.
+        model (LSTMAutoencoder): Instance of LSTMAutoencoder class.
+
+    Returns:
+        None
+    """
     model_ckpt_path = os.path.join(base_path, saved_model_path)
     print(f"Loading model from:\n{model_ckpt_path}")
     device = torch.device("cpu")
@@ -213,12 +255,19 @@ def load_model(base_path: str, saved_model_path: str, model: LSTMAutoencoder):
     )
 
 
-def create_model():
+def create_model()->LSTMAutoencoder:
+    """
+    Instantiate the LSTM Autoencoder model. Hardcoding the values because these
+    are the values the model is trained with.
+
+    Returns:
+        LSTMAutoencoder model instance.
+    """
     seq_len = 16  # sws
-    n_features = 64
-    n_layers = 2
-    pct = 0.3
-    hidden_dim = 32
+    n_features = 64  # num BES channels
+    n_layers = 2    # num stacked LSTM layers
+    pct = 0.3   # dropout fraction
+    hidden_dim = 32     # hidden dimension
     encoder = Encoder(
         hidden_dim=hidden_dim,
         seq_len=seq_len,
@@ -246,6 +295,22 @@ def main(
     show_plots: bool = True,
     output_dir: str = "ts_anomaly_detection_plots",
 ):
+    """
+    Actual function creating the automatic labels and creating plot for each ELM
+    event.
+
+    Args:
+        data_dir ():
+        input_file_name ():
+        output_file_name ():
+        model ():
+        threshold ():
+        show_plots ():
+        output_dir ():
+
+    Returns:
+
+    """
     hf = h5py.File(os.path.join(data_dir, input_file_name), "r")
     hf_out = h5py.File(os.path.join(data_dir, output_file_name), "w")
     elm_ids = list(hf.keys())

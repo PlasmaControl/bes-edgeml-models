@@ -1035,7 +1035,7 @@ def main(
     print_arrays_shape(X_valid_y1, y_valid_y1, mode="valid_y1")
 
     train_dataset = create_tensor_dataset(X_train_y0, y_train_y0)
-    valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
+    # valid_dataset = create_tensor_dataset(X_valid_y0, y_valid_y0)
     validation_dataset = create_tensor_dataset(X_valid, y_valid)
 
     train_loader = torch.utils.data.DataLoader(
