@@ -210,9 +210,9 @@ def plot(
     elm_range: str,
     n_rows: Union[int, None] = None,
     n_cols: Union[int, None] = None,
-    figsize: tuple = (14, 12),
+    figsize: tuple = (12, 14),
 ) -> None:
-    """Helper function to plot the time series plot of the ELM events with the
+    """Function to plot the time series plot of the ELM events with the
     ground truth and prediction. Apart from the basic plotting arguments, it takes
     in the dictionary containing the signals, labels, and their corresponding micro
     and macro predictions.
@@ -341,35 +341,41 @@ def plot_all(
     elm_predictions: dict,
     plot_dir: str,
 ) -> None:
+    """Helper function to plot the time series plots for all the ELM events in
+    the test set on multiple pages.
+    """
     elm_id = list(elm_predictions.keys())
-    i_elms_1_12 = elm_id[:12]
-    i_elms_12_24 = elm_id[12:24]
-    i_elms_24_36 = elm_id[24:36]
-    i_elms_36_48 = elm_id[36:48]
-    i_elms_48_60 = elm_id[48:60]
-    i_elms_60_66 = elm_id[60:66]
+    num_pages = int(elm_id // 12) + 1
+    elm_ids_per_page = [elm_id[i * 12 : (i + 1) * 12] for i in range(num_pages)]
 
-    # plot 1-12
-    plot(args, elm_predictions, plot_dir, i_elms_1_12, elm_range="1-12")
-    # plot 12-24
-    plot(args, elm_predictions, plot_dir, i_elms_12_24, elm_range="12-24")
-    # plot 24-36
-    plot(args, elm_predictions, plot_dir, i_elms_24_36, elm_range="24-36")
-    # plot 36-48
-    plot(args, elm_predictions, plot_dir, i_elms_36_48, elm_range="36-48")
-    # plot 48-60
-    plot(args, elm_predictions, plot_dir, i_elms_48_60, elm_range="48-60")
-    # plot 60-66
-    plot(
-        args,
-        elm_predictions,
-        plot_dir,
-        i_elms_60_66,
-        elm_range="60-66",
-        n_rows=2,
-        n_cols=3,
-        figsize=(14, 6),
-    )
+    # iterate through pages
+    for page_num, page in enumerate(elm_ids_per_page):
+        print(f"Drawing plots on page: {page_num+1}")
+        if len(page) == 12:
+            rows = args.num_rows
+            cols = args.num_cols
+            figsize = (12, 14)
+        else:
+            remaining_elms = len(elm_id) - 12 * (num_pages - 1)
+            if remaining_elms <= 4:
+                rows = remaining_elms
+                cols = 1
+                figsize = (8, 12)
+            else:
+                rows = 4
+                cols = int(np.ceil(remaining_elms / rows))
+                figsize = (12, 14)
+        elm_range = f"{page_num*12 + 1}-{page_num*12 + 12}"
+        plot(
+            args,
+            elm_predictions,
+            plot_dir,
+            page,
+            elm_range=elm_range,
+            n_rows=rows,
+            n_cols=cols,
+            figsize=figsize,
+        )
 
 
 def show_details(test_data: tuple) -> None:

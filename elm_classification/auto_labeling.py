@@ -316,7 +316,7 @@ def main(
     hf = h5py.File(os.path.join(data_dir, input_file_name), "r")
     hf_out = h5py.File(os.path.join(data_dir, output_file_name), "w")
     elm_ids = list(hf.keys())
-    num_pages = 40
+    num_pages = int(elm_ids // 12) + 1
     elm_ids_per_page = [
         elm_ids[i * 12 : (i + 1) * 12] for i in range(num_pages)
     ]
@@ -327,11 +327,15 @@ def main(
         if len(page) == 12:
             fig, ax = plt.subplots(nrows=4, ncols=3, figsize=(12, 14), dpi=150)
         else:
-            remaining_elms = len(elm_ids) - 12 * num_pages
-            rows = 4
-            cols = remaining_elms // rows
+            remaining_elms = len(elm_ids) - 12 * (num_pages - 1)
+            if remaining_elms <= 4:
+                rows = remaining_elms
+                cols = 1
+            else:
+                rows = 4
+                cols = int(np.ceil(remaining_elms / rows))
             fig, ax = plt.subplots(
-                nrows=rows, ncols=1, figsize=(10, 12), dpi=150
+                nrows=rows, ncols=cols, figsize=(10, 12), dpi=150
             )
         ax = ax.flatten()
         # iterate through the ELM events in each page
