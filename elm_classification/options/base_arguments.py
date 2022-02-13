@@ -26,7 +26,8 @@ class BaseArguments:
             "--model_name",
             type=str,
             required=True,
-            help="name of the model to be used for training, "
+            help="name of the model to be used for training. Do not add a trailing "
+            "`_model` in the name."
             "[feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].",
         )
         parser.add_argument(
@@ -131,7 +132,7 @@ class BaseArguments:
             required=True,
             help="name of the data manipulator to be used. Selecting any of the "
             "mentioned techniques will create data ready corresponding to that "
-            "technique for training, "
+            "technique for training. Do not add a trailing `_data` in the name."
             "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
             "balance | rnn | gaussian_noise].",
         )
