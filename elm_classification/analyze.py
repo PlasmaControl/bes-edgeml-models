@@ -1,6 +1,11 @@
 """
-Main inference and error analysis script to run inference on the validation data 
-using the trained model.
+Main inference and error analysis script to run inference on the test data 
+using the trained model. It calculates micro and macro predictions for each ELM 
+event in the test data and create metrics like confusion metrics, classification
+report. It also creates (and saves) various plots such as time series plots for 
+the ELM events with the ground truth and model predictions as well as the confusion
+matrices for both macro and micro predictions. Using the  command line argument 
+`--dry_run` will just show the plots, it will not save them.
 """
 import os
 import pickle
@@ -21,7 +26,7 @@ from tqdm import tqdm
 from data_preprocessing import *
 from src import utils, dataset
 from options.test_arguments import TestArguments
-from models import multi_features_model, multi_features_ds_model
+from models import multi_features_model
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
 palette = list(sns.color_palette("muted").as_hex())
@@ -593,67 +598,41 @@ def model_predict(
     model: object,
     device: torch.device,
     data: tuple,
-    data_cwt: Union[tuple, None] = None,
 ) -> None:
-    # put the elm_model to eval mode
+    """Make predictions on the validation set to assess the model's performance
+    on the test/validation set using metrics like ROC or F1-scores.
+    """
+    # put the model to eval mode
     model.eval()
     predictions = []
     targets = []
+    # create pytorch dataset for test set
     test_dataset = dataset.ELMDataset(
         args, *data, logger=logger, phase="testing"
     )
+    # dataloader
     data_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
         drop_last=True,
     )
-
     inputs, _ = next(iter(data_loader))
     print(f"Input size: {inputs.shape}")
+    # iterate through the dataloader
+    for images, labels in tqdm(data_loader):
+        images = images.to(device)
 
-    if args.multi_features and data_cwt is not None:
-        test_dataset_cwt = dataset.ELMDataset(
-            args, *data_cwt, logger=logger, phase="testing (CWT)"
-        )
-        test_dataset = dataset.ConcatDatasets(test_dataset, test_dataset_cwt)
-        data_loader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            drop_last=True,
-        )
-
-        raw, cwt = next(iter(data_loader))
-        print(f"Input size: {raw[0].shape}, {cwt[0].shape}")
-
-        for (raw, cwt) in tqdm(data_loader):
-            raw_input, labels = raw[0], raw[1]
-            cwt_input = cwt[0]
-
-            raw_input = raw_input.to(device)
-            cwt_input = cwt_input.to(device)
-
-            with torch.no_grad():
-                preds = model(raw_input, cwt_input)
-
-            preds = preds.view(-1)
-            predictions.append(torch.sigmoid(preds).cpu().numpy())
-            targets.append(labels.cpu().numpy())
-    else:
-        for images, labels in tqdm(data_loader):
-            images = images.to(device)
-
-            with torch.no_grad():
-                preds = model(images)
-            preds = preds.view(-1)
-            predictions.append(torch.sigmoid(preds).cpu().numpy())
-            targets.append(labels.cpu().numpy())
+        with torch.no_grad():
+            preds = model(images)
+        preds = preds.view(-1)
+        predictions.append(torch.sigmoid(preds).cpu().numpy())
+        targets.append(labels.cpu().numpy())
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
-    f1_thresh = 0.35
+    f1_thresh = 0.35  # threshold for F1-score
     f1 = metrics.f1_score(targets, (predictions > f1_thresh).astype(int))
-    print(predictions[:10], targets[:10])
+    # display ROC and F1-score
     print(
         f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}"
     )
@@ -661,6 +640,7 @@ def model_predict(
 
 
 def get_dict_values(pred_dict: dict, mode: str):
+    """Helper function to extract values from the prediction dictionary."""
     targets = []
     predictions = []
     if mode == "micro":
@@ -684,35 +664,26 @@ def get_dict_values(pred_dict: dict, mode: str):
 def main(
     args: argparse.Namespace,
 ) -> None:
+    """Actual function encapsulating all analysis function and making inference."""
     logger = utils.get_logger(
         script_name=__name__,
         stream_handler=True,
     )
-    test_data_cwt = None
 
     # instantiate the elm_model and load the checkpoint
-    # if args.multi_features:
-    #     raw_model = multi_features_model.RawFeatureModel(args)
-    #     fft_model = multi_features_model.FFTFeatureModel(args)
-    #     cwt_model = multi_features_model.CWTFeatureModel(args)
-    #     model_cls = utils.create_model(args.model_name)
-    #     model = model_cls(args, raw_model, fft_model, cwt_model)
-    # else:
-    #     model_cls = utils.create_model(args.model_name)
-    #     model = model_cls(args)
     raw_model = (
-        multi_features_ds_model.RawFeatureModel(args)
+        multi_features_model.RawFeatureModel(args)
         if args.raw_num_filters > 0
         else None
     )
     fft_model = (
-        multi_features_ds_model.FFTFeatureModel(args)
+        multi_features_model.FFTFeatureModel(args)
         if args.fft_num_filters > 0
         else None
     )
     dwt_model = (
-        multi_features_ds_model.DWTFeatureModel(args)
-        if args.dwt_num_filters > 0
+        multi_features_model.DWTFeatureModel(args)
+        if args.wt_num_filters > 0
         else None
     )
     model_cls = utils.create_model(args.model_name)
@@ -758,11 +729,11 @@ def main(
     if args.test_data_info:
         show_details(test_data)
 
-    # model_predict(args, logger, model, device, test_data, test_data_cwt)
+    model_predict(args, logger, model, device, test_data)
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
-    pred_dict = predict(args, model, device, test_data, test_data_cwt)
+    pred_dict = predict(args, model, device, test_data)
 
     if args.plot_data:
         plot_all(args, pred_dict, plot_dir)
@@ -801,7 +772,7 @@ if __name__ == "__main__":
         "--device",
         "cuda",
         "--model_name",
-        "multi_features_ds",
+        "multi_features",
         "--data_preproc",
         "unprocessed",
         "--data_dir",
@@ -821,7 +792,7 @@ if __name__ == "__main__":
         "48",
         "--fft_num_filters",
         "48",
-        "--dwt_num_filters",
+        "--wt_num_filters",
         "48",
         "--max_elms",
         "-1",
