@@ -1,3 +1,5 @@
+"""Various utility functions used for data preprocessing, training and validation.
+"""
 import os
 import logging
 import time
@@ -50,8 +52,7 @@ def get_logger(
     -----
         script_name (str): Name of the scripts outputting the logs.
         log_file (str): Name of the log file.
-        stream_handler (bool, optional): Whether or not to show logs in the
-            console. Defaults to True.
+        stream_handler (bool, optional): If true, show logs in the console. Defaults to True.
 
     Returns:
     --------
@@ -66,9 +67,7 @@ def get_logger(
         # create handlers
         f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
         # create formatters and add it to the handlers
-        f_format = logging.Formatter(
-            "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
-        )
+        f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
         f_handler.setFormatter(f_format)
         # add handlers to the logger
         logger.addHandler(f_handler)
@@ -83,7 +82,7 @@ def get_logger(
     return logger
 
 
-def as_minutes_seconds(s: int) -> str:
+def as_minutes_seconds(s: float) -> str:
     m = math.floor(s / 60)
     s -= m * 60
     m, s = int(m), int(s)
@@ -91,6 +90,7 @@ def as_minutes_seconds(s: int) -> str:
 
 
 def time_since(since: int, percent: float) -> str:
+    """Helper function to time the training and evaluation process"""
     now = time.time()
     elapsed = now - since
     total_estimated = elapsed / percent
@@ -98,7 +98,17 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def create_data(data_name: str):
+def create_data(data_name: str) -> object:
+    """
+    Helper function to import the data preprocessing module as per the command
+    line argument `--data_preproc`.
+
+    Args:
+        data_name (str): `--data_preproc` argument.
+
+    Returns:
+        Object of the data class.
+    """
     data_filename = data_name + "_data"
     data_class_path = "data_preprocessing." + data_filename
     data_lib = importlib.import_module(data_class_path)
@@ -114,6 +124,17 @@ def create_data(data_name: str):
 def create_output_paths(
     args: argparse.Namespace, infer_mode: bool = False
 ) -> Tuple[str]:
+    """
+    Helper function to create various output paths to save model checkpoints,
+    test data, plots, etc.
+
+    Args:
+        args (argparse.Namespace): Argparse object containing command line args.
+        infer_mode (bool): If true, return file output paths for inference as well.
+
+    Returns:
+        Tuple containing output paths.
+    """
     test_data_path = os.path.join(
         args.test_data_dir, f"signal_window_{args.signal_window_size}"
     )
@@ -132,9 +153,7 @@ def create_output_paths(
         look_ahead_path = os.path.join(
             base_path, f"label_look_ahead_{args.label_look_ahead}"
         )
-        clf_report_path = os.path.join(
-            look_ahead_path, "classification_reports"
-        )
+        clf_report_path = os.path.join(look_ahead_path, "classification_reports")
         plot_path = os.path.join(look_ahead_path, "plots")
         roc_path = os.path.join(look_ahead_path, "roc")
         paths = [clf_report_path, plot_path, roc_path]
@@ -152,17 +171,47 @@ def create_output_paths(
 
 
 def get_params(model: object) -> int:
+    """Helper function to find the total number of trainable parameters in the
+    PyTorch model.
+
+    Args:
+        model (object): Instance of the PyTorch model being used.
+
+    Returns:
+        Number of trainable parameters.
+    """
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
+    """
+    Print Keras like model details on the screen before training.
+
+    Args:
+        model (object): Instance of the PyTorch model being used.
+        x (torch.Tensor): Dummy input.
+        input_size (tuple): Size of the input.
+
+    Returns:
+        None
+    """
     print("\t\t\t\tMODEL SUMMARY")
     summary(model, input_size=input_size)
     print(f"Output size: {model(x).shape}")
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 
-def create_model(model_name: str):
+def create_model(model_name: str) -> object:
+    """
+    Helper function to import the module for the model being used as per the
+    command line argument `--model_name`.
+
+    Args:
+        model_name (str): `--model_name` argument.
+
+    Returns:
+        Object of the model class.
+    """
     model_filename = model_name + "_model"
     model_path = "models." + model_filename
     model_lib = importlib.import_module(model_path)
