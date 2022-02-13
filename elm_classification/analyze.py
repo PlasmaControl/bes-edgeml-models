@@ -398,12 +398,27 @@ def show_metrics(
     roc_dir: str,
     plot_dir: str,
     pred_mode: str,
-):
+) -> None:
+    """Show metrics like confusion matrix and classification report for both
+    micro and macro predictions.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object.
+        y_true (np.ndarray): True labels.
+        y_probas (np.ndarray): Prediction probabilities (output of sigmoid).
+        report_dir (str): Output directory path to save classification reports.
+        roc_dir (str): Output directory path to save TPR, FPR and threshold arrays
+            to calculate ROC curves.
+        plot_dir (str): Output directory path to save confusion matrix plots.
+        pred_mode (str): Whether to calculate metrics for micro or macro predictions.
+    """
     if pred_mode == "micro":
         if np.array_equal(y_probas, y_probas.astype(bool)):
             raise ValueError(
                 "Metrics for micro mode require micro_predictions but macro_predictions are passed."
             )
+        # calculate predictions from the probabilities
         y_preds = (y_probas > args.threshold).astype(int)
 
         # creating a classification report
@@ -417,6 +432,7 @@ def show_metrics(
         total_error = np.sum(cm[coords])
         cm_scaled = cm / total_error
 
+        # classification report
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
         df = pd.DataFrame(cr).transpose()
         print(f"Classification report:\n{df}")
@@ -428,6 +444,7 @@ def show_metrics(
         roc_details["tpr"] = tpr
         roc_details["threshold"] = thresh
 
+        # plots
         fig = plt.figure(figsize=(8, 6), dpi=100)
         ax = fig.add_subplot()
         sns.heatmap(
@@ -506,6 +523,7 @@ def show_metrics(
         roc_details["tpr"] = tpr
         roc_details["threshold"] = thresh
 
+        # plot
         fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot()
         sns.heatmap(
