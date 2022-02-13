@@ -11,7 +11,7 @@ We can set a threshold for use the reconstruction error as a metric to categoriz
 a given input as an anomaly or not. By default, the value of the threshold is chosen
 to be `mean(training_loss) + 2 * standard_deviation(training_loss)`.
 """
-
+print(__doc__)
 import os
 import time
 import argparse

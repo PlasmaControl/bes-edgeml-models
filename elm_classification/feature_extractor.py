@@ -6,6 +6,7 @@ out of the 3D convolution layer from the `FeatureModel` in the following script.
 See here for more details:
 https://pytorch.org/tutorials/beginner/former_torchies/nnft_tutorial.html#forward-and-backward-function-hooks
 """
+print(__doc__)
 import os
 
 import numpy as np
@@ -28,6 +29,7 @@ def get_activation(name):
     Returns:
         Callable.
     """
+
     def hook(model, input, output):
         activation[name] = output.detach()
 
@@ -152,6 +154,8 @@ if __name__ == "__main__":
     # save the dataframe as a CSV file (not very memory efficient, could use HDF5.
     # Pandas support HDF5 format).
     df.to_csv(
-        os.path.join(roc_dir, f"{args.model_name}_feature_df_{args.label_look_ahead}.csv"),
+        os.path.join(
+            roc_dir, f"{args.model_name}_feature_df_{args.label_look_ahead}.csv"
+        ),
         index=False,
     )

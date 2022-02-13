@@ -7,6 +7,7 @@ package.
 The following script expects a training metrics pickle file containing the keys:
 `train_loss`, `valid_loss`, `roc_scores` and `f1_scores`.
 """
+print(__doc__)
 import os
 import pickle
 

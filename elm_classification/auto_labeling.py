@@ -7,6 +7,7 @@ Make sure to use all the data from the HDF5 file using the command line argument
 Kept this script and `lstm_autoencoder.py` a bit standalone so there might be some
 hardcoded parameters.
 """
+print(__doc__)
 import os
 import h5py
 from typing import Union, Tuple

@@ -5,6 +5,7 @@ different epochs and saves them in a file. The saved model as well as the
 validation set are also saved, these will be used during the inference in 
 `analyze.py`.
 """
+print(__doc__)
 import os
 import time
 import pickle

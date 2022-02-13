@@ -7,6 +7,7 @@ the ELM events with the ground truth and model predictions as well as the confus
 matrices for both macro and micro predictions. Using the  command line argument 
 `--dry_run` will just show the plots, it will not save them.
 """
+print(__doc__)
 import os
 import pickle
 from typing import Tuple, List, Union
