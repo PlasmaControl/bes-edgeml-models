@@ -212,15 +212,22 @@ def plot(
     n_cols: Union[int, None] = None,
     figsize: tuple = (14, 12),
 ) -> None:
+    """Helper function to plot the time series plot of the ELM events with the
+    ground truth and prediction. Apart from the basic plotting arguments, it takes
+    in the dictionary containing the signals, labels, and their corresponding micro
+    and macro predictions.
+    """
     flag = False
     fig = plt.figure(figsize=figsize)
     for i, i_elm in enumerate(elms):
         signals = elm_predictions[i_elm]["signals"]
-        signal_max = np.max(signals)
         labels = elm_predictions[i_elm]["labels"]
+        # `elm_start` and `elm_end` indices
         try:
             elm_start = np.where(labels > 0)[0][0]
             elm_end = np.where(labels > 0)[0][-1]
+        # edge case when the ELM event time series is too small because of larger
+        # signal window and label lookahead that it skips the `elm_start` completely
         except IndexError:
             elm_start = len(labels) - 80
             elm_end = len(labels)
@@ -232,26 +239,21 @@ def plot(
             plt.subplot(n_rows, n_cols, i + 1)
         else:
             plt.subplot(args.num_rows, args.num_cols, i + 1)
-        # if args.use_gradients:
-        #     plt.plot(
-        #         elm_time,
-        #         signals[:, 2, 6, 0] / np.max(signals),
-        #         label="BES ch. 22",
-        #         lw=1.25,
-        #     )
-        # else:
-        #     # plt.plot(
-        #     #     elm_time,
-        #     #     signals[:, 0, 0] / np.max(signals),
-        #     #     label="Ch. 1",
-        #     #     lw=1.25,
-        #     # )
-        plt.plot(
-            elm_time,
-            signals[:, 2, 6] / np.max(signals),
-            label="Ch. 22",
-            lw=1.25,
-        )
+        # grab the channel 22 for different data preprocessing techniques
+        if args.data_preproc == "gradient":
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6, 0] / np.max(signals),
+                label="BES ch. 22",
+                lw=1.25,
+            )
+        else:
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6] / np.max(signals),
+                label="Ch. 22",
+                lw=1.25,
+            )
         plt.plot(
             elm_time,
             labels + 0.02,
@@ -266,6 +268,7 @@ def plot(
             ls="-",
             lw=1,
         )
+        # edge case when the ELM event is too small, plot it in red
         if flag:
             plt.axvline(
                 elm_start - args.truncate_buffer,
