@@ -6,16 +6,28 @@ import torch
 
 from . import utils
 
+
 class Run:
     def __init__(
-        self,
-        model,
-        device: torch.device,
-        criterion,
-        optimizer: torch.optim.Optimizer,
-        use_focal_loss: bool = False,
-        use_rnn: bool = False,
+            self,
+            model: object,
+            device: torch.device,
+            criterion: object,
+            optimizer: torch.optim.Optimizer,
+            use_focal_loss: bool = False,
+            use_rnn: bool = False,
     ):
+        """
+        Trainer class containing the boilerplate code for training and evaluation.
+
+        Args:
+            model (object): Instance of the model being used.
+            device (torch.device): Device to run training/inference on.
+            criterion (object): Instance of the loss function being used.
+            optimizer (torch.optim.Optimizer): Optimizer used during training.
+            use_focal_loss (bool): If true, use focal loss. It is supposed to work better in class imbalance problems. See: https://arxiv.org/pdf/1708.02002.pdf
+            use_rnn (bool): If true, use a recurrent neural network. It makes sure to take predictions at the last time step.
+        """
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -24,11 +36,11 @@ class Run:
         self.use_rnn = use_rnn
 
     def train(
-        self,
-        data_loader: torch.utils.data.DataLoader,
-        epoch: int,
-        scheduler: Union[Callable, None] = None,
-        print_every: int = 100,
+            self,
+            data_loader: torch.utils.data.DataLoader,
+            epoch: int,
+            scheduler: Union[Callable, None] = None,
+            print_every: int = 100,
     ) -> float:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -44,26 +56,17 @@ class Run:
 
             # zero out all the accumulated gradients
             self.optimizer.zero_grad()
-            
-            # if self.use_cwt:
-            #     if self.scales is not None:
-            #         # get CWT batch wise
-            #         images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
-            #         images_cwt = images_cwt.to(self.device)
-            #     else:
-            #         raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
-                
+
             # send the data to device
             images = images.to(self.device)
             labels = labels.to(self.device)
-            
+
             batch_size = images.size(0)
 
             # forward pass
-            # if self.use_cwt:
-            #     y_preds = self.model(images, images_cwt)
-            # else:
             y_preds = self.model(images)
+
+            # use predictions for the last time step for RNN
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
@@ -104,9 +107,9 @@ class Run:
         return losses.avg
 
     def evaluate(
-        self,
-        data_loader: torch.utils.data.DataLoader,
-        print_every: int = 50,
+            self,
+            data_loader: torch.utils.data.DataLoader,
+            print_every: int = 50,
     ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -121,26 +124,15 @@ class Run:
         for batch_idx, (images, labels) in enumerate(data_loader):
             # measure data loading time
             data_time.update(time.time() - end)
-            
-            # if self.use_cwt:
-            #     if self.scales is not None:
-            #         # get CWT batch wise
-            #         images_cwt = transform.continuous_wavelet_transform(self.sws, self.scales, images)
-            #         images_cwt = images_cwt.to(self.device)
-            #     else:
-            #         raise ValueError('Using continuous wavelet transform but iterable containing scales is not parsed!')
-                
+
             # send the data to device
             images = images.to(self.device)
             labels = labels.to(self.device)
-            
+
             batch_size = images.size(0)
 
             # compute loss with no backprop
             with torch.no_grad():
-                # if self.use_cwt:
-                #     y_preds = self.model(images, images_cwt)
-                # else:
                 y_preds = self.model(images)
 
             if self.use_rnn:
