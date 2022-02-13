@@ -28,7 +28,6 @@ def train_loop(
     args: argparse.Namespace,
     data_obj: object,
     test_datafile_name: str,
-    fold: Union[int, None] = None,
     desc: bool = False,
 ) -> None:
     """Actual function to put the model to training. Use command line arg
@@ -40,8 +39,6 @@ def train_loop(
             line arguments.
         data_obj (object): Data object that creates train, validation and test data.
         test_datafile_name (str): Name of the pickle file that stores the test data.
-        fold (Union[int, None]): Integer index for the fold if using k-fold cross
-        validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
     # containers to hold train and validation losses
@@ -62,11 +59,6 @@ def train_loop(
     LOGGER.info("-" * 30)
     LOGGER.info(f"       Training fold: {fold}       ")
     LOGGER.info("-" * 30)
-
-    # turn off model details for subsequent folds/epochs
-    if fold is not None:
-        if fold >= 1:
-            desc = False
 
     # create train, valid and test data
     train_data, valid_data, _ = data_obj.get_data(
