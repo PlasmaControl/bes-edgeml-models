@@ -98,7 +98,7 @@ class Encoder(nn.Module):
         """
         Encoder part of the autoencoder using LSTM layers to create an
         intermediate representation. The architecture is loosely based on paper:
-        https://arxiv.org/abs/1502.04681
+        https://arxiv.org/abs/1502.04681.
 
         It takes an argument `seq_len` which is the length of the input sequence.
         It is basically the size of the rolling signal window of the BES signal.
@@ -156,7 +156,7 @@ class Decoder(nn.Module):
         """
         Decoder part of the autoencoder using LSTM layers to create an
         intermediate representation. The architecture is loosely based on paper:
-        https://arxiv.org/abs/1502.04681
+        https://arxiv.org/abs/1502.04681.
 
         **The arguments and their meaning is mostly similar to that of the encoder.**
 
