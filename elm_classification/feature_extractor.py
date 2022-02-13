@@ -77,7 +77,6 @@ if __name__ == "__main__":
     # instantiate the elm_model and load the checkpoint
     model_ckpt_dir = "model_checkpoints/signal_window_16"
     args, parser = TestArguments().parse(verbose=True)
-    utils.test_args_compat(args, parser, infer_mode=True)
 
     # load the output paths
     paths = utils.create_output_paths(args, infer_mode=True)

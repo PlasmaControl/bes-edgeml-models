@@ -814,5 +814,4 @@ if __name__ == "__main__":
         # "--dry_run",
     ]
     args, parser = TestArguments().parse(verbose=True, arg_list=arg_list)
-    utils.test_args_compat(args, parser, infer_mode=True)
     main(args)

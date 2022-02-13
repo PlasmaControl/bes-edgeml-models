@@ -98,35 +98,6 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def test_args_compat(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
-    infer_mode: bool = False,
-):
-    """Checks if all the parameters with dependencies are passed."""
-    compat = True
-    # check the inference related parameters
-    if infer_mode:
-        if (
-            (args.plot_num == 12)
-            and (args.num_rows != 4)
-            and (args.num_cols != 3)
-        ) or (
-            (args.plot_num == 6)
-            and (args.num_rows != 3)
-            and (args.num_cols != 2)
-        ):
-            parser.error(
-                f"number of rows: {args.num_rows} and number of columns: {args.num_cols} "
-                f"are not compatible with total number of plots: {args.plot_num}"
-            )
-            compat = False
-    else:
-        raise ValueError("Function only required for inference.")
-    if compat:
-        print("All the parsed parameters are compatible with each other!")
-
-
 def create_data(data_name: str):
     data_filename = data_name + "_data"
     data_class_path = "data_preprocessing." + data_filename
