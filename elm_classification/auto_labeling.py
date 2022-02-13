@@ -232,7 +232,9 @@ class LSTMAutoencoder(nn.Module):
         return y.squeeze(0)
 
 
-def load_model(base_path: str, saved_model_path: str, model: LSTMAutoencoder) -> None:
+def load_model(
+    base_path: str, saved_model_path: str, model: LSTMAutoencoder
+) -> None:
     """
     Load model from a checkpoint.
     Args:
@@ -255,7 +257,7 @@ def load_model(base_path: str, saved_model_path: str, model: LSTMAutoencoder) ->
     )
 
 
-def create_model()->LSTMAutoencoder:
+def create_model() -> LSTMAutoencoder:
     """
     Instantiate the LSTM Autoencoder model. Hardcoding the values because these
     are the values the model is trained with.
@@ -265,9 +267,9 @@ def create_model()->LSTMAutoencoder:
     """
     seq_len = 16  # sws
     n_features = 64  # num BES channels
-    n_layers = 2    # num stacked LSTM layers
-    pct = 0.3   # dropout fraction
-    hidden_dim = 32     # hidden dimension
+    n_layers = 2  # num stacked LSTM layers
+    pct = 0.3  # dropout fraction
+    hidden_dim = 32  # hidden dimension
     encoder = Encoder(
         hidden_dim=hidden_dim,
         seq_len=seq_len,
@@ -293,30 +295,33 @@ def main(
     model: LSTMAutoencoder,
     threshold: float = 0.023,
     show_plots: bool = True,
-    output_dir: str = "ts_anomaly_detection_plots",
-):
+    output_dir: str = "outputs/ts_anomaly_detection_plots/automatic_labels",
+) -> None:
     """
-    Actual function creating the automatic labels and creating plot for each ELM
-    event.
+    Actual function creating the automatic labels and plot for each ELM event.
 
     Args:
-        data_dir ():
-        input_file_name ():
-        output_file_name ():
-        model ():
-        threshold ():
-        show_plots ():
-        output_dir ():
+        data_dir (str): Path to the data directory.
+        input_file_name (str): Name of the input HDF5 file.
+        output_file_name (str): Name of the output HDF5 file.
+        model (LSTMAutoencoder): Instance of the LSTM model.
+        threshold (float): Threshold for the reconstruction error.
+        show_plots (bool): If true, display plots.
+        output_dir (str): Path to the directory where output plots are saved.
 
     Returns:
+        None
 
     """
     hf = h5py.File(os.path.join(data_dir, input_file_name), "r")
     hf_out = h5py.File(os.path.join(data_dir, output_file_name), "w")
     elm_ids = list(hf.keys())
     num_pages = 40
-    elm_ids_per_page = [elm_ids[i * 12 : (i + 1) * 12] for i in range(num_pages)]
+    elm_ids_per_page = [
+        elm_ids[i * 12 : (i + 1) * 12] for i in range(num_pages)
+    ]
     print(f"Total ELM events: {len(elm_ids)}")
+    # iterate through all the pages
     for page_num, page in enumerate(elm_ids_per_page):
         print(f"Drawing plots on page: {page_num+1}")
         if len(page) == 12:
@@ -325,16 +330,27 @@ def main(
             remaining_elms = len(elm_ids) - 12 * num_pages
             rows = 4
             cols = remaining_elms // rows
-            fig, ax = plt.subplots(nrows=rows, ncols=1, figsize=(10, 12), dpi=150)
+            fig, ax = plt.subplots(
+                nrows=rows, ncols=1, figsize=(10, 12), dpi=150
+            )
         ax = ax.flatten()
+        # iterate through the ELM events in each page
         for i, id in enumerate(page):
             mae = []
-            print(f"Processing {i+1} elm event out of {len(page)} with id: {id}")
+            print(
+                f"Processing {i+1} elm event out of {len(page)} with id: {id}"
+            )
+            # create group in the output HDF5 file
             hf_out_group = hf_out.create_group(f"{id}")
             signal = np.array(hf[id]["signals"])
             label = np.array(hf[id]["labels"])
-            hf_out_group.create_dataset("signals", data=signal, dtype=np.float32)
-            hf_out_group.create_dataset("manual_labels", data=label, dtype=np.uint16)
+            # store the original signals and manual labels in the output HDF5 file
+            hf_out_group.create_dataset(
+                "signals", data=signal, dtype=np.float32
+            )
+            hf_out_group.create_dataset(
+                "manual_labels", data=label, dtype=np.uint16
+            )
             signal = signal.T
             signal = normalize_data(signal)
             signal, label = temporalize(sws=16, signals=signal, labels=label)
@@ -344,25 +360,33 @@ def main(
                 signal_dataset, batch_size=1, num_workers=0
             )
             for input_sequence, _ in data_loader:
+                # calculate loss from the predicted sequence and store it
                 pred_sequence = model(input_sequence)
-                # print(input_sequence.shape, manual_label.shape, pred_sequence.shape)
                 loss = torch.mean(
                     torch.abs(torch.squeeze(input_sequence, 0) - pred_sequence)
                 )
                 mae.append(loss.cpu().detach().numpy())
+            # compute predictions from the reconstruction error using mean absolute error (MAE)
             predictions = (np.array(mae) > threshold).astype(int)
+            # Clean up the predictions: suppress the predictions in pre-ELM and
+            # post-ELM regions using the manual labels
             for j in range(len(label)):
                 if (label[j] or predictions[j]) and (label[j] == 0):
                     predictions[j] = 0
             x = list(np.where(predictions == 1)[0])
+            # label all the time steps between the first and the last time step of
+            # active ELM as active; this will fail for ELM shots with more than
+            # one active ELM per event
             if not x:
                 print(f"Found no active elm with id: {id}.")
             else:
                 predictions[x[0] : x[-1]] = 1
+            # store predictions as automatic labels
             hf_out_group.create_dataset(
                 "automatic_labels", data=predictions, dtype=np.uint16
             )
             print(signal.shape, label.shape, np.array(mae).shape)
+            # plot
             ax[i].plot(signal[:, -1, 0], label="signal")
             ax[i].plot(label, label="manual label")
             ax[i].plot(predictions, label="auto label")
@@ -398,5 +422,5 @@ if __name__ == "__main__":
         model=model,
         threshold=0.023,
         show_plots=False,
-        output_dir="outputs/ts_anomaly_detection_plots",
+        output_dir="outputs/ts_anomaly_detection_plots/automatic_labels",
     )
