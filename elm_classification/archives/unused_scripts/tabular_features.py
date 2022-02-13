@@ -1,3 +1,6 @@
+"""Script to generate tabular features using max and average pooling on the raw
+BES data. DEPRECATED.
+"""
 import os
 import sys
 

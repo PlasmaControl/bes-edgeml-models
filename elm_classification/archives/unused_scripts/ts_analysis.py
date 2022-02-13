@@ -1,3 +1,6 @@
+"""Classical time series analysis (autocorrelation, lag_plots) of the ELM events.
+DEPRECATED!!
+"""
 import os
 import sys
 import argparse
