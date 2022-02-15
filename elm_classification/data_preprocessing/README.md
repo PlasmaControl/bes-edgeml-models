@@ -19,6 +19,6 @@ derived from `base_data`, there is an option to truncate the input signals
 is used for ELM onset prediction tasks to reduce the compute time. This can also
 be turned on/off using `--truncate_inputs` argument.
 
-The output of these data preprocessing steps produce a tuples for training, validation 
+The output of these data preprocessing steps produce tuples for training, validation 
 and testing that contain signals, labels, sample (or valid) indices, and window start 
 indices.
