@@ -8,6 +8,9 @@ The whole project can be structured as follows:
 
 The code consists of the PyTorch implementations for various models which are located inside the `models/` directory.
 
+`data_preprocessing/` consists of scripts responsible for the data preparation from raw BES data 
+for training and evaluation.
+
 `notebooks/` directory contains various jupyter notebooks which are used for experimentation with the data preprocessing pipelines and calculating ROC plots.
 
 `src/` directory contains scripts for various utility functions, data preprocessing and boilerplate code used for training and evaluation. One of the key features of the data preprocessing pipelines is the way inputs and labels are created. Inputs are 3D-tensors where the leading dimension contains time-steps according to `signal_window_size` and the last two dimensions contain `8x8` BES spatial data comprising the output from the 64 channels of the detector. This can be understood in more detail by the following fantastic figure created by Dr. David Smith.
@@ -24,7 +27,7 @@ The code consists of the PyTorch implementations for various models which are lo
 `archives/model_tools/` is a Python module and the primary set of tools for training ML models. `archives/hpo/` is a directory with python modules and Slurm scripts to perform hyper-parameter optimization with Optuna. `archives/multitrain/` is out-of-date but similar to `hpo/`.  The scripts and python modules in `multi-train/` are intended
 to perform multiple training runs for a single set of model parameters, for example, the "best" parameters from HPO.
 
-`train.py` and `analyze.py` are the main scripts used for training and inference. 
+`train.py` and `analyze.py` are the main scripts used for training, and inference respectively. 
 
 ## Getting started
 There are certain command line arguments which should be passed along with the training script. You can find more help about these by running
@@ -38,15 +41,19 @@ python analyze.py --help
 ### Train the model
 Training a model can be easily done by running something like (from the project directory) -
 ```
-python train.py --model_name cnn --n_epochs 5 --signal_window_size 16 --label_look_ahead 0 --scheduler CyclicLR --num_workers 4
+ python train.py --input_file labeled-elm-events.hdf5 --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 512 --label_look_ahead 500 --normalize_data --n_epochs 5 --max_elms -1 --filename_suffix _dwt_db4_low_lr --raw_num_filters 48 --fft_num_filters 48 --wt_num_filters 48 --dwt_wavelet db4 --dwt_level 9 --lr 0.0003 --weight_decay 0.0025
 ```
 
 `train.py` script expects the input `.hdf5` file to be stored in the `data/` directory 
 
 ### Test the model
-Testing can be done similarly -
+Testing can be done similarly. The command line arguments would look like-
 ```
-python analyze.py --model_name cnn --signal_window_size 16 --output_dir outputs --threshold 0.45 --plot_data --show_metrics
+ python analyze.py --device cuda --model_name multi_features --data_preproc unprocessed --signal_window_size 512 --label_look_ahead 500 --truncate_inputs --normalize_data --n_epochs 20 --max_elms -1 --multi_features --use_fft --plot_data --show_metrics
 ```
 
 If you just want to run `train.py` and `analyze.py` without saving any output files or plots, you can just add the flag `--dry_run` to either of the scripts.
+
+### Tracking the model and experimentation
+All the parameters of interest during training are logged into a pickle file which can be used with [Weights and Biases](https://wandb.ai/site) to track the experiments. More details 
+ca be found in [`train.py`](train.py) and [`wandb_manual_logs.py`](wandb_manual_logs.py).
