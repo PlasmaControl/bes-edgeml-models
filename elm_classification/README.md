@@ -56,4 +56,4 @@ If you just want to run `train.py` and `analyze.py` without saving any output fi
 
 ### Tracking the model and experimentation
 All the parameters of interest during training are logged into a pickle file which can be used with [Weights and Biases](https://wandb.ai/site) to track the experiments. More details 
-ca be found in [`train.py`](train.py) and [`wandb_manual_logs.py`](wandb_manual_logs.py).
+can be found in [`train.py`](train.py) and [`wandb_manual_logs.py`](wandb_manual_logs.py).
