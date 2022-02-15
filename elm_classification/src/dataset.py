@@ -27,12 +27,10 @@ class ELMDataset(torch.utils.data.Dataset):
             args (argparse.Namespace): Argparse object containing command line args.
             signals (np.ndarray): BES signals obtained after data preprocessing.
             labels (np.ndarray): Corresponding targets.
-            sample_indices (np.ndarray): Indices of the inputs obtained after
-                oversampling.
+            sample_indices (np.ndarray): Indices of the inputs obtained after oversampling.
             window_start (np.ndarray): Start index of each ELM event.
             logger (logging.getLogger): Logger object to log the dataset creation process.
-            phase (str): Dataset creation phase - 'Training', 'Validation' or 'Testing'.
-                Defaults to 'Training'.
+            phase (str): Dataset creation phase - 'Training', 'Validation' or 'Testing'. Defaults to 'Training'.
         """
         self.args = args
         self.signals = signals
