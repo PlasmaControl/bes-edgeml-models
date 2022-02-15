@@ -255,8 +255,13 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
-    LOGGER = utils.make_logger(script_name=__name__, log_file=os.path.join(args.log_dir,
-                                                                           f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
+    LOGGER = utils.make_logger(script_name=__name__,
+                               log_file=os.path.join(args.log_dir,
+                                                     f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
+    save_str = f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}" \
+               f"{'_' + args.balance_data if args.balance_data else ''}" \
+               f"{'_' + args.filename_suffix if args.filename_suffix else ''}"
+
     args.output_dir = 'outputs'
     args.test_data_info = False
     lookaheads = np.arange(0, 1001, 100)
@@ -264,10 +269,17 @@ if __name__ == "__main__":
         args.label_look_ahead = x
         data_cls = utils.create_data(args.data_preproc)
         data_obj = data_cls(args, LOGGER)
-        if not os.path.isfile(os.path.join(args.test_data_dir, f"test_data_lookahead_{args.label_look_ahead}_"
-                                                               f"{args.data_preproc}.pkl")):
-            train_loop(args, data_obj,
-                       test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
+        # if not (os.path.isfile(os.path.join(args.test_data_dir,
+        #                                     f"signal_window_{args.signal_window_size}",
+        #                                     f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl"))
+        #         and
+        #         os.path.isfile(os.path.join("model_checkpoints",
+        #                                     f"signal_window_{args.signal_window_size}",
+        #                                     f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}.pth"))):
+
+        train_loop(args,
+                   data_obj,
+                   test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
 
         viz = Visualizations(args, LOGGER)
         layers = list(viz.model.layers.keys())[:-1]

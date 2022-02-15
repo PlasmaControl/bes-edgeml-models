@@ -88,7 +88,7 @@ class Visualizations:
                                                                                                   infer_mode=True)
 
         # get the test data and dataloader
-        accepted_preproc = ['wavelet']
+        accepted_preproc = ['wavelet', 'unprocessed']
         test_fname = os.path.join(test_data_dir,
                                   f'test_data_lookahead_{self.args.label_look_ahead}{self.filename_suffix}'
                                   f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
@@ -1409,11 +1409,11 @@ if __name__ == "__main__":
     logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
                                                                                    f"{args.filename_suffix}.log"))
 
-    lookaheads = np.arange(0, 100, 1000)
+    lookaheads = np.arange(1000, 1001, 1000)
     for lah in lookaheads:
         args.label_look_ahead = lah
         viz = Visualizations(cl_args=args)
-        pca = PCA(viz, layer='conv', elm_index=[5])
+        pca = PCA(viz, layer='conv', elm_index=[0, 1, 2])
         pca.perform_PCA()
         pca.plot_pca(plot_type='compare')
 
