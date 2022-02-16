@@ -3,36 +3,44 @@ from typing import Tuple, Union, Callable
 
 import numpy as np
 import torch
-import torch.nn as nn
 
 from . import utils
 
 
 class Run:
     def __init__(
-        self,
-        model,
-        device: torch.device,
-        criterion,
-        optimizer: torch.optim.Optimizer,
-        use_focal_loss: bool = False,
-        use_rnn: bool = False,
-        multi_features: bool = False,
+            self,
+            model: object,
+            device: torch.device,
+            criterion: object,
+            optimizer: torch.optim.Optimizer,
+            use_focal_loss: bool = False,
+            use_rnn: bool = False,
     ):
+        """
+        Trainer class containing the boilerplate code for training and evaluation.
+
+        Args:
+            model (object): Instance of the model being used.
+            device (torch.device): Device to run training/inference on.
+            criterion (object): Instance of the loss function being used.
+            optimizer (torch.optim.Optimizer): Optimizer used during training.
+            use_focal_loss (bool): If true, use focal loss. It is supposed to work better in class imbalance problems. See: https://arxiv.org/pdf/1708.02002.pdf
+            use_rnn (bool): If true, use a recurrent neural network. It makes sure to take predictions at the last time step.
+        """
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
         self.device = device
         self.use_focal_loss = use_focal_loss
         self.use_rnn = use_rnn
-        self.multi_features = multi_features
 
     def train(
-        self,
-        data_loader: torch.utils.data.DataLoader,
-        epoch: int,
-        scheduler: Union[Callable, None] = None,
-        print_every: int = 100,
+            self,
+            data_loader: torch.utils.data.DataLoader,
+            epoch: int,
+            scheduler: Union[Callable, None] = None,
+            print_every: int = 100,
     ) -> float:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -42,121 +50,66 @@ class Run:
         self.model.train()
 
         start = end = time.time()
+        for batch_idx, (images, labels) in enumerate(data_loader):
+            # data loading time
+            data_time.update(time.time() - end)
 
-        if self.multi_features:
-            for batch_idx, (raw, cwt) in enumerate(data_loader):
-                # data loading time
-                data_time.update(time.time() - end)
+            # zero out all the accumulated gradients
+            self.optimizer.zero_grad()
 
-                # zero out all the accumulated gradients
-                self.optimizer.zero_grad()
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
 
-                # send data to device
-                raw_input, labels = raw[0], raw[1]
-                cwt_input = cwt[0]
-                batch_size = raw_input.size(0)
+            batch_size = images.size(0)
 
-                raw_input = raw_input.to(self.device)
-                labels = labels.to(self.device)
-                cwt_input = cwt_input.to(self.device)
+            # forward pass
+            y_preds = self.model(images)
 
-                # forward pass
-                y_preds = self.model(raw_input, cwt_input)
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
+            # use predictions for the last time step for RNN
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
 
-                loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
+            loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
 
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
 
-                # perform loss reduction
-                loss = loss.mean()
+            # perform loss reduction
+            loss = loss.mean()
 
-                # record loss
-                losses.update(loss.item(), batch_size)
+            # record loss
+            losses.update(loss.item(), batch_size)
 
-                # backpropagate
-                loss.backward()
+            # backpropagate
+            loss.backward()
 
-                # optimizer step
-                self.optimizer.step()
+            # optimizer step
+            self.optimizer.step()
 
-                # elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
+            # elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-                # step the scheduler if provided
-                if scheduler is not None:
-                    scheduler.step()
+            # step the scheduler if provided
+            if scheduler is not None:
+                scheduler.step()
 
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Epoch: [{epoch+1}][{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-
-        else:
-            for batch_idx, (images, labels) in enumerate(data_loader):
-                # data loading time
-                data_time.update(time.time() - end)
-
-                # zero out all the accumulated gradients
-                self.optimizer.zero_grad()
-
-                # send the data to device
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                batch_size = images.size(0)
-
-                # forward pass
-                y_preds = self.model(images)
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
-
-                loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
-
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
-
-                # perform loss reduction
-                loss = loss.mean()
-
-                # record loss
-                losses.update(loss.item(), batch_size)
-
-                # backpropagate
-                loss.backward()
-
-                # optimizer step
-                self.optimizer.step()
-
-                # elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-                # step the scheduler if provided
-                if scheduler is not None:
-                    scheduler.step()
-
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Epoch: [{epoch+1}][{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
+            # display results
+            if (batch_idx + 1) % print_every == 0:
+                print(
+                    f"Epoch: [{epoch + 1}][{batch_idx + 1}/{len(data_loader)}] "
+                    f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
+                    f"Elapsed {utils.time_since(start, float(batch_idx + 1) / len(data_loader))} "
+                    f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
+                )
 
         return losses.avg
 
     def evaluate(
-        self,
-        data_loader: torch.utils.data.DataLoader,
-        print_every: int = 50,
+            self,
+            data_loader: torch.utils.data.DataLoader,
+            print_every: int = 50,
     ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
@@ -167,107 +120,58 @@ class Run:
         preds = []
         valid_labels = []
         start = end = time.time()
-        if self.multi_features:
-            for batch_idx, (raw, cwt) in enumerate(data_loader):
-                # measure data loading time
-                data_time.update(time.time() - end)
+        images_cwt = None
+        for batch_idx, (images, labels) in enumerate(data_loader):
+            # measure data loading time
+            data_time.update(time.time() - end)
 
-                # send the data to device
-                raw_input, labels = raw[0], raw[1]
-                cwt_input = cwt[0]
-                batch_size = raw_input.size(0)
+            # send the data to device
+            images = images.to(self.device)
+            labels = labels.to(self.device)
 
-                raw_input = raw_input.to(self.device)
-                labels = labels.to(self.device)
-                cwt_input = cwt_input.to(self.device)
+            batch_size = images.size(0)
 
-                # compute loss with no backprop
-                with torch.no_grad():
-                    y_preds = self.model(raw_input, cwt_input)
+            # compute loss with no backprop
+            with torch.no_grad():
+                y_preds = self.model(images)
 
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
+            if self.use_rnn:
+                y_preds = y_preds.squeeze()[:, -1]
 
-                y_preds = y_preds.view(-1)
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
+            y_preds = y_preds.view(-1)
+            loss = self.criterion(y_preds, labels.type_as(y_preds))
 
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
+            if self.use_focal_loss:
+                loss = self._focal_loss(labels, y_preds, loss)
 
-                # perform loss reduction
-                loss = loss.mean()
+            # perform loss reduction
+            loss = loss.mean()
 
-                losses.update(loss.item(), batch_size)
+            losses.update(loss.item(), batch_size)
 
-                # record accuracy
-                preds.append(torch.sigmoid(y_preds).cpu().numpy())
-                valid_labels.append(labels.cpu().numpy())
+            # record accuracy
+            preds.append(torch.sigmoid(y_preds).cpu().numpy())
+            valid_labels.append(labels.cpu().numpy())
 
-                # measure elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Evaluating: [{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-            predictions = np.concatenate(preds)
-            targets = np.concatenate(valid_labels)
-
-        else:
-            for batch_idx, (images, labels) in enumerate(data_loader):
-                # measure data loading time
-                data_time.update(time.time() - end)
-
-                # send the data to device
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                batch_size = images.size(0)
-
-                # compute loss with no backprop
-                with torch.no_grad():
-                    y_preds = self.model(images)
-
-                if self.use_rnn:
-                    y_preds = y_preds.squeeze()[:, -1]
-
-                y_preds = y_preds.view(-1)
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
-
-                if self.use_focal_loss:
-                    loss = self._focal_loss(labels, y_preds, loss)
-
-                # perform loss reduction
-                loss = loss.mean()
-
-                losses.update(loss.item(), batch_size)
-
-                # record accuracy
-                preds.append(torch.sigmoid(y_preds).cpu().numpy())
-                valid_labels.append(labels.cpu().numpy())
-
-                # measure elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-                # display results
-                if (batch_idx + 1) % print_every == 0:
-                    print(
-                        f"Evaluating: [{batch_idx+1}/{len(data_loader)}] "
-                        f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
-                        f"Elapsed {utils.time_since(start, float(batch_idx+1)/len(data_loader))} "
-                        f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
-                    )
-            predictions = np.concatenate(preds)
-            targets = np.concatenate(valid_labels)
+            # display results
+            if (batch_idx + 1) % print_every == 0:
+                print(
+                    f"Evaluating: [{batch_idx + 1}/{len(data_loader)}] "
+                    f"Batch time: {batch_time.val:.3f} ({batch_time.avg:.3f}) "
+                    f"Elapsed {utils.time_since(start, float(batch_idx + 1) / len(data_loader))} "
+                    f"Loss: {losses.val:.4f} ({losses.avg:.4f}) "
+                )
+        predictions = np.concatenate(preds)
+        targets = np.concatenate(valid_labels)
 
         return losses.avg, predictions, targets
 
-    def _focal_loss(self, y_true, y_preds, loss, gamma=2):
+    @staticmethod
+    def _focal_loss(y_true, y_preds, loss, gamma=2):
         probas = torch.sigmoid(y_preds)
         loss = torch.where(
             y_true >= 0.5,

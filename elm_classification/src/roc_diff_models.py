@@ -1,3 +1,7 @@
+"""Script to create ROC plots for different models or for different lookaheads
+with a same model. Not actively maintained, needs a lot of refactoring.
+"""
+print(__doc__)
 import os
 import sys
 
@@ -5,8 +9,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+sns.set_theme(style='whitegrid', palette='muted', font_scale=1.15)
 sys.path.append(os.getcwd())
-plt.style.use("/home/lakshya/plt_custom.mplstyle")
 
 if __name__ == "__main__":
     path_0 = "outputs/signal_window_16/label_look_ahead_0/roc"

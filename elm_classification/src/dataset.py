@@ -1,6 +1,5 @@
 import argparse
 import logging
-from typing import Callable
 
 import torch
 import numpy as np
@@ -25,15 +24,13 @@ class ELMDataset(torch.utils.data.Dataset):
 
         Args:
         -----
-            signals (np.ndarray): Input data of size 8x8.
+            args (argparse.Namespace): Argparse object containing command line args.
+            signals (np.ndarray): BES signals obtained after data preprocessing.
             labels (np.ndarray): Corresponding targets.
-            sample_indices (np.ndarray): Indices of the inputs obtained after
-                oversampling.
+            sample_indices (np.ndarray): Indices of the inputs obtained after oversampling.
             window_start (np.ndarray): Start index of each ELM event.
-            signal_window_size (int): Number of time data points to be used for
-                stacking.
-            label_look_ahead (int): Label look ahead to find which time step label
-                is to used.
+            logger (logging.getLogger): Logger object to log the dataset creation process.
+            phase (str): Dataset creation phase - 'Training', 'Validation' or 'Testing'. Defaults to 'Training'.
         """
         self.args = args
         self.signals = signals
@@ -75,17 +72,3 @@ class ELMDataset(torch.utils.data.Dataset):
 
         return signal_window, label
 
-
-class ConcatDatasets(torch.utils.data.Dataset):
-    def __init__(self, *datasets):
-        """PyTorch dataset to concat different datasets and feed them through
-        dataloader. It can be used to concatenate different features from
-        different datasets.
-        """
-        self.datasets = datasets
-
-    def __len__(self):
-        return min(len(d) for d in self.datasets)
-
-    def __getitem__(self, i):
-        return tuple(d[i] for d in self.datasets)

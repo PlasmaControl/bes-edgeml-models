@@ -168,8 +168,9 @@ class FFTFeatureModel(_FeatureBase):
 class DWTFeatureModel(_FeatureBase):
     def __init__(self, *args, **kwargs):
         """
-        Use features from the output of continuous wavelet transform. The model architecture
-        is similar to the `RawFeatureModel`. This model takes in a 6-dimensional
+        Use features from the output of 1D discrete wavelet transform. Based on:
+        https://github.com/fbcotter/pytorch_wavelets
+        The model architecture is similar to the `RawFeatureModel`. This model takes in a 6-dimensional
         tensor of size: `(N, 1, signal_window_size, n_scales, 8, 8)`, where `N`=batch_size, and
         `n_scales`=number of different scales used (which are equal to `signal_window_size`).
         For each signal block, only the scales and BES channels for the leading time
@@ -350,7 +351,7 @@ if __name__ == "__main__":
         help="FFT window for FFTFeatureModel; power of 2 <= signal window size; if 0, use signal_window_size",
     )
     parser.add_argument(
-        "--dwt_num_filters",
+        "--wt_num_filters",
         type=int,
         default=48,
         help="Number of features for DWTFeatureModel: int >= 0",
@@ -364,11 +365,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dwt_level",
         type=int,
-        default=3,
+        default=7,
         help="Wavelet decomposition level: int >= 1; default=3",
     )
-    args = parser.parse_args(["--signal_window_size", "16", "--device", "cuda"])
-    shape_raw = (16, 1, 16, 8, 8)
+    args = parser.parse_args(["--signal_window_size", "128", "--device", "cpu"])
+    shape_raw = (1, 1, 128, 8, 8)
     x_raw = torch.randn(*shape_raw)
 
     device = args.device
@@ -387,5 +388,4 @@ if __name__ == "__main__":
         f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )
     y = model(x_raw)
-    print(y)
     print(y.shape)

@@ -151,7 +151,7 @@ class BaseData:
         return count
 
     def _partition_elms(
-        self, max_elms: int = None, fold: int = None
+        self, max_elms: int = None
     ) -> Tuple[ndarray, ndarray, ndarray]:
         """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
@@ -164,11 +164,6 @@ class BaseData:
                 Defaults to None (Take the entire data).
             fold (int, optional): Fold index for K-fold cross-validation. Defaults
                 to None.
-
-        Raises:
-        -------
-            Exception:  Throws error when `kfold` is set to True but fold index
-                is not passed.
 
         Returns:
         --------
@@ -235,7 +230,6 @@ class BaseData:
         elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
 
-    # TODO: implement K-fold cross validation
     # def _kfold_cross_val(self, training_elms: np.ndarray) -> None:
     #     """Helper function to perform K-fold cross-validation.
 

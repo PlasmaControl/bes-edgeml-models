@@ -19,14 +19,21 @@ class BaseArguments:
         parser.add_argument(
             "--input_file",
             type=str,
-            default="labeled-elm-events-large.hdf5",
+            default="labeled-elm-events.hdf5",
             help="path to the input hdf5 file.",
+        )
+        parser.add_argument(
+            "--automatic_labels",
+            action="store_true",
+            default=False,
+            help="if true, use automatic labels from the HDF5 file instead of manual labels..",
         )
         parser.add_argument(
             "--model_name",
             type=str,
             required=True,
-            help="name of the model to be used for training, "
+            help="name of the model to be used for training. Do not add a trailing "
+            "`_model` in the name."
             "[feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].",
         )
         parser.add_argument(
@@ -47,20 +54,6 @@ class BaseArguments:
             default=False,
             help="if true, don't split the data into training, testing and validation "
             "sets.",
-        )
-        parser.add_argument(
-            "--multi_features",
-            action="store_true",
-            default=False,
-            help="if true, create additional features based on FFT and CWT",
-        )
-        parser.add_argument(
-            "--use_fft",
-            action="store_true",
-            default=False,
-            help="if true, create additional features from FFT. As of version 1.7.0, "
-            "PyTorch FFT function does not work on systems that do not support "
-            "Intel MKL library(like PPC systems).",
         )
         parser.add_argument(
             "--data_dir",
@@ -110,18 +103,6 @@ class BaseArguments:
             default=0,
             help="seed of the PRNG for reproducibity of results.",
         )
-        # parser.add_argument(
-        #     "--kfold",
-        #     action="store_true",
-        #     default=False,
-        #     help="if true, use K-fold cross-validation other makes standard train-test split.",
-        # )
-        # parser.add_argument(
-        #     "--n_folds",
-        #     type=int,
-        #     help="number of folds for k-fold cross validation. Only passed when "
-        #     "`kfold` is set to True.",
-        # )
         parser.add_argument(
             "--max_elms",
             type=int,
@@ -163,7 +144,7 @@ class BaseArguments:
             required=True,
             help="name of the data manipulator to be used. Selecting any of the "
             "mentioned techniques will create data ready corresponding to that "
-            "technique for training, "
+            "technique for training. Do not add a trailing `_data` in the name."
             "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
             "balance | rnn | gaussian_noise].",
         )
@@ -244,13 +225,12 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
-
-        # arguments for `train_ds.py` and `multi_features_ds_model.py`
+        # arguments for `multi_features_model.py`
         parser.add_argument(
             "--mf_maxpool_size",
             type=int,
-            default=2,
-            help="spatial maxpool: 1|2(default)|4",
+            default=1,
+            help="spatial maxpool: 1(no pooling)|2|4",
         )
         parser.add_argument(
             "--mf_time_slice_interval",
@@ -265,7 +245,7 @@ class BaseArguments:
             help="Dropout rate",
         )
         parser.add_argument(
-            "--mf_negative_slope",
+            "--mf_relu_negative_slope",
             type=float,
             default=0.02,
             help="RELU negative slope",
@@ -289,11 +269,18 @@ class BaseArguments:
             help="FFT bins for FFTFeatureModel; power of 2: 1(default)|2|4...",
         )
         parser.add_argument(
-            "--dwt_num_filters",
+            "--wt_num_filters",
             type=int,
             default=16,
-            help="Number of features for DWTFeatureModel: int >= 0",
+            help="Number of features for D(C)WTFeatureModel: int >= 0",
         )
+        # parser.add_argument(
+        #     "--scales",
+        #     nargs="+",
+        #     type=int,
+        #     default=None,
+        #     help="Scales to be used for CWT.",
+        # )
         parser.add_argument(
             "--dwt_wavelet",
             type=str,
@@ -311,9 +298,7 @@ class BaseArguments:
 
         return parser
 
-    def _gather_args(
-        self, arg_list: Union[list, None] = None
-    ):  # implement `arg_list`
+    def _gather_args(self, arg_list: Union[list, None] = None):  # implement `arg_list`
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(

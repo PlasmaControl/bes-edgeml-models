@@ -1,3 +1,11 @@
+"""Script to put the ML models to training. It gathers the data from the data 
+preprocessing pipeline, creates PyTorch datasets and dataloader and tracks the 
+training parameters like ROC, F1-score, training and validation losses for 
+different epochs and saves them in a file. The saved model as well as the 
+validation set are also saved, these will be used during the inference in 
+`analyze.py`.
+"""
+print(__doc__)
 import os
 import time
 import pickle
@@ -10,56 +18,16 @@ import torch.nn as nn
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
-import pywt
 
-from data_preprocessing import *
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
 from models import multi_features_model
-
-
-def get_multi_features(args, train_data, valid_data):
-    print(f"Train data shape: {train_data[0].shape}")
-    print(f"Valid data shape: {valid_data[0].shape}")
-    train_data_cwt = list(train_data)
-    valid_data_cwt = list(valid_data)
-    max_scale = 1024
-    num = int(np.log2(max_scale)) + 1
-    widths = np.round(
-        np.geomspace(1, max_scale, num=num, endpoint=True)
-    ).astype(int)
-    train_data_cwt[0], _ = pywt.cwt(
-        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
-    valid_data_cwt[0], _ = pywt.cwt(
-        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
-
-    train_data_cwt = tuple(train_data_cwt)
-    valid_data_cwt = tuple(valid_data_cwt)
-    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
-    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
-
-    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
-    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
-
-    assert (
-        train_data[0].shape[0] == train_data_cwt[0].shape[0]
-    ), "CWT train data leading dimension does not match with the raw data!"
-    assert (
-        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
-    ), "CWT valid data leading dimension does not match with the raw data!"
-
-    return train_data_cwt, valid_data_cwt
 
 
 def train_loop(
     args: argparse.Namespace,
     data_obj: object,
     test_datafile_name: str,
-    fold: Union[int, None] = None,
     desc: bool = False,
 ) -> None:
     """Actual function to put the model to training. Use command line arg
@@ -71,8 +39,6 @@ def train_loop(
             line arguments.
         data_obj (object): Data object that creates train, validation and test data.
         test_datafile_name (str): Name of the pickle file that stores the test data.
-        fold (Union[int, None]): Integer index for the fold if using k-fold cross
-        validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
     # containers to hold train and validation losses
@@ -84,10 +50,6 @@ def train_loop(
         args, infer_mode=False
     )
     test_data_file = os.path.join(test_data_path, test_datafile_name)
-    if args.multi_features:
-        test_data_file_cwt = os.path.join(
-            test_data_path, "cwt_" + test_datafile_name
-        )
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
@@ -98,20 +60,10 @@ def train_loop(
     LOGGER.info(f"       Training fold: {fold}       ")
     LOGGER.info("-" * 30)
 
-    # turn off model details for subsequent folds/epochs
-    if fold is not None:
-        if fold >= 1:
-            desc = False
-
     # create train, valid and test data
     train_data, valid_data, _ = data_obj.get_data(
         shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
     )
-
-    if args.multi_features:
-        train_data_cwt, valid_data_cwt = get_multi_features(
-            args, train_data, valid_data
-        )
 
     # dump test data into a file
     if not args.dry_run:
@@ -125,17 +77,6 @@ def train_loop(
                 },
                 f,
             )
-        if args.multi_features:
-            with open(test_data_file_cwt, "wb") as f:
-                pickle.dump(
-                    {
-                        "signals": valid_data_cwt[0],
-                        "labels": valid_data_cwt[1],
-                        "sample_indices": valid_data_cwt[2],
-                        "window_start": valid_data_cwt[3],
-                    },
-                    f,
-                )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -144,18 +85,6 @@ def train_loop(
     valid_dataset = dataset.ELMDataset(
         args, *valid_data, logger=LOGGER, phase="validation"
     )
-
-    if args.multi_features:
-        train_dataset_cwt = dataset.ELMDataset(
-            args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
-        )
-        valid_dataset_cwt = dataset.ELMDataset(
-            args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
-        )
-
-        # create a combined dataset
-        train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
-        valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -177,21 +106,35 @@ def train_loop(
     )
 
     # model
-    if args.multi_features:
-        raw_model = multi_features_model.RawFeatureModel(args)
-        fft_model = multi_features_model.FFTFeatureModel(args)
-        cwt_model = multi_features_model.CWTFeatureModel(args)
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args, raw_model, fft_model, cwt_model)
-    else:
-        model_cls = utils.create_model(args.model_name)
-        model = model_cls(args)
+    raw_model = (
+        multi_features_model.RawFeatureModel(args)
+        if args.raw_num_filters > 0
+        else None
+    )
+    fft_model = (
+        multi_features_model.FFTFeatureModel(args)
+        if args.fft_num_filters > 0
+        else None
+    )
+    cwt_model = (
+        multi_features_model.DWTFeatureModel(args)
+        if args.wt_num_filters > 0
+        else None
+    )
+    features = [
+        type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f
+    ]
+
+    model_cls = utils.create_model(args.model_name)
+    model = model_cls(args, raw_model, fft_model, cwt_model)
 
     device = torch.device(args.device)
     model = model.to(device)
-    LOGGER.info("-" * 50)
-    LOGGER.info(f"       Training with model: {args.model_name}       ")
-    LOGGER.info("-" * 50)
+    LOGGER.info("-" * 100)
+    LOGGER.info(
+        f"Training with model `{args.model_name}` with features from {features}"
+    )
+    LOGGER.info("-" * 100)
 
     # display model details
     if desc:
@@ -258,7 +201,6 @@ def train_loop(
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
-        multi_features=args.multi_features,
     )
 
     # iterate through all the epochs
@@ -282,6 +224,9 @@ def train_loop(
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores.append(roc_score)
+        # hard coding the threshold value for F1 score, smaller value will reduce
+        # the number of false negatives while larger value reduces the number of
+        # false positives
         thresh = 0.35
         f1 = f1_score(valid_labels, (preds > thresh).astype(int))
         f1_scores.append(f1)
@@ -332,6 +277,8 @@ def train_loop(
         parents=True, exist_ok=True
     )  # make dir. for output file
 
+    # save the training parameters in a pickle file, use it for experiment tracking
+    # in weights and biases
     with open(outputs_file.as_posix(), "wb") as f:
         pickle.dump(
             {
@@ -359,4 +306,5 @@ if __name__ == "__main__":
         args,
         data_obj,
         test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+        desc=True,
     )
