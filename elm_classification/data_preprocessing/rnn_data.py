@@ -51,7 +51,18 @@ class RNNData(BaseData):
             _signals = np.array(elm_event["signals"], dtype=np.float32)
             # transposing so that the time dimension comes forward
             _signals = np.transpose(_signals, (1, 0))
-            _labels = np.array(elm_event["labels"], dtype=np.float32)
+            if not self.args.automatic_labels:
+                try:
+                    _labels = np.array(elm_event["labels"], dtype=np.float32)
+                except KeyError:
+                    _labels = np.array(elm_event["manual_labels"], dtype=np.float32)
+            else:
+                try:
+                    _labels = np.array(elm_event["automatic_labels"], dtype=np.float32)
+                except KeyError:
+                    print(
+                        f"`--automatic_labels` are parsed but the HDF5 file containing automatic labels is not used!"
+                    )
             if self.args.normalize_data:
                 _signals = _signals.reshape(-1, 64)
                 _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
