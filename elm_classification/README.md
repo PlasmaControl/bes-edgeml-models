@@ -6,28 +6,28 @@ The whole project can be structured as follows:
     <img src='assets/project_structure.png' alt='project_structure' width='300'/>
 </p>
 
-The code consists of the PyTorch implementations for various models which are located inside the `models/` directory.
+The code consists of the PyTorch implementations for various models which are located inside the [`models/`](models/) directory.
 
-`data_preprocessing/` consists of scripts responsible for the data preparation from raw BES data 
+[`data_preprocessing/`](data_preprocessing/) consists of scripts responsible for the data preparation from raw BES data 
 for training and evaluation.
 
-`notebooks/` directory contains various jupyter notebooks which are used for experimentation with the data preprocessing pipelines and calculating ROC plots.
+[`notebooks/`](notebooks/) directory contains various jupyter notebooks which are used for experimentation with the data preprocessing pipelines and calculating ROC plots.
 
-`src/` directory contains scripts for various utility functions, data preprocessing and boilerplate code used for training and evaluation. One of the key features of the data preprocessing pipelines is the way inputs and labels are created. Inputs are 3D-tensors where the leading dimension contains time-steps according to `signal_window_size` and the last two dimensions contain `8x8` BES spatial data comprising the output from the 64 channels of the detector. This can be understood in more detail by the following fantastic figure created by Dr. David Smith.
+[`src/`](src/) directory contains scripts for various utility functions, data preprocessing and boilerplate code used for training and evaluation. One of the key features of the data preprocessing pipelines is the way inputs and labels are created. Inputs are 3D-tensors where the leading dimension contains time-steps according to `signal_window_size` and the last two dimensions contain `8x8` BES spatial data comprising the output from the 64 channels of the detector. This can be understood in more detail by the following fantastic figure created by Dr. David Smith.
 
 <p align='center'>
     <img src='assets/signal_window_diagram.png' alt='signal_window' width='1000'/>
 </p>
 
-`options/` directory contains helper classes for various command line arguments which can be used to change the various parameters ranging from data-preprocessing to model training and inference.
+[`options/`](options/) directory contains helper classes for various command line arguments which can be used to change the various parameters ranging from data-preprocessing to model training and inference.
 
-`model_checkpoints/` contains the saved models which can be used for inference.
+[`model_checkpoints/`](model_checkpoints/) contains the saved models which can be used for inference.
 
-`archives/` directory contains previous code files which are implemented in TensorFlow. It also contains plots generated earlier using PyTorch. It is just for reference and is not in active development.
+[`archives/`](archives/) directory contains previous code files which are implemented in TensorFlow. It also contains plots generated earlier using PyTorch. It is just for reference and is not in active development.
 `archives/model_tools/` is a Python module and the primary set of tools for training ML models. `archives/hpo/` is a directory with python modules and Slurm scripts to perform hyper-parameter optimization with Optuna. `archives/multitrain/` is out-of-date but similar to `hpo/`.  The scripts and python modules in `multi-train/` are intended
 to perform multiple training runs for a single set of model parameters, for example, the "best" parameters from HPO.
 
-`train.py` and `analyze.py` are the main scripts used for training, and inference respectively. 
+[`train.py`](train.py) and [`analyze.py`](analyze.py) are the main scripts used for training, and inference respectively. 
 
 ## Getting started
 There are certain command line arguments which should be passed along with the training script. You can find more help about these by running
@@ -56,4 +56,4 @@ If you just want to run `train.py` and `analyze.py` without saving any output fi
 
 ### Tracking the model and experimentation
 All the parameters of interest during training are logged into a pickle file which can be used with [Weights and Biases](https://wandb.ai/site) to track the experiments. More details 
-ca be found in [`train.py`](train.py) and [`wandb_manual_logs.py`](wandb_manual_logs.py).
+can be found in [`train.py`](train.py) and [`wandb_manual_logs.py`](wandb_manual_logs.py).
