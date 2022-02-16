@@ -23,6 +23,12 @@ class BaseArguments:
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
+            "--automatic_labels",
+            action="store_true",
+            default=False,
+            help="if true, use automatic labels from the HDF5 file instead of manual labels..",
+        )
+        parser.add_argument(
             "--model_name",
             type=str,
             required=True,
