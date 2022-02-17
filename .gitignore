@@ -6,6 +6,7 @@ data/
 test_data/
 processed_data/
 jobs/
+viz/
 figures/
 model_checkpoints/
 wandb/
@@ -159,16 +160,13 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-# outputs/signal_window_16/label_look_ahead_0/roc/cnn_feature_df_0.csv
-# outputs/signal_window_16/label_look_ahead_0/roc/automatic_labels_df_0.csv
-# outputs/signal_window_16/label_look_ahead_0/roc/cnn_features_automatic_labels_df_0.csv
-# outputs/signal_window_128/label_look_ahead_0/roc/automatic_labels_df_0.csv
-# outputs/signal_window_16/label_look_ahead_0/roc/automatic_labels_df_sws_16_0.csv
-# outputs/signal_window_16/label_look_ahead_100/roc/cnn_feature_df_100.csv
-# outputs/signal_window_16/label_look_ahead_200/roc/cnn_feature_df_200.csv
-# outputs/signal_window_16/label_look_ahead_50/roc/cnn_feature_df_50.csv
-# outputs/signal_window_16/label_look_ahead_100/roc/roc_details_lr_manual_lookahead_100.csv
-# outputs/signal_window_16/label_look_ahead_200/roc/roc_details_lr_manual_lookahead_200.csv
-# outputs/signal_window_16/label_look_ahead_50/roc/roc_details_lr_manual_lookahead_50.csv
+/visualizations/outputs/
+/visualizations/PATH/
+/logs/
+/visualizations/notes/
+/src/outputs
+/outputs
+
 *.pth
+*.pkl
 *.hdf5
