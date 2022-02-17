@@ -92,7 +92,7 @@ class BaseData:
         all_elms = None
         all_data = None
         training_elms, validation_elms, test_elms = self._partition_elms(
-            max_elms=self.args.max_elms, fold=fold
+            max_elms=self.args.max_elms,
         )
         self.logger.info("Reading ELM events and creating datasets")
         self.logger.info("-" * 30)

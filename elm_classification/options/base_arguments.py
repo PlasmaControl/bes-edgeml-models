@@ -245,7 +245,7 @@ class BaseArguments:
             help="Dropout rate",
         )
         parser.add_argument(
-            "--mf_relu_negative_slope",
+            "--mf_negative_slope",
             type=float,
             default=0.02,
             help="RELU negative slope",
@@ -269,7 +269,7 @@ class BaseArguments:
             help="FFT bins for FFTFeatureModel; power of 2: 1(default)|2|4...",
         )
         parser.add_argument(
-            "--wt_num_filters",
+            "--dwt_num_filters",
             type=int,
             default=16,
             help="Number of features for D(C)WTFeatureModel: int >= 0",

@@ -684,7 +684,7 @@ def main(
     )
     dwt_model = (
         multi_features_model.DWTFeatureModel(args)
-        if args.wt_num_filters > 0
+        if args.dwt_num_filters > 0
         else None
     )
     model_cls = utils.create_model(args.model_name)

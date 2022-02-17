@@ -30,7 +30,7 @@ class _BaseFeatureModel(nn.Module):
         self.time_points = (
                 self.args.signal_window_size // self.args.mf_time_slice_interval
         )
-        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_relu_negative_slope)
+        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
         self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
         self.num_filters = None
         self.conv = None
@@ -153,7 +153,7 @@ class DWTFeatureModel(_BaseFeatureModel):
         for hi in x_hi:
             self.dwt_output_length += hi.shape[2]
 
-        self.num_filters = self.args.wt_num_filters
+        self.num_filters = self.args.dwt_num_filters
         filter_size = (self.dwt_output_length, 8, 8)
         self.conv = nn.Conv3d(
             in_channels=1,
@@ -205,7 +205,7 @@ class DWTFeatureModel(_BaseFeatureModel):
 #                 about signal_window.
 #         """
 #         super(CWTFeatureModel, self).__init__(args)
-#         self.num_filters = self.args.wt_num_filters
+#         self.num_filters = self.args.dwt_num_filters
 #         filter_size = (len(self.args.scales), 8, 8)
 #         self.conv = nn.Conv3d(
 #             in_channels=1, out_channels=self.num_filters, kernel_size=filter_size
@@ -267,7 +267,7 @@ class MultiFeaturesModel(nn.Module):
         self.fc2 = nn.Linear(in_features=128, out_features=32)
         self.fc3 = nn.Linear(in_features=32, out_features=1)
         self.dropout = nn.Dropout(p=self.args.mf_dropout_rate)
-        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_relu_negative_slope)
+        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
 
     def forward(self, x):
         # extract raw and cwt processed signals

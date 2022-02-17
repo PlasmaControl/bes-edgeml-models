@@ -118,7 +118,7 @@ def train_loop(
     )
     cwt_model = (
         multi_features_model.DWTFeatureModel(args)
-        if args.wt_num_filters > 0
+        if args.dwt_num_filters > 0
         else None
     )
     features = [
