@@ -17,10 +17,97 @@ class BaseArguments:
         """Define the options common for training and testing."""
         # basic parameters
         parser.add_argument(
+            "--model_name",
+            type=str,
+            default='multi_features_ds',
+            help="name of the model to be used for training. Do not add a trailing "
+            "`_model` in the name."
+        )
+        parser.add_argument(
+            "--device",
+            type=str,
+            default="cpu",
+            help="device to use, [ cpu (default) | cuda | cuda:N ].",
+        )
+        parser.add_argument(
+            "--n_epochs",
+            type=int,
+            default=10,
+            help="total number of epochs for training.",
+        )
+        parser.add_argument(
+            "--max_elms",
+            type=int,
+            default=-1,
+            help="total number of elm events to be used. Use -1 to use all of them.",
+        )
+        parser.add_argument(
+            "--batch_size",
+            type=int,
+            default=64,
+            help="batch size for model training and testing.",
+        )
+        parser.add_argument(
+            "--signal_window_size",
+            type=int,
+            default=16,
+            help="number of time data points to use for the input. "
+            "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
+            "[8 | 16].",
+        )
+        parser.add_argument(
+            "--label_look_ahead",
+            type=int,
+            default=50,
+            help="`look ahead`, meaning the label for the entire signal window is taken to "
+            "be label corresponding to the last element (0 ahead) of the signal window, "
+            "[ int >= 0 (50 default) ].",
+        )
+        parser.add_argument(
             "--input_file",
             type=str,
             default="labeled-elm-events.hdf5",
             help="path to the input hdf5 file.",
+        )
+        parser.add_argument(
+            "--data_dir",
+            type=str,
+            default="data",
+            help="path to the input data.",
+        )
+        parser.add_argument(
+            "--output_dir",
+            type=str,
+            default="outputs",
+            help="path to the inference outputs.",
+        )
+        parser.add_argument(
+            "--test_data_dir",
+            type=str,
+            default="data/test_data",
+            help="path to save the test data.",
+        )
+        # parser.add_argument(
+        #     "--log_dir",
+        #     type=str,
+        #     default="logs",
+        #     help="path to save the logs.",
+        # )
+        parser.add_argument(
+            "--dry_run",
+            action="store_true",
+            default=False,
+            help="if true, train (test) the model without saving anything.",
+        )
+        parser.add_argument(
+            "--data_preproc",
+            type=str,
+            default='unprocessed',
+            help="name of the data manipulator to be used. Selecting any of the "
+            "mentioned techniques will create data ready corresponding to that "
+            "technique for training. Do not add a trailing `_data` in the name."
+            "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
+            "balance | rnn | gaussian_noise].",
         )
         parser.add_argument(
             "--automatic_labels",
@@ -29,24 +116,10 @@ class BaseArguments:
             help="if true, use automatic labels from the HDF5 file instead of manual labels..",
         )
         parser.add_argument(
-            "--model_name",
-            type=str,
-            required=True,
-            help="name of the model to be used for training. Do not add a trailing "
-            "`_model` in the name."
-            "[feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].",
-        )
-        parser.add_argument(
             "--model_ckpts",
             type=str,
             default="model_checkpoints",
             help="path to the pretrained weights of the saved models.",
-        )
-        parser.add_argument(
-            "--output_dir",
-            type=str,
-            default="outputs",
-            help="path to the inference outputs.",
         )
         parser.add_argument(
             "--use_all_data",
@@ -56,46 +129,10 @@ class BaseArguments:
             "sets.",
         )
         parser.add_argument(
-            "--data_dir",
-            type=str,
-            default="data",
-            help="path to the input data.",
-        )
-        parser.add_argument(
-            "--test_data_dir",
-            type=str,
-            default="data/test_data",
-            help="path to save the test data.",
-        )
-        parser.add_argument(
-            "--log_dir",
-            type=str,
-            default="logs",
-            help="path to save the logs.",
-        )
-        parser.add_argument(
             "--add_tensorboard",
             action="store_true",
             default=False,
             help="if true, write loss summary to a tensorboard log file.",
-        )
-        parser.add_argument(
-            "--device",
-            type=str,
-            default="cpu",
-            help="device to use, [cuda | cpu].",
-        )
-        parser.add_argument(
-            "--dry_run",
-            action="store_true",
-            default=False,
-            help="if true, train (test) the model without saving anything.",
-        )
-        parser.add_argument(
-            "--n_epochs",
-            type=int,
-            default=10,
-            help="total number of epochs for training.",
         )
         parser.add_argument(
             "--seed",
@@ -104,23 +141,11 @@ class BaseArguments:
             help="seed of the PRNG for reproducibity of results.",
         )
         parser.add_argument(
-            "--max_elms",
-            type=int,
-            default=-1,
-            help="total number of elm events to be used. Use -1 to use all of them.",
-        )
-        parser.add_argument(
             "--filename_suffix",
             type=str,
             default="",
             help="suffix in the file name. It can be passed when args like interpolate, "
             "etc. are passed. Must be passed with a leading underscore '_'.",
-        )
-        parser.add_argument(
-            "--batch_size",
-            type=int,
-            default=64,
-            help="batch size for model training and testing.",
         )
         parser.add_argument(
             "--num_workers",
@@ -135,34 +160,6 @@ class BaseArguments:
             type=int,
             default=1,
             help="data parallel distributed training: -1 all GPUs|1 single GPU (default)|N gpus",
-        )
-
-        # data preparation parameters
-        parser.add_argument(
-            "--data_preproc",
-            type=str,
-            required=True,
-            help="name of the data manipulator to be used. Selecting any of the "
-            "mentioned techniques will create data ready corresponding to that "
-            "technique for training. Do not add a trailing `_data` in the name."
-            "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
-            "balance | rnn | gaussian_noise].",
-        )
-        parser.add_argument(
-            "--signal_window_size",
-            type=int,
-            default=16,
-            help="number of time data points to use for the input. "
-            "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
-            "[8 | 16].",
-        )
-        parser.add_argument(
-            "--label_look_ahead",
-            type=int,
-            default=0,
-            help="`look ahead`, meaning the label for the entire signal window is taken to "
-            "be label corresponding to the last element (0 ahead) of the signal window, "
-            "[0 | 4 | 8 | ...].",
         )
         parser.add_argument(
             "--fraction_valid",
@@ -221,7 +218,7 @@ class BaseArguments:
         parser.add_argument(
             "--shuffle_sample_indices",
             action="store_true",
-            default=False,
+            default=True,
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
@@ -274,13 +271,6 @@ class BaseArguments:
             default=16,
             help="Number of features for D(C)WTFeatureModel: int >= 0",
         )
-        # parser.add_argument(
-        #     "--scales",
-        #     nargs="+",
-        #     type=int,
-        #     default=None,
-        #     help="Scales to be used for CWT.",
-        # )
         parser.add_argument(
             "--dwt_wavelet",
             type=str,
@@ -298,7 +288,10 @@ class BaseArguments:
 
         return parser
 
-    def _gather_args(self, arg_list: Union[list, None] = None):  # implement `arg_list`
+    def _gather_args(
+        self, 
+        arg_list: Union[list, None] = None,
+    ):
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
@@ -308,12 +301,10 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        if arg_list is None:
-            args = parser.parse_args()
-        else:
-            args = parser.parse_args(arg_list)
+        args = parser.parse_args(arg_list)
 
-        return args, parser
+        # return args, parser
+        return args
 
     def _print_args(self, args):
         """Print command line arguments.
@@ -336,12 +327,10 @@ class BaseArguments:
               arg_list: Union[list, None] = None,
     ):  # implement `arg_list`
         """Parse the arguments."""
-        if arg_list is None:
-            args, parser = self._gather_args()
-        else:
-            args, parser = self._gather_args(arg_list)
+        args = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)
 
         self.args = args
-        return args, parser
+        # return args, parser
+        return args

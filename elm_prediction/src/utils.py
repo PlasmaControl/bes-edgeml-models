@@ -42,8 +42,8 @@ class MetricMonitor:
 
 # log the model and data preprocessing outputs
 def get_logger(
-    script_name: str,
-    log_file: Union[str, None] = None,
+    script_name: Union[str, None] = None,
+    log_file: Union[str, Path, None] = 'output.log',
     stream_handler: bool = True,
 ) -> logging.getLogger:
     """Initiate the logger to log the progress into a file.
@@ -62,10 +62,10 @@ def get_logger(
     logger.setLevel(logging.INFO)
 
     if log_file is not None:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
+        log_file = Path(log_file).resolve()
+        log_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
         # create handlers
-        f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
+        f_handler = logging.FileHandler(log_file.as_posix(), mode="w")
         # create formatters and add it to the handlers
         f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
         f_handler.setFormatter(f_format)
@@ -110,8 +110,11 @@ def create_data(data_name: str) -> object:
         Object of the data class.
     """
     data_filename = data_name + "_data"
-    data_class_path = "data_preprocessing." + data_filename
-    data_lib = importlib.import_module(data_class_path)
+    data_class_path = "..data_preprocessing." + data_filename
+    data_lib = importlib.import_module(
+        data_class_path,
+        package='elm_prediction.src',
+    )
     data_class = None
     _data_name = data_name.replace("_", "") + "data"
     for name, cls in data_lib.__dict__.items():
@@ -122,7 +125,8 @@ def create_data(data_name: str) -> object:
 
 
 def create_output_paths(
-    args: argparse.Namespace, infer_mode: bool = False
+    args: argparse.Namespace, 
+    infer_mode: bool = False
 ) -> Tuple[str]:
     """
     Helper function to create various output paths to save model checkpoints,
@@ -136,11 +140,13 @@ def create_output_paths(
         Tuple containing output paths.
     """
     test_data_path = os.path.join(
-        args.test_data_dir, f"signal_window_{args.signal_window_size}"
+        args.test_data_dir, 
+        f"signal_window_{args.signal_window_size}",
     )
     os.makedirs(test_data_path, exist_ok=True)
     model_ckpt_path = os.path.join(
-        args.model_ckpts, f"signal_window_{args.signal_window_size}"
+        args.model_ckpts, 
+        f"signal_window_{args.signal_window_size}",
     )
     os.makedirs(model_ckpt_path, exist_ok=True)
     if infer_mode:
@@ -213,8 +219,11 @@ def create_model(model_name: str) -> object:
         Object of the model class.
     """
     model_filename = model_name + "_model"
-    model_path = "models." + model_filename
-    model_lib = importlib.import_module(model_path)
+    model_path = "..models." + model_filename
+    model_lib = importlib.import_module(
+        model_path,
+        package='elm_prediction.src',
+    )
     model = None
     _model_name = model_name.replace("_", "") + "model"
     for name, cls in model_lib.__dict__.items():

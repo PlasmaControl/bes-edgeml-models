@@ -1,9 +1,14 @@
+'''
+
+'''
+
 import os
 import time
 import pickle
 import argparse
 from typing import Union
 from pathlib import Path
+import logging
 
 import torch
 import torch.nn as nn
@@ -13,23 +18,33 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
-import pywt
 
 try:
     import optuna
 except ImportError:
     optuna = None
 
-from options.train_arguments import TrainArguments
-from src import utils, trainer, dataset
-from models import multi_features_model
-from models import multi_features_ds_model
+try:
+    from .options.train_arguments import TrainArguments
+    from .src import utils, trainer, dataset
+    from .models import multi_features_ds_model
+except ImportError:
+    from elm_prediction.options.train_arguments import TrainArguments
+    from elm_prediction.src import utils, trainer, dataset
+    from elm_prediction.models import multi_features_ds_model
+
+
+def prepare_data_obj(args, LOGGER):
+    data_cls = utils.create_data(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+    return data_obj
 
 
 def train_loop(
     args: argparse.Namespace,
     data_obj: object,
-    test_datafile_name: str,
+    logger: logging.getLogger,
+    test_datafile_name: str = 'test_data.pkl',
     desc: bool = False,
     trial = None,  # optuna `trial` object
     rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
@@ -47,7 +62,7 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    LOGGER = data_obj.logger  # define `LOGGER` inside function
+    LOGGER = logger
 
     # containers to hold train and validation losses
     train_loss = np.empty(0)
@@ -60,9 +75,7 @@ def train_loop(
         args.device = f'cuda:{rank}'
         LOGGER.info(f'Distributed data parallel: process rank {rank} on GPU {args.device}')
 
-    test_data_path, model_ckpt_path = utils.create_output_paths(
-        args, infer_mode=False
-    )
+    test_data_path, model_ckpt_path = utils.create_output_paths(args)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
 
     LOGGER = data_obj.logger  # define `LOGGER` inside function
@@ -361,58 +374,15 @@ def run_distributed_train_loop(*train_loop_args):
 
 
 if __name__ == "__main__":
-    # args, parser = TrainArguments().parse(verbose=True)
-    # LOGGER = utils.get_logger(
-    #     script_name=__name__,
-    #     log_file=os.path.join(
-    #         args.log_dir,
-    #         f"output_logs_{args.model_name}{args.filename_suffix}.log",
-    #     ),
-    # )
-    # data_cls = utils.create_data(args.data_preproc)
-    # data_obj = data_cls(args, LOGGER)
-    # train_loop(
-    #     args,
-    #     data_obj,
-    #     test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
-    # )
-
-
     arg_list = [
-        "--device",  "cpu",
-        "--model_name", "multi_features_ds",
-        "--data_preproc",  "unprocessed",
         "--data_dir", (Path.home() / "Documents/Projects/data").as_posix(),
-        "--input_file",  "labeled-elm-events-small.hdf5",
-        "--test_data_dir", Path("test_data").as_posix(),
         "--signal_window_size", "64",
         "--label_look_ahead",  "50",
-        "--raw_num_filters",  "20",
-        "--fft_num_filters",  "20",
-        "--dwt_num_filters", "20",
         "--max_elms",  "5",
         "--n_epochs",  "2",
-        # "--dry_run", "20",
-        "--dwt_wavelet", "db4",
-        "--dwt_level", "1",
-        "--filename_suffix", "_dwt_no_pooling",
-        "--normalize_data",
-        "--truncate_inputs",
-        # "--dry_run",
     ]
-    args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    LOGGER = utils.get_logger(
-        script_name=__name__,
-        log_file=os.path.join(
-            args.log_dir,
-            f"output_logs_{args.model_name}{args.filename_suffix}.log",
-        ),
-    )
-    data_cls = utils.create_data(args.data_preproc)
-    data_obj = data_cls(args, LOGGER)
-    train_loop(
-        args,
-        data_obj,
-        test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
-    )
+    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    LOGGER = utils.get_logger()
+    data_obj = prepare_data_obj(args, LOGGER)
+    train_loop(args, data_obj, LOGGER)
     
