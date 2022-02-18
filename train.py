@@ -21,7 +21,7 @@ from sklearn.metrics import roc_auc_score, f1_score
 
 from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
-from models import multi_features_model
+from models import multi_features_model, multi_features_ds_model
 
 
 def train_loop(
@@ -57,12 +57,12 @@ def train_loop(
     if not args.dry_run:
         LOGGER.info(f"Test data will be saved to: {test_data_file}")
     LOGGER.info("-" * 30)
-    LOGGER.info(f"       Training fold: {fold}       ")
+    # LOGGER.info(f"       Training fold: {fold}       ")
     LOGGER.info("-" * 30)
 
     # create train, valid and test data
     train_data, valid_data, _ = data_obj.get_data(
-        shuffle_sample_indices=args.shuffle_sample_indices, fold=fold
+        shuffle_sample_indices=args.shuffle_sample_indices
     )
 
     # dump test data into a file
@@ -107,17 +107,17 @@ def train_loop(
 
     # model
     raw_model = (
-        multi_features_model.RawFeatureModel(args)
+        multi_features_ds_model.RawFeatureModel(args)
         if args.raw_num_filters > 0
         else None
     )
     fft_model = (
-        multi_features_model.FFTFeatureModel(args)
+        multi_features_ds_model.FFTFeatureModel(args)
         if args.fft_num_filters > 0
         else None
     )
     cwt_model = (
-        multi_features_model.DWTFeatureModel(args)
+        multi_features_ds_model.DWTFeatureModel(args)
         if args.dwt_num_filters > 0
         else None
     )
@@ -292,7 +292,29 @@ def train_loop(
 
 
 if __name__ == "__main__":
-    args, parser = TrainArguments().parse(verbose=True)
+    arg_list = [
+        "--device",  "cpu",
+        "--model_name", "multi_features_ds",
+        "--data_preproc",  "unprocessed",
+        "--data_dir", (Path.home() / "Documents/Projects/data").as_posix(),
+        "--input_file",  "labeled-elm-events-small.hdf5",
+        "--test_data_dir", Path("test_data").as_posix(),
+        "--signal_window_size", "64",
+        "--label_look_ahead",  "50",
+        "--raw_num_filters",  "20",
+        "--fft_num_filters",  "20",
+        "--dwt_num_filters", "20",
+        "--max_elms",  "5",
+        "--n_epochs",  "2",
+        # "--dry_run", "20",
+        "--dwt_wavelet", "db4",
+        "--dwt_level", "1",
+        "--filename_suffix", "_dwt_no_pooling",
+        "--normalize_data",
+        "--truncate_inputs",
+        # "--dry_run",
+    ]
+    args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
     LOGGER = utils.get_logger(
         script_name=__name__,
         log_file=os.path.join(
