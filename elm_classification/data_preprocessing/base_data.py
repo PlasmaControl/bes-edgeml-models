@@ -14,12 +14,7 @@ from sklearn import model_selection
 
 
 class BaseData:
-    def __init__(
-        self,
-        args: argparse.Namespace,
-        logger: logging.getLogger,
-        datafile: str = None,
-    ):
+    def __init__(self, args: argparse.Namespace, logger: logging.getLogger, datafile: str = None, ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
         sets, upsample the data to reduce class imbalance and create a sample signal
@@ -41,38 +36,23 @@ class BaseData:
         self.logger = logger
         self.df = pd.DataFrame()
         self.elm_indices, self.hf = self._read_file()
-        self.logger.info(
-            f"Total frames in the whole data: {self._get_total_frames()}"
-        )
+        self.logger.info(f"Total frames in the whole data: {self._get_total_frames()}")
+        self.shuffle_ = True
         if self.args.data_preproc == "automatic_labels":
             try:
                 csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
-                self.labels_df = pd.read_csv(
-                    os.path.join(
-                        csv_path,
-                        f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
-                    )
-                )
-                self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
-                    lambda x: f"{x:05d}"
-                )
+                self.labels_df = pd.read_csv(os.path.join(csv_path,
+                        f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv", ))
+                self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(lambda x: f"{x:05d}")
                 print(self.labels_df.info())
             except FileNotFoundError:
-                print("CSV file containing the automatic labels not found.")
-        # self.transition = np.linspace(
-        #     0, 1, 2 * self.args.transition_halfwidth + 3
-        # )
+                print(
+                    "CSV file containing the automatic labels not found.")  # self.transition = np.linspace(  #     0, 1, 2 * self.args.transition_halfwidth + 3  # )
 
-    def get_data(
-        self, shuffle_sample_indices: bool = False, fold: int = None
-    ) -> Union[
-        Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]],
-        Tuple[
-            Tuple[ndarray, ndarray, ndarray, ndarray],
-            Tuple[ndarray, ndarray, ndarray, ndarray],
-            Tuple[ndarray, ndarray, ndarray, ndarray],
-        ],
-    ]:
+    def get_data(self, shuffle_sample_indices: bool = False, fold: int = None) -> Union[
+        Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]], Tuple[
+            Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[ndarray, ndarray, ndarray, ndarray], Tuple[
+                ndarray, ndarray, ndarray, ndarray],],]:
         """Method to create data for training, validation and testing.
 
         Args:
@@ -91,56 +71,82 @@ class BaseData:
         test_data = None
         all_elms = None
         all_data = None
-        training_elms, validation_elms, test_elms = self._partition_elms(
-            max_elms=self.args.max_elms, fold=fold
-        )
+        training_elms, validation_elms, test_elms = self._partition_elms(max_elms=self.args.max_elms, fold=fold)
         self.logger.info("Reading ELM events and creating datasets")
         self.logger.info("-" * 30)
         self.logger.info("  Creating training data")
         self.logger.info("-" * 30)
         if self.args.use_all_data:
-            all_elms = np.concatenate(
-                [training_elms, validation_elms, test_elms]
-            )
-            all_data = self._preprocess_data(
-                all_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
-            )
+            all_elms = np.concatenate([training_elms, validation_elms, test_elms])
+            all_data = self._preprocess_data(all_elms, shuffle_sample_indices=shuffle_sample_indices, )
         else:
-            train_data = self._preprocess_data(
-                training_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
-            )
+            train_data = self._preprocess_data(training_elms, shuffle_sample_indices=shuffle_sample_indices, )
             self.logger.info("-" * 30)
             self.logger.info("  Creating validation data")
             self.logger.info("-" * 30)
-            validation_data = self._preprocess_data(
-                validation_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
-            )
+            validation_data = self._preprocess_data(validation_elms, shuffle_sample_indices=shuffle_sample_indices, )
             self.logger.info("-" * 30)
             self.logger.info("  Creating test data")
             self.logger.info("-" * 30)
-            test_data = self._preprocess_data(
-                test_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
-            )
+            test_data = self._preprocess_data(test_elms, shuffle_sample_indices=shuffle_sample_indices, )
 
+        if self.args.balance_data:
+            train_data, validation_data, test_data = self._balance_data(train_data, validation_data, test_data)
         self.hf.close()
         if self.hf:
             self.logger.info("File is open.")
         else:
             self.logger.info("File is closed.")
 
-        return (
-            (all_elms, all_data)
-            if self.args.use_all_data
-            else (
-                train_data,
-                validation_data,
-                test_data,
-            )
-        )
+        return ((all_elms, all_data) if self.args.use_all_data else (train_data, validation_data, test_data,))
+
+    def _balance_data(self, train, valid, test):
+
+        clip_type = self.args.balance_data
+
+        self.logger.info("-" * 40)
+        self.logger.info(f"  Balancing data - {clip_type}")
+        self.logger.info("-" * 40)
+
+        old = [train, valid, test]
+        new = [None, None, None]
+
+        for x, old_set in enumerate(old):
+            signals, labels, idx, start_idx = old_set
+            clipped = [[], [], []]
+            for j, i in enumerate(start_idx, start=1):
+
+                j = start_idx[j] if j != len(start_idx) else None
+
+                elm_event_signals = signals[i:j]
+                elm_event_labels = labels[i:j]
+
+                n_elms = len(elm_event_labels[elm_event_labels == 1])
+                n_pelms = len(elm_event_labels[elm_event_labels == 0])
+                diff = n_pelms - n_elms
+
+                if clip_type == 'clip_outside':
+                    _signals = elm_event_signals[diff:] if diff >= 0 else elm_event_signals[:diff]
+                    _labels = elm_event_labels[diff:] if diff >= 0 else elm_event_labels[:diff]
+                elif clip_type == 'clip_inside':
+                    slc = np.s_[n_elms:-n_elms] if diff >= 0 else np.s_[n_pelms:-n_pelms]
+                    _signals = np.delete(elm_event_signals, slc, axis=0)
+                    _labels = np.delete(elm_event_labels, slc, axis=0)
+                else:
+                    (f, t) = (n_pelms // n_elms, n_pelms % n_elms) if diff >= 0 else (
+                    n_elms // n_pelms, n_elms % n_pelms)
+                    _signals = np.concatenate((elm_event_signals[t:n_pelms:f], elm_event_signals[n_pelms:]))
+                    _labels = np.concatenate((elm_event_labels[t:n_pelms:f], elm_event_labels[n_pelms:]))
+
+                clipped[0].extend(_signals)
+                clipped[1].extend(_labels)
+                clipped[2].extend(range(len(_labels) - (self.args.signal_window_size - 1)))
+
+            new_start_idxs = np.pad((np.diff(np.array([0] + clipped[1])) == -1).nonzero()[0], (1, 0))
+
+            new[x] = (np.array(clipped[0]), np.array(clipped[1]), np.array(clipped[2]), new_start_idxs)
+
+        return new
 
     def _get_total_frames(self):
         count = 0
@@ -150,9 +156,7 @@ class BaseData:
             count += np.array(elm_event["labels"]).shape[0]
         return count
 
-    def _partition_elms(
-        self, max_elms: int = None
-    ) -> Tuple[ndarray, ndarray, ndarray]:
+    def _partition_elms(self, max_elms: int = None, fold: int = None) -> Tuple[ndarray, ndarray, ndarray]:
         """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
         validation set being `fraction_validate` of the training set or by K-fold
@@ -164,6 +168,11 @@ class BaseData:
                 Defaults to None (Take the entire data).
             fold (int, optional): Fold index for K-fold cross-validation. Defaults
                 to None.
+
+        Raises:
+        -------
+            Exception:  Throws error when `kfold` is set to True but fold index
+                is not passed.
 
         Returns:
         --------
@@ -178,12 +187,10 @@ class BaseData:
             n_elms = len(self.elm_indices)
 
         # split the data into train, validation and test sets
-        training_elms, test_elms = model_selection.train_test_split(
-            self.elm_indices[:n_elms],
-            test_size=self.args.fraction_test,
-            shuffle=True,
-            random_state=self.args.seed,
-        )
+        training_elms, test_elms = model_selection.train_test_split(self.elm_indices[:n_elms],
+                                                                    test_size=self.args.fraction_test,
+                                                                    shuffle=self.shuffle_,
+                                                                    random_state=self.args.seed, )
 
         # kfold cross validation
         # if self.args.kfold and fold is None:
@@ -197,19 +204,13 @@ class BaseData:
         #     training_elms = self.df[self.df["fold"] != fold]["elm_events"]
         #     validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
         # else:
-        self.logger.info(
-            "Creating training and validation datasets by simple splitting"
-        )
-        training_elms, validation_elms = model_selection.train_test_split(
-            training_elms,
-            test_size=self.args.fraction_valid,
-            shuffle=True,
-            random_state=self.args.seed,
-        )
+        self.logger.info("Creating training and validation datasets by simple splitting")
+        training_elms, validation_elms = model_selection.train_test_split(training_elms,
+                                                                          test_size=self.args.fraction_valid,
+                                                                          shuffle=self.shuffle_,
+                                                                          random_state=self.args.seed, )
         self.logger.info(f"Number of training ELM events: {training_elms.size}")
-        self.logger.info(
-            f"Number of validation ELM events: {validation_elms.size}"
-        )
+        self.logger.info(f"Number of validation ELM events: {validation_elms.size}")
         self.logger.info(f"Number of test ELM events: {test_elms.size}")
 
         return training_elms, validation_elms, test_elms
@@ -221,7 +222,7 @@ class BaseData:
         --------
             Tuple[ndarray, h5py.File]: Tuple containing ELM indices and file object.
         """
-        assert os.path.exists(self.datafile)
+        assert os.path.exists(self.datafile), f"{self.datafile} does not exist."
         self.logger.info(f"Found datafile: {self.datafile}")
 
         # get ELM indices from datafile
@@ -230,6 +231,7 @@ class BaseData:
         elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
 
+    # TODO: implement K-fold cross validation
     # def _kfold_cross_val(self, training_elms: np.ndarray) -> None:
     #     """Helper function to perform K-fold cross-validation.
 
@@ -238,26 +240,17 @@ class BaseData:
     #         training_elms (np.ndarray): Indices for training ELM events.
     #     """
     #     kf = model_selection.KFold(
-    #         n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
+    #         n_splits=self.args.folds, shuffle=self.shuffle_, random_state=self.args.seed
     #     )
     #     self.df["elm_events"] = training_elms
     #     self.df["fold"] = -1
     #     for f_, (_, valid_idx) in enumerate(kf.split(X=training_elms)):
     #         self.df.loc[valid_idx, "fold"] = f_
 
-    def _get_valid_indices(
-        self,
-        _signals: np.ndarray,
-        _labels: np.ndarray,
-        window_start_indices: np.ndarray = None,
-        elm_start_indices: np.ndarray = None,
-        elm_stop_indices: np.ndarray = None,
-        valid_t0: np.ndarray = None,
-        labels: np.ndarray = None,
-        signals: np.ndarray = None,
-    ) -> Tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
-    ]:
+    def _get_valid_indices(self, _signals: np.ndarray, _labels: np.ndarray, window_start_indices: np.ndarray = None,
+            elm_start_indices: np.ndarray = None, elm_stop_indices: np.ndarray = None, valid_t0: np.ndarray = None,
+            labels: np.ndarray = None, signals: np.ndarray = None, ) -> Tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to concatenate the signals and labels for the ELM events
         for a given mode. It also creates allowed indices to sample from with respect
         to signal window size and label look ahead. See the README to know more
@@ -292,9 +285,7 @@ class BaseData:
         """
         # allowed indices; time data points which can be used for creating the data chunks
         _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
-        _valid_t0[
-            -(self.args.signal_window_size + self.args.label_look_ahead) + 1 :
-        ] = 0
+        _valid_t0[-(self.args.signal_window_size + self.args.label_look_ahead) + 1:] = 0
 
         # indices for active elm events in each elm event
         active_elm_events = np.nonzero(_labels >= 0.5)[0]
@@ -310,32 +301,15 @@ class BaseData:
         else:
             # concat on axis 0 (time dimension)
             last_index = len(labels) - 1
-            window_start_indices = np.append(
-                window_start_indices, last_index + 1
-            )
-            elm_start_indices = np.append(
-                elm_start_indices, active_elm_events[0] + last_index + 1
-            )
-            elm_stop_indices = np.append(
-                elm_stop_indices, active_elm_events[-1] + last_index + 1
-            )
+            window_start_indices = np.append(window_start_indices, last_index + 1)
+            elm_start_indices = np.append(elm_start_indices, active_elm_events[0] + last_index + 1)
+            elm_stop_indices = np.append(elm_stop_indices, active_elm_events[-1] + last_index + 1)
             valid_t0 = np.concatenate([valid_t0, _valid_t0])
             signals = np.concatenate([signals, _signals], axis=0)
             labels = np.concatenate([labels, _labels], axis=0)
 
-        return (
-            signals,
-            labels,
-            valid_t0,
-            window_start_indices,
-            elm_start_indices,
-            elm_stop_indices,
-        )
+        return (signals, labels, valid_t0, window_start_indices, elm_start_indices, elm_stop_indices,)
 
-    def _preprocess_data(
-        self,
-        elm_indices: np.ndarray = None,
-        shuffle_sample_indices: bool = False,
-        **kwargs,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _preprocess_data(self, elm_indices: np.ndarray = None, shuffle_sample_indices: bool = False, **kwargs, ) -> \
+    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         raise NotImplementedError
