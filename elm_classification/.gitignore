@@ -11,8 +11,6 @@ figures/
 model_checkpoints/
 wandb/
 
-*.code-workspace
-
 # tensorboard/
 train_features_df_*.csv
 valid_features_df_*.csv
@@ -172,5 +170,3 @@ cython_debug/
 *.pth
 *.pkl
 *.hdf5
-*.png
-*.pkl
