@@ -9,7 +9,6 @@ jobs/
 viz/
 figures/
 model_checkpoints/
-wandb/
 
 *.code-workspace
 
@@ -18,7 +17,6 @@ train_features_df_*.csv
 valid_features_df_*.csv
 
 *.onnx
-slurm*
 *.db
 *.log
 .DS_Store
