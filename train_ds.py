@@ -26,48 +26,10 @@ from models import multi_features_model
 from models import multi_features_ds_model
 
 
-def get_multi_features(args, train_data, valid_data):
-    print(f"Train data shape: {train_data[0].shape}")
-    print(f"Valid data shape: {valid_data[0].shape}")
-    train_data_cwt = list(train_data)
-    valid_data_cwt = list(valid_data)
-    max_scale = 1024
-    num = int(np.log2(max_scale)) + 1
-    widths = np.round(
-        np.geomspace(1, max_scale, num=num, endpoint=True)
-    ).astype(int)
-    train_data_cwt[0], _ = pywt.cwt(
-        train_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    train_data_cwt[0] = np.transpose(train_data_cwt[0], (1, 0, 2, 3))
-    valid_data_cwt[0], _ = pywt.cwt(
-        valid_data_cwt[0], scales=widths, wavelet="morl", axis=0
-    )
-    valid_data_cwt[0] = np.transpose(valid_data_cwt[0], (1, 0, 2, 3))
-
-    train_data_cwt = tuple(train_data_cwt)
-    valid_data_cwt = tuple(valid_data_cwt)
-    print(f"CWT Train data shape: {train_data_cwt[0].shape}")
-    print(f"CWT Valid data shape: {valid_data_cwt[0].shape}")
-
-    print(f"CWT Train data label shape: {train_data_cwt[1].shape}")
-    print(f"CWT Valid data label shape: {valid_data_cwt[1].shape}")
-
-    assert (
-        train_data[0].shape[0] == train_data_cwt[0].shape[0]
-    ), "CWT train data leading dimension does not match with the raw data!"
-    assert (
-        valid_data[0].shape[0] == valid_data_cwt[0].shape[0]
-    ), "CWT valid data leading dimension does not match with the raw data!"
-
-    return train_data_cwt, valid_data_cwt
-
-
 def train_loop(
     args: argparse.Namespace,
     data_obj: object,
-    test_datafile_name: str = 'test_data.pkl',
-    fold: Union[int, None] = None,
+    test_datafile_name: str,
     desc: bool = False,
     trial = None,  # optuna `trial` object
     rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
@@ -98,41 +60,22 @@ def train_loop(
         args.device = f'cuda:{rank}'
         LOGGER.info(f'Distributed data parallel: process rank {rank} on GPU {args.device}')
 
+    test_data_path, model_ckpt_path = utils.create_output_paths(
+        args, infer_mode=False
+    )
+    test_data_file = os.path.join(test_data_path, test_datafile_name)
+
+    LOGGER = data_obj.logger  # define `LOGGER` inside function
+    LOGGER.info("-" * 30)
+
     if not args.dry_run:
-        test_data_path, model_ckpt_path = utils.create_output_paths(
-            args, infer_mode=False,
-        )
-        test_data_file = os.path.join(test_data_path, test_datafile_name)
         LOGGER.info(f"Test data will be saved to: {test_data_file}")
-
-        # if args.multi_features:
-        #     test_data_file_cwt = os.path.join(
-        #         test_data_path, "cwt_" + test_datafile_name
-        #     )
-
     LOGGER.info("-" * 30)
-
-    LOGGER.info("-" * 30)
-    LOGGER.info(f"       Training fold: {fold}       ")
-    LOGGER.info("-" * 30)
-
-    # turn off model details for subsequent folds/epochs
-    if fold is not None:
-        if fold >= 1:
-            desc = False
 
     # create train, valid and test data
     train_data, valid_data, _ = data_obj.get_data(
         shuffle_sample_indices=args.shuffle_sample_indices,
-        fold=fold
     )
-
-    # if args.multi_features:
-    #     train_data_cwt, valid_data_cwt = get_multi_features(
-    #         args,
-    #         train_data,
-    #         valid_data
-    #     )
 
     # dump test data into a file
     if not args.dry_run:
@@ -146,17 +89,6 @@ def train_loop(
                 },
                 f,
             )
-        # if args.multi_features:
-        #     with open(test_data_file_cwt, "wb") as f:
-        #         pickle.dump(
-        #             {
-        #                 "signals": valid_data_cwt[0],
-        #                 "labels": valid_data_cwt[1],
-        #                 "sample_indices": valid_data_cwt[2],
-        #                 "window_start": valid_data_cwt[3],
-        #             },
-        #             f,
-        #         )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -165,18 +97,6 @@ def train_loop(
     valid_dataset = dataset.ELMDataset(
         args, *valid_data, logger=LOGGER, phase="validation"
     )
-
-    # if args.multi_features:
-    #     train_dataset_cwt = dataset.ELMDataset(
-    #         args, *train_data_cwt, logger=LOGGER, phase="training (CWT)"
-    #     )
-    #     valid_dataset_cwt = dataset.ELMDataset(
-    #         args, *valid_data_cwt, logger=LOGGER, phase="validation (CWT)"
-    #     )
-    #
-    #     # create a combined dataset
-    #     train_dataset = dataset.ConcatDatasets(train_dataset, train_dataset_cwt)
-    #     valid_dataset = dataset.ConcatDatasets(valid_dataset, valid_dataset_cwt)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -214,14 +134,14 @@ def train_loop(
             if args.dwt_num_filters > 0
             else None
         )
-        model_args = (args, raw_model, fft_model, dwt_model)
+        model_cls_args = (args, raw_model, fft_model, dwt_model)
     # elif args.multi_features:
     #     raw_model = multi_features_model.RawFeatureModel(args)
     #     fft_model = multi_features_model.FFTFeatureModel(args)
     #     cwt_model = multi_features_model.CWTFeatureModel(args)
     #     model_args = (args, raw_model, fft_model, cwt_model)
     else:
-        model_args = (args, )
+        model_cls_args = (args, )
 
     model_cls = utils.create_model(args.model_name)
 
@@ -229,11 +149,11 @@ def train_loop(
 
     if rank is None:
         # model training on CPU or single GPU
-        model = model_cls(*model_args)
+        model = model_cls(*model_cls_args)
         model = model.to(device)
     else:
         # model training on multiple GPUs
-        original_model = model_cls(*model_args)
+        original_model = model_cls(*model_cls_args)
         original_model.to(device)
         model = DDP(original_model, device_ids=[rank])
 
@@ -286,9 +206,7 @@ def train_loop(
 
     # optimizer
     optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
 
     # get the lr scheduler
@@ -296,7 +214,7 @@ def train_loop(
         optimizer,
         mode="min",
         factor=0.5,
-        patience=8,
+        patience=2,
         verbose=True,
     )
 
@@ -316,16 +234,11 @@ def train_loop(
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
-        # multi_features=args.multi_features,
     )
 
     # output file
     outputs_file = (
         Path(args.output_dir) / 'outputs.pkl'
-        # / f"signal_window_{args.signal_window_size}"
-        # / f"label_look_ahead_{args.label_look_ahead}"
-        # / "training_metrics"
-        # / f"{args.model_name}{args.filename_suffix}.pkl"
     )
     outputs_file.parent.mkdir(
         parents=True, exist_ok=True
@@ -354,6 +267,9 @@ def train_loop(
         # scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores = np.append(roc_scores, roc_score)
+        # hard coding the threshold value for F1 score, smaller value will reduce
+        # the number of false negatives while larger value reduces the number of
+        # false positives
         thresh = 0.35
         f1 = f1_score(valid_labels, (preds > thresh).astype(int))
         f1_scores = np.append(f1_scores, f1)
@@ -445,7 +361,46 @@ def run_distributed_train_loop(*train_loop_args):
 
 
 if __name__ == "__main__":
-    args, parser = TrainArguments().parse(verbose=True)
+    # args, parser = TrainArguments().parse(verbose=True)
+    # LOGGER = utils.get_logger(
+    #     script_name=__name__,
+    #     log_file=os.path.join(
+    #         args.log_dir,
+    #         f"output_logs_{args.model_name}{args.filename_suffix}.log",
+    #     ),
+    # )
+    # data_cls = utils.create_data(args.data_preproc)
+    # data_obj = data_cls(args, LOGGER)
+    # train_loop(
+    #     args,
+    #     data_obj,
+    #     test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
+    # )
+
+
+    arg_list = [
+        "--device",  "cpu",
+        "--model_name", "multi_features_ds",
+        "--data_preproc",  "unprocessed",
+        "--data_dir", (Path.home() / "Documents/Projects/data").as_posix(),
+        "--input_file",  "labeled-elm-events-small.hdf5",
+        "--test_data_dir", Path("test_data").as_posix(),
+        "--signal_window_size", "64",
+        "--label_look_ahead",  "50",
+        "--raw_num_filters",  "20",
+        "--fft_num_filters",  "20",
+        "--dwt_num_filters", "20",
+        "--max_elms",  "5",
+        "--n_epochs",  "2",
+        # "--dry_run", "20",
+        "--dwt_wavelet", "db4",
+        "--dwt_level", "1",
+        "--filename_suffix", "_dwt_no_pooling",
+        "--normalize_data",
+        "--truncate_inputs",
+        # "--dry_run",
+    ]
+    args, parser = TrainArguments().parse(verbose=True, arg_list=arg_list)
     LOGGER = utils.get_logger(
         script_name=__name__,
         log_file=os.path.join(
@@ -460,3 +415,4 @@ if __name__ == "__main__":
         data_obj,
         test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
     )
+    
