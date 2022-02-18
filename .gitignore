@@ -166,7 +166,9 @@ cython_debug/
 /visualizations/notes/
 /src/outputs
 /outputs
+/archives
 
 *.pth
 *.pkl
 *.hdf5
+*.png

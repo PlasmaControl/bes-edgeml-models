@@ -88,7 +88,7 @@ class Visualizations:
                                                                                                   infer_mode=True)
 
         # get the test data and dataloader
-        accepted_preproc = ['wavelet']
+        accepted_preproc = ['wavelet', 'unprocessed']
         test_fname = os.path.join(test_data_dir,
                                   f'test_data_lookahead_{self.args.label_look_ahead}{self.filename_suffix}'
                                   f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
@@ -1413,7 +1413,7 @@ if __name__ == "__main__":
     for lah in lookaheads:
         args.label_look_ahead = lah
         viz = Visualizations(cl_args=args)
-        pca = PCA(viz, layer='conv', elm_index=[5])
+        pca = PCA(viz, layer='conv', elm_index=[0, 1, 2])
         pca.perform_PCA()
         pca.plot_pca(plot_type='compare')
 
