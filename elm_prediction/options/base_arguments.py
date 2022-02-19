@@ -64,16 +64,16 @@ class BaseArguments:
             "[ int >= 0 (50 default) ].",
         )
         parser.add_argument(
-            "--input_file",
-            type=str,
-            default="labeled-elm-events.hdf5",
-            help="path to the input hdf5 file.",
-        )
-        parser.add_argument(
             "--data_dir",
             type=str,
             default="data",
             help="path to the input data.",
+        )
+        parser.add_argument(
+            "--input_file",
+            type=str,
+            default="labeled-elm-events.hdf5",
+            help="path to the input hdf5 file.",
         )
         parser.add_argument(
             "--output_dir",
@@ -84,15 +84,15 @@ class BaseArguments:
         parser.add_argument(
             "--test_data_dir",
             type=str,
-            default="data/test_data",
+            default="test_data",
             help="path to save the test data.",
         )
-        # parser.add_argument(
-        #     "--log_dir",
-        #     type=str,
-        #     default="logs",
-        #     help="path to save the logs.",
-        # )
+        parser.add_argument(
+            "--model_ckpts",
+            type=str,
+            default="model_checkpoints",
+            help="path to the pretrained weights of the saved models.",
+        )
         parser.add_argument(
             "--dry_run",
             action="store_true",
@@ -114,12 +114,6 @@ class BaseArguments:
             action="store_true",
             default=False,
             help="if true, use automatic labels from the HDF5 file instead of manual labels..",
-        )
-        parser.add_argument(
-            "--model_ckpts",
-            type=str,
-            default="model_checkpoints",
-            help="path to the pretrained weights of the saved models.",
         )
         parser.add_argument(
             "--use_all_data",

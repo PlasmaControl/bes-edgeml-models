@@ -139,23 +139,17 @@ def create_output_paths(
     Returns:
         Tuple containing output paths.
     """
-    test_data_path = os.path.join(
-        args.test_data_dir, 
-        f"signal_window_{args.signal_window_size}",
-    )
+    test_data_path = args.test_data_dir
     os.makedirs(test_data_path, exist_ok=True)
-    model_ckpt_path = os.path.join(
-        args.model_ckpts, 
-        f"signal_window_{args.signal_window_size}",
-    )
+
+    model_ckpt_path = args.model_ckpts
     os.makedirs(model_ckpt_path, exist_ok=True)
+
     if infer_mode:
-        base_path = os.path.join(
-            args.output_dir,
-            f"signal_window_{args.signal_window_size}",
-        )
+        base_path = args.output_dir
         look_ahead_path = os.path.join(
-            base_path, f"label_look_ahead_{args.label_look_ahead}"
+            base_path, 
+            # f"label_look_ahead_{args.label_look_ahead}"
         )
         clf_report_path = os.path.join(look_ahead_path, "classification_reports")
         plot_path = os.path.join(look_ahead_path, "plots")

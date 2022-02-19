@@ -9,6 +9,7 @@ jobs/
 viz/
 figures/
 model_checkpoints/
+outputs/
 
 *.code-workspace
 
