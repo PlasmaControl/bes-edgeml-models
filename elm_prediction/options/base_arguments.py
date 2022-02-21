@@ -17,6 +17,12 @@ class BaseArguments:
         """Define the options common for training and testing."""
         # basic parameters
         parser.add_argument(
+            "--input_data_file",
+            type=str,
+            required=True,
+            help="path to the input hdf5 file.",
+        )
+        parser.add_argument(
             "--model_name",
             type=str,
             default='multi_features_ds',
@@ -50,7 +56,7 @@ class BaseArguments:
         parser.add_argument(
             "--signal_window_size",
             type=int,
-            default=16,
+            default=64,
             help="number of time data points to use for the input. "
             "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
             "[8 | 16].",
@@ -64,34 +70,28 @@ class BaseArguments:
             "[ int >= 0 (50 default) ].",
         )
         parser.add_argument(
-            "--data_dir",
-            type=str,
-            default="data",
-            help="path to the input data.",
-        )
-        parser.add_argument(
-            "--input_file",
-            type=str,
-            default="labeled-elm-events.hdf5",
-            help="path to the input hdf5 file.",
-        )
-        parser.add_argument(
             "--output_dir",
             type=str,
-            default="outputs",
-            help="path to the inference outputs.",
+            default="run_dir",
+            help="path to output directory, rel. or abs.",
+        )
+        parser.add_argument(
+            "--metrics_file",
+            type=str,
+            default="output.pkl",
+            help="output metrics file, rel. to `run_dir`",
         )
         parser.add_argument(
             "--test_data_dir",
             type=str,
             default="test_data",
-            help="path to save the test data.",
+            help="test data file, rel. to `run_dir`",
         )
         parser.add_argument(
             "--model_ckpts",
             type=str,
             default="model_checkpoints",
-            help="path to the pretrained weights of the saved models.",
+            help="model checkpoint file, rel. to `run_dir`",
         )
         parser.add_argument(
             "--dry_run",
@@ -319,8 +319,11 @@ class BaseArguments:
     def parse(self,
               verbose: bool = False,
               arg_list: Union[list, None] = None,
-    ):  # implement `arg_list`
-        """Parse the arguments."""
+    ):
+        """
+        Parse arguments
+        Note: `arg_list` will override command line inputs from `sys.argv`
+        """
         args = self._gather_args(arg_list)
         if verbose:
             self._print_args(args)

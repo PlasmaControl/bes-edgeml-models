@@ -1,8 +1,12 @@
 '''
+Main module for training ELM prediction models
 
+To train an ELM prediction model, call `train_loop()` using
+a recipe similar to `if __name__=="main"` block.
 '''
 
 import os
+import sys
 import time
 import pickle
 import argparse
@@ -10,14 +14,14 @@ from typing import Union
 from pathlib import Path
 import logging
 
+import numpy as np
+from sklearn.metrics import roc_auc_score, f1_score
+
 import torch
 import torch.nn as nn
 import torch.distributed
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-import numpy as np
-from sklearn.metrics import roc_auc_score, f1_score
 
 try:
     import optuna
@@ -34,20 +38,11 @@ except ImportError:
     from elm_prediction.models import multi_features_ds_model
 
 
-def prepare_data_obj(args, LOGGER):
-    data_cls = utils.create_data(args.data_preproc)
-    data_obj = data_cls(args, LOGGER)
-    return data_obj
-
-
 def train_loop(
     args: argparse.Namespace,
-    data_obj: object,
-    logger: logging.getLogger,
-    test_datafile_name: str = 'test_data.pkl',
     desc: bool = False,
     trial = None,  # optuna `trial` object
-    rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
+    _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
@@ -62,23 +57,25 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
-    LOGGER = logger
+    # output directory and files
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # containers to hold train and validation losses
-    train_loss = np.empty(0)
-    valid_loss = np.empty(0)
-    roc_scores = np.empty(0)
-    f1_scores = np.empty(0)
+    metrics_file = output_dir / args.metrics_file
+    log_file = output_dir / args.log_file
+    
+    test_data_file, model_ckpt_file = utils.create_output_paths(args)
 
-    if rank is not None:
+    LOGGER = utils.get_logger(log_file=log_file)
+
+    data_cls = utils.create_data(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+
+    if _rank is not None:
         # override args.device for multi-GPU distributed data parallel training
-        args.device = f'cuda:{rank}'
-        LOGGER.info(f'Distributed data parallel: process rank {rank} on GPU {args.device}')
+        args.device = f'cuda:{_rank}'
+        LOGGER.info(f'Distributed data parallel: process rank {_rank} on GPU {args.device}')
 
-    test_data_path, model_ckpt_path = utils.create_output_paths(args)
-    test_data_file = os.path.join(test_data_path, test_datafile_name)
-
-    LOGGER = data_obj.logger  # define `LOGGER` inside function
     LOGGER.info("-" * 30)
 
     if not args.dry_run:
@@ -148,11 +145,6 @@ def train_loop(
             else None
         )
         model_cls_args = (args, raw_model, fft_model, dwt_model)
-    # elif args.multi_features:
-    #     raw_model = multi_features_model.RawFeatureModel(args)
-    #     fft_model = multi_features_model.FFTFeatureModel(args)
-    #     cwt_model = multi_features_model.CWTFeatureModel(args)
-    #     model_args = (args, raw_model, fft_model, cwt_model)
     else:
         model_cls_args = (args, )
 
@@ -160,7 +152,7 @@ def train_loop(
 
     device = torch.device(args.device)
 
-    if rank is None:
+    if _rank is None:
         # model training on CPU or single GPU
         model = model_cls(*model_cls_args)
         model = model.to(device)
@@ -168,7 +160,7 @@ def train_loop(
         # model training on multiple GPUs
         original_model = model_cls(*model_cls_args)
         original_model.to(device)
-        model = DDP(original_model, device_ids=[rank])
+        model = DDP(original_model, device_ids=[_rank])
 
 
     LOGGER.info("-" * 50)
@@ -249,13 +241,11 @@ def train_loop(
         use_rnn=use_rnn,
     )
 
-    # output file
-    outputs_file = (
-        Path(args.output_dir) / 'outputs.pkl'
-    )
-    outputs_file.parent.mkdir(
-        parents=True, exist_ok=True
-    )  # make dir. for output file
+    # containers to hold train and validation losses
+    train_loss = np.empty(0)
+    valid_loss = np.empty(0)
+    roc_scores = np.empty(0)
+    f1_scores = np.empty(0)
 
     outputs = {}
 
@@ -264,22 +254,27 @@ def train_loop(
         start_time = time.time()
         # train
         avg_loss = engine.train(
-            train_loader, epoch, print_every=args.train_print_every
+            train_loader, 
+            epoch, 
+            print_every=args.train_print_every,
         )
         train_loss = np.append(train_loss, avg_loss)
 
         # evaluate
         avg_val_loss, preds, valid_labels = engine.evaluate(
-            valid_loader, print_every=args.valid_print_every
+            valid_loader, 
+            print_every=args.valid_print_every
         )
         valid_loss = np.append(valid_loss, avg_val_loss)
 
         # step the scheduler
         scheduler.step(avg_val_loss)
 
-        # scoring
+        # ROC scoring
         roc_score = roc_auc_score(valid_labels, preds)
         roc_scores = np.append(roc_scores, roc_score)
+
+        # F1 scoring
         # hard coding the threshold value for F1 score, smaller value will reduce
         # the number of false negatives while larger value reduces the number of
         # false positives
@@ -302,32 +297,22 @@ def train_loop(
             )
             if not args.dry_run:
                 # save the model if best f1 score is found
-                model_save_path = os.path.join(
-                    model_ckpt_path,
-                    f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
-                )
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
-                    model_save_path,
+                    model_ckpt_file.as_posix(),
                 )
-                LOGGER.info(f"Model saved to: {model_save_path}")
-
-        if avg_val_loss < best_loss:
-            best_loss = avg_val_loss
-            LOGGER.info(
-                f"Epoch: {epoch+1}, \tSave Best Loss: {best_loss:.4f} Model"
-            )
+                LOGGER.info(f"Model saved to: {model_ckpt_file.as_posix()}")
 
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
         outputs['roc_scores'] = roc_scores
         outputs['f1_scores'] = f1_scores
 
-        with open(outputs_file.as_posix(), "wb") as f:
+        with open(metrics_file.as_posix(), "wb") as f:
             pickle.dump(outputs, f)
 
         # optuna hook to monitor training epochs
-        if trial is not None:
+        if trial is not None and optuna is not None:
             trial.report(f1, epoch)
             # save outputs as lists in trial user attributes
             for key, item in outputs.items():
@@ -346,43 +331,17 @@ def train_loop(
     return outputs
 
 
-def _distributed_train_loop(rank, world_size, *train_loop_args):
-    torch.distributed.init_process_group('nccl', rank=rank, world_size=world_size)
-    print(len(train_loop_args))
-    train_loop(*train_loop_args, rank=rank)
-    torch.distributed.destroy_process_group()
-
-
-def run_distributed_train_loop(*train_loop_args):
-    """
-    train_loop_args: Must be ordered argument list for train_loop(), excluding `rank`
-    """
-    args = train_loop_args[0]
-
-    assert args.distributed != 1
-    assert args.device.startswith('cuda')
-    assert torch.distributed.is_available()
-
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-
-    world_size = torch.cuda.device_count() if args.distributed == -1 else args.distributed
-    mp.spawn(_distributed_train_loop,
-             args=(world_size, *train_loop_args),
-             nprocs=world_size,
-             join=True)
-
-
 if __name__ == "__main__":
-    arg_list = [
-        "--data_dir", (Path.home() / "Documents/Projects/data").as_posix(),
-        "--signal_window_size", "64",
-        "--label_look_ahead",  "50",
-        "--max_elms",  "5",
-        "--n_epochs",  "2",
-    ]
+    if len(sys.argv) == 1:
+        # input arguments if no command line arguments in `sys.argv`
+        arg_list = [
+            "--input_data_file", (Path.home() / "Documents/Projects/data/labeled-elm-events.hdf5").as_posix(),
+            "--max_elms",  "5",
+            "--n_epochs",  "2",
+        ]
+    else:
+        # use command line arguments in `sys.argv`
+        arg_list = None
     args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    LOGGER = utils.get_logger()
-    data_obj = prepare_data_obj(args, LOGGER)
-    train_loop(args, data_obj, LOGGER)
+    train_loop(args)
     

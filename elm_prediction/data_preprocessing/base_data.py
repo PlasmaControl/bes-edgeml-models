@@ -18,7 +18,7 @@ class BaseData:
         self,
         args: argparse.Namespace,
         logger: logging.getLogger,
-        datafile: str = None,
+        # datafile: str = None,
     ):
         """Helper class that takes care of all the data preparation steps: reading
         the HDF5 file, split all the ELM events into training, validation and test
@@ -31,18 +31,18 @@ class BaseData:
 
         """
         self.args = args
-        self.datafile = datafile
-        if self.datafile is None:
-            # self.datafile = os.path.join("data", self.args.input_file)
-            self.datafile = os.path.join(
-                self.args.data_dir, self.args.input_file
-            )
+        self.datafile = self.args.input_data_file
+        assert(os.path.exists(self.datafile))
+        # if self.datafile is None:
+        #     self.datafile = os.path.join(
+        #         self.args.data_dir, self.args.input_file
+        #     )
 
         self.logger = logger
         self.df = pd.DataFrame()
         self.elm_indices, self.hf = self._read_file()
         self.logger.info(
-            f"Total frames in the whole data: {self._get_total_frames()}"
+            f"Total frames in input data file: {self._get_total_frames()}"
         )
         if self.args.data_preproc == "automatic_labels":
             try:
@@ -59,9 +59,6 @@ class BaseData:
                 print(self.labels_df.info())
             except FileNotFoundError:
                 print("CSV file containing the automatic labels not found.")
-        # self.transition = np.linspace(
-        #     0, 1, 2 * self.args.transition_halfwidth + 3
-        # )
 
     def get_data(
         self, shuffle_sample_indices: bool = False, fold: int = None
@@ -185,18 +182,6 @@ class BaseData:
             random_state=self.args.seed,
         )
 
-        # kfold cross validation
-        # if self.args.kfold and fold is None:
-        #     raise ValueError(
-        #         f"K-fold cross validation is passed but fold index in range [0, {self.args.folds}) is not specified."
-        #     )
-
-        # if self.args.kfold:
-        #     self.logger.info("Using K-fold cross validation")
-        #     self._kfold_cross_val(training_elms)
-        #     training_elms = self.df[self.df["fold"] != fold]["elm_events"]
-        #     validation_elms = self.df[self.df["fold"] == fold]["elm_events"]
-        # else:
         self.logger.info(
             "Creating training and validation datasets by simple splitting"
         )
@@ -229,21 +214,6 @@ class BaseData:
         self.logger.info(f"Number of ELM events in the datafile: {len(hf)}")
         elm_index = np.array([int(key) for key in hf], dtype=np.int32)
         return elm_index, hf
-
-    # def _kfold_cross_val(self, training_elms: np.ndarray) -> None:
-    #     """Helper function to perform K-fold cross-validation.
-
-    #     Args:
-    #     -----
-    #         training_elms (np.ndarray): Indices for training ELM events.
-    #     """
-    #     kf = model_selection.KFold(
-    #         n_splits=self.args.folds, shuffle=True, random_state=self.args.seed
-    #     )
-    #     self.df["elm_events"] = training_elms
-    #     self.df["fold"] = -1
-    #     for f_, (_, valid_idx) in enumerate(kf.split(X=training_elms)):
-    #         self.df.loc[valid_idx, "fold"] = f_
 
     def _get_valid_indices(
         self,

@@ -139,34 +139,24 @@ def create_output_paths(
     Returns:
         Tuple containing output paths.
     """
-    test_data_path = args.test_data_dir
-    os.makedirs(test_data_path, exist_ok=True)
-
-    model_ckpt_path = args.model_ckpts
-    os.makedirs(model_ckpt_path, exist_ok=True)
+    test_data_file = (args.output_dir / args.metrics_file).as_posix()
+    model_ckpt_file = (args.output_dir / args.model_ckpts).as_posix()
 
     if infer_mode:
-        base_path = args.output_dir
-        look_ahead_path = os.path.join(
-            base_path, 
-            # f"label_look_ahead_{args.label_look_ahead}"
-        )
-        clf_report_path = os.path.join(look_ahead_path, "classification_reports")
-        plot_path = os.path.join(look_ahead_path, "plots")
-        roc_path = os.path.join(look_ahead_path, "roc")
-        paths = [clf_report_path, plot_path, roc_path]
-        for p in paths:
-            if not os.path.exists(p):
-                os.makedirs(p, exist_ok=True)
+        clf_report_dir = os.path.join(args.output_dir, "classification_reports")
+        plot_dir = os.path.join(args.output_dir, "plots")
+        roc_dir = os.path.join(args.output_dir, "roc")
+        for p in [clf_report_dir, plot_dir, roc_dir]:
+            os.makedirs(p, exist_ok=True)
         output = (
-            test_data_path,
-            model_ckpt_path,
-            clf_report_path,
-            plot_path,
-            roc_path,
+            test_data_file,
+            model_ckpt_file,
+            clf_report_dir,
+            plot_dir,
+            roc_dir,
         )
     else:
-        output = (test_data_path, model_ckpt_path)
+        output = (test_data_file, model_ckpt_file)
     return output
 
 
