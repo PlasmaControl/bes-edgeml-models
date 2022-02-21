@@ -63,12 +63,16 @@ def train_loop(
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
+    args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
+
+    with args_file.open('wb') as f:
+        pickle.dump(args, f)
 
     if _rank is not None:
         # override args.device for multi-GPU distributed data parallel training

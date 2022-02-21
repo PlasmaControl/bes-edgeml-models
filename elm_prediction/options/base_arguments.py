@@ -88,6 +88,12 @@ class BaseArguments:
             help="log file, rel. to `run_dir`",
         )
         parser.add_argument(
+            "--args_file",
+            type=str,
+            default="args.pkl",
+            help="arguments file, rel. to `run_dir`",
+        )
+        parser.add_argument(
             "--test_data_file",
             type=str,
             default="test_data.pkl",
