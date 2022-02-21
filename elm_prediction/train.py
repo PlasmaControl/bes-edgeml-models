@@ -330,9 +330,9 @@ def train_loop(
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
+        input_data_file = Path(__file__).parent / 'labeled-elm-events-10elms.hdf5'
         arg_list = [
-            "--input_data_file", (Path.home() / "Documents/Projects/data/labeled-elm-events.hdf5").as_posix(),
-            "--max_elms",  "5",
+            "--input_data_file", input_data_file.as_posix(),
             "--n_epochs",  "2",
         ]
     else:

@@ -33,10 +33,6 @@ class BaseData:
         self.args = args
         self.datafile = self.args.input_data_file
         assert(os.path.exists(self.datafile))
-        # if self.datafile is None:
-        #     self.datafile = os.path.join(
-        #         self.args.data_dir, self.args.input_file
-        #     )
 
         self.logger = logger
         self.df = pd.DataFrame()

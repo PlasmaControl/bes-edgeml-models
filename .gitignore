@@ -174,3 +174,7 @@ cython_debug/
 *.hdf5
 *.png
 *.pkl
+
+
+# test data
+!labeled-elm-events-10elms.hdf5
