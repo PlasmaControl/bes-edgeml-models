@@ -62,7 +62,7 @@ def get_logger(
     logger.setLevel(logging.INFO)
 
     if log_file is not None:
-        log_file = Path(log_file).resolve()
+        log_file = Path(log_file)
         log_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
         # create handlers
         f_handler = logging.FileHandler(log_file.as_posix(), mode="w")
@@ -139,8 +139,8 @@ def create_output_paths(
     Returns:
         Tuple containing output paths.
     """
-    test_data_file = (args.output_dir / args.metrics_file).as_posix()
-    model_ckpt_file = (args.output_dir / args.model_ckpts).as_posix()
+    test_data_file = (Path(args.output_dir) / args.test_data_file).as_posix()
+    checkpoint_file = (Path(args.output_dir) / args.checkpoint_file).as_posix()
 
     if infer_mode:
         clf_report_dir = os.path.join(args.output_dir, "classification_reports")
@@ -150,13 +150,13 @@ def create_output_paths(
             os.makedirs(p, exist_ok=True)
         output = (
             test_data_file,
-            model_ckpt_file,
+            checkpoint_file,
             clf_report_dir,
             plot_dir,
             roc_dir,
         )
     else:
-        output = (test_data_file, model_ckpt_file)
+        output = (test_data_file, checkpoint_file)
     return output
 
 

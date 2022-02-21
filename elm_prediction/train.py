@@ -61,10 +61,10 @@ def train_loop(
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics_file = output_dir / args.metrics_file
+    output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     
-    test_data_file, model_ckpt_file = utils.create_output_paths(args)
+    test_data_file, checkpoint_file = utils.create_output_paths(args)
 
     LOGGER = utils.get_logger(log_file=log_file)
 
@@ -299,16 +299,16 @@ def train_loop(
                 # save the model if best f1 score is found
                 torch.save(
                     {"model": model.state_dict(), "preds": preds},
-                    model_ckpt_file.as_posix(),
+                    checkpoint_file,
                 )
-                LOGGER.info(f"Model saved to: {model_ckpt_file.as_posix()}")
+                LOGGER.info(f"Model saved to: {checkpoint_file}")
 
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
         outputs['roc_scores'] = roc_scores
         outputs['f1_scores'] = f1_scores
 
-        with open(metrics_file.as_posix(), "wb") as f:
+        with open(output_file.as_posix(), "wb") as f:
             pickle.dump(outputs, f)
 
         # optuna hook to monitor training epochs

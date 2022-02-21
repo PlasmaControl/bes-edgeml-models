@@ -76,21 +76,27 @@ class BaseArguments:
             help="path to output directory, rel. or abs.",
         )
         parser.add_argument(
-            "--metrics_file",
+            "--output_file",
             type=str,
             default="output.pkl",
-            help="output metrics file, rel. to `run_dir`",
+            help="output training metrics file, rel. to `run_dir`",
         )
         parser.add_argument(
-            "--test_data_dir",
+            "--log_file",
             type=str,
-            default="test_data",
+            default="output.log",
+            help="log file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--test_data_file",
+            type=str,
+            default="test_data.pkl",
             help="test data file, rel. to `run_dir`",
         )
         parser.add_argument(
-            "--model_ckpts",
+            "--checkpoint_file",
             type=str,
-            default="model_checkpoints",
+            default="checkpoint.pytorch",
             help="model checkpoint file, rel. to `run_dir`",
         )
         parser.add_argument(
