@@ -24,10 +24,17 @@ import seaborn as sns
 from sklearn import metrics
 from tqdm import tqdm
 
-from data_preprocessing import *
-from src import utils, dataset
-from options.test_arguments import TestArguments
-from models import multi_features_model
+try:
+    from .data_preprocessing import *
+    from .src import utils, dataset
+    from .options.test_arguments import TestArguments
+    from .models import multi_features_model, multi_features_ds_model
+except ImportError:
+    from elm_prediction.data_preprocessing import *
+    from elm_prediction.src import utils, dataset
+    from elm_prediction.options.test_arguments import TestArguments
+    from elm_prediction.models import multi_features_ds_model
+
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
 palette = list(sns.color_palette("muted").as_hex())
@@ -351,7 +358,7 @@ def plot_all(
     the test set on multiple pages.
     """
     elm_id = list(elm_predictions.keys())
-    num_pages = int(elm_id // 12) + 1
+    num_pages = len(elm_id) // 12 + 1
     elm_ids_per_page = [elm_id[i * 12 : (i + 1) * 12] for i in range(num_pages)]
 
     # iterate through pages
@@ -634,9 +641,7 @@ def model_predict(
     f1_thresh = 0.35  # threshold for F1-score
     f1 = metrics.f1_score(targets, (predictions > f1_thresh).astype(int))
     # display ROC and F1-score
-    print(
-        f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}"
-    )
+    print(f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
     print(f"F1 score on test data: {f1:.4f}")
 
 
@@ -666,152 +671,107 @@ def main(
     args: argparse.Namespace,
 ) -> None:
     """Actual function encapsulating all analysis function and making inference."""
-    logger = utils.get_logger(
+
+    output_dir = Path(args.output_dir)
+    assert(output_dir.exists())
+
+    LOGGER = utils.get_logger(
         script_name=__name__,
         stream_handler=True,
+        log_file=(output_dir / 'analysis.log').as_posix(),
     )
 
-    # instantiate the elm_model and load the checkpoint
-    raw_model = (
-        multi_features_model.RawFeatureModel(args)
-        if args.raw_num_filters > 0
-        else None
-    )
-    fft_model = (
-        multi_features_model.FFTFeatureModel(args)
-        if args.fft_num_filters > 0
-        else None
-    )
-    dwt_model = (
-        multi_features_model.DWTFeatureModel(args)
-        if args.dwt_num_filters > 0
-        else None
-    )
+    # instantiate model
+    if args.model_name == 'multi_features_ds':
+        raw_model = (
+            multi_features_ds_model.RawFeatureModel(args)
+            if args.raw_num_filters > 0
+            else None
+        )
+        fft_model = (
+            multi_features_ds_model.FFTFeatureModel(args)
+            if args.fft_num_filters > 0
+            else None
+        )
+        dwt_model = (
+            multi_features_ds_model.DWTFeatureModel(args)
+            if args.dwt_num_filters > 0
+            else None
+        )
+        model_cls_args = (args, raw_model, fft_model, dwt_model)
+    else:
+        model_cls_args = (args, )
+
     model_cls = utils.create_model(args.model_name)
-    model = model_cls(args, raw_model, fft_model, dwt_model)
-    print(model)
+    model = model_cls(*model_cls_args)
+
+    if args.device.startswith('cuda'):
+        args.device = 'cuda'
     device = torch.device(args.device)
+
     model = model.to(device)
 
     # load the model checkpoint and other paths
-    output_paths = utils.create_output_paths(args, infer_mode=True)
-    (
-        test_data_dir,
-        model_ckpt_dir,
-        clf_report_dir,
-        plot_dir,
-        roc_dir,
-    ) = output_paths
-    model_ckpt_path = os.path.join(
-        model_ckpt_dir,
-        f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pth",
-    )
-    print(f"Using elm_model checkpoint: {model_ckpt_path}")
+    test_data_file, checkpoint_file, clf_report_dir, plot_dir, roc_dir = \
+        utils.create_output_paths(args, infer_mode=True)
+
+    LOGGER.info(f"Using model checkpoint: {checkpoint_file}")
+
     model.load_state_dict(
         torch.load(
-            model_ckpt_path,
+            checkpoint_file,
             map_location=device,
         )["model"]
     )
 
     # get the test data and dataloader
-    test_fname = os.path.join(
-        test_data_dir,
-        f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.pkl",
-    )
-    print(f"Using test data file: {test_fname}")
+    LOGGER.info(f"Using test data file: {test_data_file}")
 
     # get the data
-    if args.multi_features:
-        test_data, test_data_cwt = get_test_data(args, file_name=test_fname)
-    else:
-        test_data = get_test_data(args, file_name=test_fname)
+    test_data = get_test_data(args, file_name=test_data_file)
 
-    if args.test_data_info:
-        show_details(test_data)
+    show_details(test_data)
 
-    model_predict(args, logger, model, device, test_data)
+    model_predict(args, LOGGER, model, device, test_data)
 
     # get prediction dictionary containing truncated signals, labels,
     # micro-/macro-predictions and elm_time
     pred_dict = predict(args, model, device, test_data)
 
-    if args.plot_data:
-        plot_all(args, pred_dict, plot_dir)
+    plot_all(args, pred_dict, plot_dir)
 
-    if args.show_metrics:
-        # show metrics for micro predictions
-        targets_micro, predictions_micro = get_dict_values(
-            pred_dict, mode="micro"
-        )
-        show_metrics(
-            args,
-            targets_micro,
-            predictions_micro,
-            clf_report_dir,
-            roc_dir,
-            plot_dir,
-            pred_mode="micro",
-        )
-        # show metrics for macro predictions
-        targets_macro, predictions_macro = get_dict_values(
-            pred_dict, mode="macro"
-        )
-        show_metrics(
-            args,
-            targets_macro,
-            predictions_macro,
-            clf_report_dir,
-            roc_dir,
-            plot_dir,
-            pred_mode="macro",
-        )
+    # show metrics for micro predictions
+    targets_micro, predictions_micro = get_dict_values(
+        pred_dict, mode="micro"
+    )
+    show_metrics(
+        args,
+        targets_micro,
+        predictions_micro,
+        clf_report_dir,
+        roc_dir,
+        plot_dir,
+        pred_mode="micro",
+    )
+    # show metrics for macro predictions
+    targets_macro, predictions_macro = get_dict_values(
+        pred_dict, mode="macro"
+    )
+    show_metrics(
+        args,
+        targets_macro,
+        predictions_macro,
+        clf_report_dir,
+        roc_dir,
+        plot_dir,
+        pred_mode="macro",
+    )
 
 
 if __name__ == "__main__":
-    arg_list = [
-        "--device",
-        "cuda",
-        "--model_name",
-        "multi_features",
-        "--data_preproc",
-        "unprocessed",
-        "--data_dir",
-        # (Path.home() / "Documents/Projects/data").as_posix(),
-        (
-            Path.home() / "research/bes_edgeml_models/elm_classification/data"
-        ).as_posix(),
-        "--input_file",
-        "labeled-elm-events.hdf5",
-        "--test_data_dir",
-        Path("data/test_data").as_posix(),
-        "--signal_window_size",
-        "512",
-        "--label_look_ahead",
-        "0",
-        "--raw_num_filters",
-        "48",
-        "--fft_num_filters",
-        "48",
-        "--wt_num_filters",
-        "48",
-        "--max_elms",
-        "-1",
-        "--n_epochs",
-        "20",
-        "--dwt_wavelet",
-        "db4",
-        "--dwt_level",
-        "9",
-        "--filename_suffix",
-        "_dwt",
-        "--threshold",
-        "0.5",
-        "--plot_data",
-        "--show_metrics",
-        "--normalize_data",
-        "--truncate_inputs",
-        # "--dry_run",
-    ]
-    args, parser = TestArguments().parse(verbose=True, arg_list=arg_list)
+    args_file = Path('run_dir/args.pkl')
+    assert(args_file.exists())
+    with args_file.open('rb') as f:
+        args = pickle.load(f)
+    args = TestArguments().parse(verbose=True, existing_namespace=args)
     main(args)

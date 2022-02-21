@@ -19,7 +19,8 @@ class BaseArguments:
         parser.add_argument(
             "--input_data_file",
             type=str,
-            required=True,
+            default='labeled-elm-events-10elms.hdf5',
+            # required=True,
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
@@ -297,6 +298,7 @@ class BaseArguments:
     def _gather_args(
         self, 
         arg_list: Union[list, None] = None,
+        existing_namespace = None,
     ):
         """Initialize the parser."""
         if not self.initialized:
@@ -307,7 +309,10 @@ class BaseArguments:
 
         # get the base options
         self.parser = parser
-        args = parser.parse_args(arg_list)
+        args = parser.parse_args(
+            args=arg_list,
+            namespace=existing_namespace,
+            )
 
         # return args, parser
         return args
@@ -328,15 +333,20 @@ class BaseArguments:
 
         print(message)
 
-    def parse(self,
-              verbose: bool = False,
-              arg_list: Union[list, None] = None,
+    def parse(
+        self,
+        verbose: bool = False,
+        arg_list: Union[list, None] = None,
+        existing_namespace = None,
     ):
         """
         Parse arguments
         Note: `arg_list` will override command line inputs from `sys.argv`
         """
-        args = self._gather_args(arg_list)
+        args = self._gather_args(
+            arg_list=arg_list,
+            existing_namespace=existing_namespace,
+            )
         if verbose:
             self._print_args(args)
 
