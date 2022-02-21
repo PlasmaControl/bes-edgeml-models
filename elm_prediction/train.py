@@ -63,10 +63,9 @@ def train_loop(
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
-    
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
-    LOGGER = utils.get_logger(log_file=log_file)
+    LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
@@ -153,11 +152,11 @@ def train_loop(
     device = torch.device(args.device)
 
     if _rank is None:
-        # model training on CPU or single GPU
+        # standard model training on CPU or single GPU
         model = model_cls(*model_cls_args)
         model = model.to(device)
     else:
-        # model training on multiple GPUs
+        # model training on multiple GPUs with `distributed data parallel`
         original_model = model_cls(*model_cls_args)
         original_model.to(device)
         model = DDP(original_model, device_ids=[_rank])
@@ -228,7 +227,6 @@ def train_loop(
 
     # define variables for ROC and loss
     best_score = 0
-    best_loss = np.inf
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -252,7 +250,8 @@ def train_loop(
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
         start_time = time.time()
-        # train
+
+        # train over an epoch
         avg_loss = engine.train(
             train_loader, 
             epoch, 
@@ -260,14 +259,14 @@ def train_loop(
         )
         train_loss = np.append(train_loss, avg_loss)
 
-        # evaluate
+        # evaluate validation data
         avg_val_loss, preds, valid_labels = engine.evaluate(
             valid_loader, 
             print_every=args.valid_print_every
         )
         valid_loss = np.append(valid_loss, avg_val_loss)
 
-        # step the scheduler
+        # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
         # ROC scoring
@@ -283,26 +282,10 @@ def train_loop(
         f1_scores = np.append(f1_scores, f1)
         elapsed = time.time() - start_time
 
-        LOGGER.info(
-            f"Epoch: {epoch + 1}, \tavg train loss: {avg_loss:.4f}, \tavg validation loss: {avg_val_loss:.4f}"
-        )
-        LOGGER.info(
-            f"Epoch: {epoch +1}, \tROC-AUC score: {roc_score:.4f}, \tF1-score: {f1:.4f}, \ttime elapsed: {elapsed:.1f} s"
-        )
+        LOGGER.info(f"Ep: {epoch+1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
+        LOGGER.info(f"Ep: {epoch+1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
 
-        if f1 > best_score:
-            best_score = f1
-            LOGGER.info(
-                f"Epoch: {epoch+1}, \tSave Best Score: {best_score:.4f} Model"
-            )
-            if not args.dry_run:
-                # save the model if best f1 score is found
-                torch.save(
-                    {"model": model.state_dict(), "preds": preds},
-                    checkpoint_file,
-                )
-                LOGGER.info(f"Model saved to: {checkpoint_file}")
-
+        # update and save outputs
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
         outputs['roc_scores'] = roc_scores
@@ -310,6 +293,18 @@ def train_loop(
 
         with open(output_file.as_posix(), "wb") as f:
             pickle.dump(outputs, f)
+
+        # track best f1 score and save model
+        if f1 > best_score:
+            best_score = f1
+            LOGGER.info(f"Ep: {epoch+1:03d} \tBest Score: {best_score:.3f}")
+            if not args.dry_run:
+                LOGGER.info(f"Ep: {epoch+1:03d} \tSaving model to: {checkpoint_file}")
+                model_data = {
+                    "model": model.state_dict(), 
+                    "preds": preds,
+                }
+                torch.save(model_data, checkpoint_file)
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
@@ -324,6 +319,7 @@ def train_loop(
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
+    # shut down logger handlers
     for handler in LOGGER.handlers[:]:
         handler.close()
         LOGGER.removeHandler(handler)
