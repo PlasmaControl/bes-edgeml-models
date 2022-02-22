@@ -1,12 +1,14 @@
 import os
-import sys
+from options.train_arguments import TrainArguments
+from src.utils import logParse
+
 import time
 import pickle
 import argparse
-from typing import Union, Tuple, List, Dict, Any, Set
-import logging
+from typing import Union
 import matplotlib.pyplot as plt
 from pathlib import Path
+import configparser
 
 import torch
 import torch.nn as nn
@@ -15,18 +17,20 @@ import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 from torch.utils.tensorboard import SummaryWriter
 
-from options.train_arguments import TrainArguments
 from src import utils, trainer, dataset
 from visualization import Visualizations, PCA
 from src.train_VAE import ELBOLoss
 from models import multi_features_model
 
-LOGGER = logging.getLogger('__main__')
-sys.excepthook = utils.log_exceptions(LOGGER)
+args, parser = TrainArguments().parse(verbose=True)
+config = utils.ConfigParser()
+config.read('options/config.ini')
+logparser = logParse(script_name=__name__,
+                     log_file=os.path.join(config['CONFIG'].get('log_dir'),
+                                           f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
 
 
-def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: str, fold: Union[int, None] = None,
-        desc: bool = False, ) -> None:
+def train_loop(data_obj: object, test_datafile_name: str, fold: Union[int, None] = None, desc: bool = False, ) -> None:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
 
@@ -47,11 +51,14 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     f1_scores = []
     test_data_path, model_ckpt_path = utils.create_output_paths(args, infer_mode=False)
     test_data_file = os.path.join(test_data_path, test_datafile_name)
+    if args.data_preproc not in config['TRAINING'].getlist('accepted_preproc'):
+        raise TypeError(f'Data preprocessing must be one of {config["TRAINING"].getlist("accepted_preproc")}')
 
     # add loss values to tensorboard
     if args.add_tensorboard:
-        writer = SummaryWriter(
-                log_dir=os.path.join(args.log_dir, "tensorboard", f"{args.model_name}{args.filename_suffix}", ))
+        writer = SummaryWriter(log_dir=os.path.join(config['TRAINING'].get('log_dir'),
+                                                    "tensorboard",
+                                                    f"{args.model_name}{args.filename_suffix}", ))
 
     LOGGER.info("-" * 30)
 
@@ -83,21 +90,29 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         transforms = dataset.get_transforms(args)
 
     # create datasets
-    train_dataset = dataset.ELMDataset(args, *train_data, logger=LOGGER, phase="training", )
+    train_dataset = dataset.ELMDataset(args, *train_data, phase="training", )
 
-    valid_dataset = dataset.ELMDataset(args, *valid_data, logger=LOGGER, phase="validation", )
+    valid_dataset = dataset.ELMDataset(args, *valid_data, phase="validation", )
 
     # training and validation dataloaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=args.batch_size,
+                                               shuffle=True,
+                                               num_workers=args.num_workers,
+                                               pin_memory=True,
+                                               drop_last=True, )
 
-    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, )
+    valid_loader = torch.utils.data.DataLoader(valid_dataset,
+                                               batch_size=args.batch_size,
+                                               shuffle=False,
+                                               num_workers=args.num_workers,
+                                               pin_memory=True,
+                                               drop_last=True, )
 
     # model
-    raw_model = (multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    raw_model = multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None
+    fft_model = multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None
+    cwt_model = multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     model_cls = utils.create_model(args.model_name)
@@ -141,8 +156,11 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # get the lr scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2,
-            verbose=True, )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                           mode="min",
+                                                           factor=0.5,
+                                                           patience=2,
+                                                           verbose=True, )
 
     # loss function
     is_vae = args.model_name.lower().startswith('vae')
@@ -154,8 +172,12 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
-    engine = trainer.Run(model, device=device, criterion=criterion, optimizer=optimizer, use_focal_loss=args.focal_loss,
-            use_rnn=use_rnn, )
+    engine = trainer.Run(model,
+                         device=device,
+                         criterion=criterion,
+                         optimizer=optimizer,
+                         use_focal_loss=args.focal_loss,
+                         use_rnn=use_rnn, )
 
     valid_loss = []
     valid_mse_loss = []
@@ -172,7 +194,8 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         start_time = time.time()
         # train
         if is_vae:
-            train_avg_loss, train_kl, train_likelihood, train_mse = engine.train(train_loader, epoch,
+            train_avg_loss, train_kl, train_likelihood, train_mse = engine.train(train_loader,
+                                                                                 epoch,
                                                                                  print_every=args.train_print_every)
             train_kl_loss.append(train_kl)
             train_likelihood_loss.append(train_likelihood)
@@ -199,9 +222,9 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
         # print(f"Train losses: {train_loss}")
         # print(f"Valid losses: {valid_loss}")
         if args.add_tensorboard:
-            writer.add_scalars(
-                    f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
-                    {"train_loss": train_avg_loss, "valid_loss": val_avg_loss, }, epoch + 1, )
+            writer.add_scalars(f"{args.model_name}_signal_window_{args.signal_window_size}_lookahead_{args.label_look_ahead}",
+                               {"train_loss": train_avg_loss, "valid_loss": val_avg_loss, },
+                               epoch + 1, )
             writer.close()
         # scoring
         if is_vae:
@@ -214,8 +237,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
             f1_scores.append(f1)
         elapsed = time.time() - start_time
 
-        LOGGER.info(
-                f"Epoch: {epoch + 1}, \tavg train loss: {train_avg_loss:.4f}, \tavg validation loss: {val_avg_loss:.4f}")
+        LOGGER.info(f"Epoch: {epoch + 1}, \tavg train loss: {train_avg_loss:.4f}, \tavg validation loss: {val_avg_loss:.4f}")
         LOGGER.info(f"Epoch: {epoch + 1}, \tROC-AUC score: {roc_score:.4f}, \ttime elapsed: {elapsed}")
 
         if f1 > best_score:
@@ -240,7 +262,7 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
     f1_scores = np.array(f1_scores)
 
     outputs_file = (
-                Path("outputs") / f"signal_window_{args.signal_window_size}" / f"label_look_ahead_{args.label_look_ahead}" / "training_metrics" / f"{args.model_name}{args.filename_suffix}.pkl")
+            Path("outputs") / f"signal_window_{args.signal_window_size}" / f"label_look_ahead_{args.label_look_ahead}" / "training_metrics" / f"{args.model_name}{args.filename_suffix}.pkl")
     outputs_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for output file
 
     with open(outputs_file.as_posix(), "wb") as f:
@@ -254,10 +276,8 @@ def train_loop(args: argparse.Namespace, data_obj: object, test_datafile_name: s
 
 
 if __name__ == "__main__":
-    args, parser = TrainArguments().parse(verbose=True)
-    LOGGER = utils.make_logger(script_name=__name__,
-                               log_file=os.path.join(args.log_dir,
-                                                     f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
+    LOGGER = logparser()
+
     save_str = f"{args.model_name}_lookahead_{args.label_look_ahead}_{args.data_preproc}" \
                f"{'_' + args.balance_data if args.balance_data else ''}" \
                f"{'_' + args.filename_suffix if args.filename_suffix else ''}"
@@ -268,7 +288,7 @@ if __name__ == "__main__":
     for j, x in enumerate(lookaheads):
         args.label_look_ahead = x
         data_cls = utils.create_data(args.data_preproc)
-        data_obj = data_cls(args, LOGGER)
+        data_obj = data_cls(args)
         # if not (os.path.isfile(os.path.join(args.test_data_dir,
         #                                     f"signal_window_{args.signal_window_size}",
         #                                     f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl"))
@@ -281,7 +301,7 @@ if __name__ == "__main__":
                    data_obj,
                    test_datafile_name=f"test_data_lookahead_{args.label_look_ahead}_{args.data_preproc}.pkl")
 
-        viz = Visualizations(args, LOGGER)
+        viz = Visualizations(args)
         layers = list(viz.model.layers.keys())[:-1]
         if j == 0:
             evrs = np.empty((len(layers), len(lookaheads)))

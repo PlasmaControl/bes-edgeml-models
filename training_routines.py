@@ -164,8 +164,9 @@ def show_mse_loss(use_saved=True, superimposed=True):
 
 if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
-    LOGGER = utils.make_logger(script_name=__name__, log_file=os.path.join(args.log_dir,
-                                                                           f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
+    LOGGER = utils.logParse(script_name=__name__,
+                            log_file=os.path.join(args.log_dir,
+                                                  f"output_logs_{args.model_name}{args.filename_suffix}.log", ), )
 
     b = list(range(0, 226, 25))
     b[0] = 1

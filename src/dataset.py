@@ -1,6 +1,7 @@
 import argparse
 import logging
 from typing import Callable
+from .utils import logParse
 
 import torch
 import numpy as np
@@ -8,7 +9,7 @@ import numpy as np
 
 class ELMDataset(torch.utils.data.Dataset):
     def __init__(self, args: argparse.Namespace, signals: np.ndarray, labels: np.ndarray, sample_indices: np.ndarray,
-            window_start: np.ndarray, logger: logging.getLogger, transform: Callable = None, phase: str = "training", ):
+                 window_start: np.ndarray, transform: Callable = None, phase: str = "training", ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
         which stacks the time data points and return a data chunk of size:
@@ -33,7 +34,7 @@ class ELMDataset(torch.utils.data.Dataset):
         self.sample_indices = sample_indices
         self.window_start = window_start
         self.transform = transform
-        self.logger = logger
+        self.logger = logParse.getGlobalLogger()
         self.logger.info("-" * 40)
         self.logger.info(f" Creating pytorch dataset for {phase} ")
         self.logger.info("-" * 40)

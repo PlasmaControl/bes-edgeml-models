@@ -589,17 +589,16 @@ if __name__ == "__main__":
     args, _ = BaseArguments().parse()
 
     # create the logger object
-    logger = utils.make_logger(script_name=__name__, stream_handler=True,
-            # log_file=f"output_logs_{args.data_mode}.log",
-    )
+    logger = utils.logParse(script_name=__name__, stream_handler=True, # log_file=f"output_logs_{args.data_mode}.log",
+                            )
     data = Data(args, logger, truncate_inputs=True)
     train_data, _, _ = data.get_data(shuffle_sample_indices=True, fold=None)
     signals, labels, sample_indices, window_start = train_data
     print(f"Signals shape: {signals.shape}")
     print(f"Label shape: {labels.shape}")
     print(np.max(sample_indices))
-    last_event_signal = signals[window_start[-1] :]
-    last_event_label = labels[window_start[-1] :]
+    last_event_signal = signals[window_start[-1]:]
+    last_event_label = labels[window_start[-1]:]
 
     logger.info(f"Sample indices: {sample_indices[:10]}")
     values, counts = np.unique(sample_indices, return_counts=True)

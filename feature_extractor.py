@@ -51,7 +51,7 @@ if __name__ == "__main__":
     paths = utils.create_output_paths(args, infer_mode=True)
     roc_dir = paths[-1]
 
-    LOGGER = utils.make_logger(script_name=__name__)
+    LOGGER = utils.logParse(script_name=__name__)
     model_cls = utils.create_model(args.model_name)
     model = model_cls(args)
     device = torch.device("cpu")

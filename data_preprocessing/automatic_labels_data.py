@@ -104,7 +104,7 @@ class AutomaticLabelsData(BaseData):
 #     args, _ = BaseArguments().parse()
 
 #     # create the logger object
-#     logger = utils.make_logger(
+#     logger = utils.logParse(
 #         script_name=__name__,
 #         stream_handler=True,
 #         # log_file=f"output_logs.log",

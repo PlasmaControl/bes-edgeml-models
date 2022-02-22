@@ -86,7 +86,7 @@ def decompose_signal(args: argparse.Namespace, signal_channel: str, df: pd.DataF
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
     utils.test_args_compat(args, parser)
-    LOGGER = utils.make_logger(script_name=__name__)
+    LOGGER = utils.logParse(script_name=__name__)
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     train_data, _, _ = data_obj.get_data()

@@ -20,17 +20,26 @@ class BaseArguments:
                             type=str,
                             default="labeled-elm-events-large.hdf5",
                             help="path to the input hdf5 file.", )
-        parser.add_argument("--model_name", type=str, required=True, help="name of the model to be used for training, "
-                                                                          "[feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].", )
+        parser.add_argument("--model_name",
+                            type=str,
+                            required=False,
+                            help="name of the model to be used for training, [feature | feature_v2 | cnn | cnn_v2 | cnn_2d | rnn | lstm_ae | fc_ae].",
+                            default='multi_features')
         parser.add_argument("--model_ckpts",
                             type=str,
                             default="model_checkpoints",
                             help="path to the pretrained weights of the saved models.", )
-        parser.add_argument("--viz", nargs='?', const=True, default=False, choices=['show_autograd'],
+        parser.add_argument("--viz",
+                            nargs='?',
+                            const=True,
+                            default=False,
+                            choices=['show_autograd'],
                             help="Create a torchviz conceptual graph of a model. Specify "
                                  "`show_autograd` to view what pytorch saves for backward pass.")
         parser.add_argument("--save_pdf", type=str, help="Save figure to pdf. Specify file location.")
-        parser.add_argument('--generated', action='store_true', default=False,
+        parser.add_argument('--generated',
+                            action='store_true',
+                            default=False,
                             help='Use generated option if using generated data.')
 
         parser.add_argument("--vae_beta", type=int, default=1.0,
@@ -67,16 +76,21 @@ class BaseArguments:
                      "the main process.", )
 
         # data preparation parameters
-        parser.add_argument("--data_preproc", type=str, required=True,
-                help="name of the data manipulator to be used. Selecting any of the "
-                     "mentioned techniques will create data ready corresponding to that "
-                     "technique for training, "
-                     "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
-                     "balance | rnn | gaussian_noise].", )
-        parser.add_argument("--signal_window_size", type=int, default=16,
-                help="number of time data points to use for the input. "
-                     "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
-                     "[8 | 16].", )
+        parser.add_argument("--data_preproc",
+                            type=str,
+                            required=False,
+                            help="name of the data manipulator to be used. Selecting any of the "
+                                 "mentioned techniques will create data ready corresponding to that "
+                                 "technique for training, "
+                                 "[unprocessed | automatic_labels | wavelet | gradient | interpolate | "
+                                 "balance | rnn | gaussian_noise].",
+                            default='unprocessed')
+        parser.add_argument("--signal_window_size",
+                            type=int,
+                            default=16,
+                            help="number of time data points to use for the input. "
+                                 "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
+                                 "[8 | 16].", )
         parser.add_argument("--label_look_ahead", type=int, default=0,
                 help="`look ahead`, meaning the label for the entire signal window is taken to "
                      "be label corresponding to the last element (0 ahead) of the signal window, "

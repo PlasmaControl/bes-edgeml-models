@@ -23,7 +23,7 @@ from torch import nn
 from torch.optim import SGD
 
 from analyze import *
-from src.utils import make_logger, create_output_paths
+from src.utils import logParse, create_output_paths
 from visualizations.utils.utils import get_model
 from src.train_VAE import ELBOLoss
 
@@ -71,9 +71,9 @@ class GradientAscent3D(GradientAscent):
 
 class Visualizations:
 
-    def __init__(self, cl_args=None, LOGGER=None) -> object:
+    def __init__(self, cl_args=None) -> object:
         self.args = cl_args if cl_args else args
-        self.logger = LOGGER if LOGGER else logger
+        self.logger = logParse.getGlobalLogger()
         self.gen_suffix_type = '_' + re.split('[_.]', self.args.input_file)[
             -2] if 'generated' in self.args.input_file else ''
         self.filename_suffix = self.args.filename_suffix + self.gen_suffix_type
@@ -1406,8 +1406,8 @@ if __name__ == "__main__":
 
     args, parser = TestArguments().parse(verbose=True)
 
-    logger = make_logger(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
-                                                                                   f"{args.filename_suffix}.log"))
+    logger = logParse(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
+                                                                                f"{args.filename_suffix}.log"))()
 
     lookaheads = np.arange(1000, 1001, 1000)
     for lah in lookaheads:

@@ -3,10 +3,12 @@ import logging
 import time
 import math
 import argparse
+import configparser
 import importlib
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 from traceback import print_tb
 from pathlib import Path
+import sys
 
 import torch
 from torchinfo import summary
@@ -41,8 +43,7 @@ class MetricMonitor:
 
 
 # log the model and data preprocessing outputs
-def make_logger(script_name: str, log_file: Union[str, None] = None,
-                stream_handler: bool = True, ) -> logging.getLogger:
+class logParse:
     """Initiate the logger to log the progress into a file.
 
     Args:
@@ -56,38 +57,76 @@ def make_logger(script_name: str, log_file: Union[str, None] = None,
     --------
         logging.getLogger: Logger object.
     """
-    logger = logging.getLogger(name=script_name)
-    logger.setLevel(logging.INFO)
 
-    if log_file is not None:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
-        # create handlers
-        f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
-        # create formatters and add it to the handlers
-        f_format = logging.Formatter(
-            "%(asctime)s:%(name)s: %(levelname)s:%(message)s"
-        )
-        f_handler.setFormatter(f_format)
-        # add handlers to the logger
-        logger.addHandler(f_handler)
+    def __init__(self, script_name: str = None, log_file: Union[str, Path] = None, stream_handler: bool = True,
+                 log_exceptions: bool = True):
 
-    # display the logs in console
-    if stream_handler:
-        s_handler = logging.StreamHandler()
-        s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
-        s_handler.setFormatter(s_format)
-        logger.addHandler(s_handler)
+        self.logger = None
+        self.script_name = script_name
+        self.log_file = log_file
+        self.stream_handler = stream_handler
+        self.log_exceptions = log_exceptions
 
-    return logger
+        if not (stream_handler and log_file):
+            raise TypeError('Logger must have Handler')
+
+    def __call__(self):
+
+        logger = logging.getLogger(name=self.script_name)
+        logger.setLevel(logging.INFO)
+
+        if self.log_file is not None:
+            log_path = Path(self.log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
+            # create handlers
+            f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
+            # create formatters and add it to the handlers
+            f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
+            f_handler.setFormatter(f_format)
+            # add handlers to the logger
+            logger.addHandler(f_handler)
+
+        # display the logs in console
+        if self.stream_handler:
+            s_handler = logging.StreamHandler()
+            s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
+            s_handler.setFormatter(s_format)
+            logger.addHandler(s_handler)
+
+        self.logger = logger
+
+        if self.log_exceptions:
+            sys.excepthook = self.log_exceptions_()
+
+        return logger
+
+    def log_exceptions_(self):
+        def my_handler(type, value, tb):
+            print_tb(tb)
+            self.logger.exception(f' {type.__name__}: {value}')
+
+        return my_handler
+
+    @staticmethod
+    def getGlobalLogger():
+        logger = logging.getLogger('__main__')
+        if not logger.hasHandlers():
+            raise AttributeError('No logger exists. Logger must be declared.')
+        return logger
 
 
-def log_exceptions(logger):
-    def my_handler(type, value, tb):
-        print_tb(tb)
-        logger.exception(f' {type.__name__}: {value}')
+class ConfigParser(configparser.ConfigParser):
+    """
+    Subclasses SafeConfigParser to parse python types from .ini files.
+    """
 
-    return my_handler
+    def __init__(self):
+        super(ConfigParser, self).__init__()
+
+    def getlist(self, key, **kwargs):
+        lst = super(ConfigParser, self).get(key, **kwargs)
+        lst = lst.replace(',', '').split()
+        return lst
 
 
 def as_minutes_seconds(s: int) -> str:
