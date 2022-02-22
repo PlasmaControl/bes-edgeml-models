@@ -10,7 +10,7 @@ viz/
 figures/
 model_checkpoints/
 outputs/
-run_dir/
+run_dir*/
 
 *.code-workspace
 

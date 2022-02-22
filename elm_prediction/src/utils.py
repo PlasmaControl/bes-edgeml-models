@@ -127,7 +127,7 @@ def create_data(data_name: str) -> object:
 def create_output_paths(
     args: argparse.Namespace, 
     infer_mode: bool = False
-) -> Tuple[str]:
+) -> Tuple:
     """
     Helper function to create various output paths to save model checkpoints,
     test data, plots, etc.

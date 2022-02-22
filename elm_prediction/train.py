@@ -1,18 +1,16 @@
-'''
+"""
 Main module for training ELM prediction models
 
 To train an ELM prediction model, call `train_loop()` using
 a recipe similar to `if __name__=="main"` block.
-'''
+"""
 
-import os
 import sys
 import time
 import pickle
 import argparse
 from typing import Union
 from pathlib import Path
-import logging
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
@@ -20,7 +18,6 @@ from sklearn.metrics import roc_auc_score, f1_score
 import torch
 import torch.nn as nn
 import torch.distributed
-import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 try:
@@ -157,6 +154,7 @@ def train_loop(
     model_cls = utils.create_model(args.model_name)
 
     device = torch.device(args.device)
+    LOGGER.info(f'On device {device}')
 
     if _rank is None:
         # standard model training on CPU or single GPU
@@ -337,10 +335,9 @@ def train_loop(
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        input_data_file = Path(__file__).parent / 'labeled-elm-events-10elms.hdf5'
         arg_list = [
-            "--input_data_file", input_data_file.as_posix(),
-            "--n_epochs",  "2",
+            '--num_workers', '4',
+            '--n_epochs', '5',
         ]
     else:
         # use command line arguments in `sys.argv`

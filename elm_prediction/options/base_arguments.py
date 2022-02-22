@@ -2,6 +2,11 @@ import sys
 import argparse
 from typing import Union
 
+try:
+    from .. import sample_labeled_elm_data_file
+except ImportError:
+    from elm_prediction import sample_labeled_elm_data_file
+
 
 class BaseArguments:
     """This class defines command line arguments common for both training and testing.
@@ -19,8 +24,7 @@ class BaseArguments:
         parser.add_argument(
             "--input_data_file",
             type=str,
-            default='labeled-elm-events-10elms.hdf5',
-            # required=True,
+            default=sample_labeled_elm_data_file.as_posix(),
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
@@ -39,14 +43,14 @@ class BaseArguments:
         parser.add_argument(
             "--n_epochs",
             type=int,
-            default=10,
+            default=2,
             help="total number of epochs for training.",
         )
         parser.add_argument(
             "--max_elms",
             type=int,
-            default=-1,
-            help="total number of elm events to be used. Use -1 to use all of them.",
+            default=10,
+            help="number of elm events to use. -1 to use all ELM events.",
         )
         parser.add_argument(
             "--batch_size",
@@ -160,7 +164,7 @@ class BaseArguments:
             default=0,
             help="turns on the multi-processing data loading with `num_workers` loader "
             "worker processes. Default: 0 meaning the data loading step will be done by "
-            "the main process.",
+            "the main process.  Rec.: 1 for cpu or single gpu; 0 for distributed multi-gpu.",
         )
         parser.add_argument(
             "--distributed",
