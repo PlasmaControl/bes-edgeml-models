@@ -33,8 +33,8 @@ class BaseArguments:
         parser.add_argument(
             "--device",
             type=str,
-            default="cpu",
-            help="device to use, [ cpu (default) | cuda | cuda:N ].",
+            default="auto",
+            help="device to use: [ auto (default, cuda if avail, else cpu) | cpu | cuda | cuda:N ].",
         )
         parser.add_argument(
             "--n_epochs",

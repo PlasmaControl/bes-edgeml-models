@@ -68,6 +68,9 @@ def train_loop(
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
+    if args.device == 'auto':
+        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     data_cls = utils.create_data(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
 
