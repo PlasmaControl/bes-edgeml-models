@@ -18,7 +18,8 @@ from sklearn.metrics import roc_auc_score, f1_score
 import torch
 import torch.nn as nn
 import torch.distributed
-from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DistributedDataParallel
+from torchinfo import summary
 
 try:
     import optuna
@@ -28,16 +29,13 @@ except ImportError:
 try:
     from .options.train_arguments import TrainArguments
     from .src import utils, trainer, dataset
-    from .models import multi_features_ds_model
 except ImportError:
     from elm_prediction.options.train_arguments import TrainArguments
     from elm_prediction.src import utils, trainer, dataset
-    from elm_prediction.models import multi_features_ds_model
 
 
 def train_loop(
     args: argparse.Namespace,
-    desc: bool = False,
     trial = None,  # optuna `trial` object
     _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
@@ -68,7 +66,7 @@ def train_loop(
     if args.device == 'auto':
         args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
 
     with args_file.open('wb') as f:
@@ -130,88 +128,61 @@ def train_loop(
         drop_last=True,
     )
 
-    # model
-    if args.model_name == 'multi_features_ds':
-        raw_model = (
-            multi_features_ds_model.RawFeatureModel(args)
-            if args.raw_num_filters > 0
-            else None
-        )
-        fft_model = (
-            multi_features_ds_model.FFTFeatureModel(args)
-            if args.fft_num_filters > 0
-            else None
-        )
-        dwt_model = (
-            multi_features_ds_model.DWTFeatureModel(args)
-            if args.dwt_num_filters > 0
-            else None
-        )
-        model_cls_args = (args, raw_model, fft_model, dwt_model)
-    else:
-        model_cls_args = (args, )
-
-    model_cls = utils.create_model(args.model_name)
-
+    # device
     device = torch.device(args.device)
     LOGGER.info(f'On device {device}')
 
-    if _rank is None:
-        # standard model training on CPU or single GPU
-        model = model_cls(*model_cls_args)
-        model = model.to(device)
-    else:
-        # model training on multiple GPUs with `distributed data parallel`
-        original_model = model_cls(*model_cls_args)
-        original_model.to(device)
-        model = DDP(original_model, device_ids=[_rank])
+    # model class and model instance
+    model_class = utils.create_model_class(args.model_name)
+    model = model_class(args)
+    model = model.to(device)
 
+    # distribute model for data-parallel training
+    if _rank is not None:
+        model = DistributedDataParallel(model, device_ids=[_rank])
 
     LOGGER.info("-" * 50)
     LOGGER.info(f"       Training with model: {args.model_name}       ")
     LOGGER.info("-" * 50)
 
-    n_parameters = 0
-    for parameter in model.parameters():
-        if parameter.requires_grad:
-            n_parameters += parameter.numel()
-
-    LOGGER.info(f"  Trainable parameters: {n_parameters}       ")
-
     # display model details
-    if desc:
-        if args.model_name == "rnn":
+    if args.model_name == "rnn":
+        input_size = (args.batch_size, args.signal_window_size, 64)
+    else:
+        if args.data_preproc == "interpolate":
+            input_size = (
+                args.batch_size,
+                1,
+                args.signal_window_size,
+                args.interpolate_size,
+                args.interpolate_size,
+            )
+        elif args.data_preproc == "gradient":
+            input_size = (
+                args.batch_size,
+                6,
+                args.signal_window_size,
+                8,
+                8,
+            )
+        elif args.data_preproc == "rnn":
             input_size = (args.batch_size, args.signal_window_size, 64)
         else:
-            if args.data_preproc == "interpolate":
-                input_size = (
-                    args.batch_size,
-                    1,
-                    args.signal_window_size,
-                    args.interpolate_size,
-                    args.interpolate_size,
-                )
-            elif args.data_preproc == "gradient":
-                input_size = (
-                    args.batch_size,
-                    6,
-                    args.signal_window_size,
-                    8,
-                    8,
-                )
-            elif args.data_preproc == "rnn":
-                input_size = (args.batch_size, args.signal_window_size, 64)
-            else:
-                input_size = (
-                    args.batch_size,
-                    1,
-                    args.signal_window_size,
-                    8,
-                    8,
-                )
-        x = torch.rand(*input_size)
-        x = x.to(device)
-        utils.model_details(model, x, input_size)
+            input_size = (
+                args.batch_size,
+                1,
+                args.signal_window_size,
+                8,
+                8,
+            )
+    x = torch.rand(*input_size)
+    x = x.to(device)
+    LOGGER.info("\t\t\t\tMODEL SUMMARY")
+    summary(model, input_size=input_size)
+    LOGGER.info(f'Batched input size: {x.shape}')
+    LOGGER.info(f"Batched output size: {model(x).shape}")
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    LOGGER.info(f"Model contains {n_params} trainable parameters!")
 
     # optimizer
     optimizer = torch.optim.Adam(
@@ -336,8 +307,6 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         arg_list = [
-            '--num_workers', '4',
-            '--n_epochs', '5',
         ]
     else:
         # use command line arguments in `sys.argv`

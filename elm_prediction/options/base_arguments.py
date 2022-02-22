@@ -56,7 +56,7 @@ class BaseArguments:
             "--batch_size",
             type=int,
             default=64,
-            help="batch size for model training and testing.",
+            help="batch size for model training and testing. (default 64)",
         )
         parser.add_argument(
             "--signal_window_size",
@@ -64,7 +64,7 @@ class BaseArguments:
             default=64,
             help="number of time data points to use for the input. "
             "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
-            "[8 | 16].",
+            "power of 2 like 32, 128, etc. (default 64)",
         )
         parser.add_argument(
             "--label_look_ahead",
@@ -249,7 +249,7 @@ class BaseArguments:
         parser.add_argument(
             "--mf_dropout_rate",
             type=float,
-            default=0.4,
+            default=0.2,
             help="Dropout rate",
         )
         parser.add_argument(
@@ -257,6 +257,18 @@ class BaseArguments:
             type=float,
             default=0.02,
             help="RELU negative slope",
+        )
+        parser.add_argument(
+            "--fc1_size",
+            type=int,
+            default=128,
+            help="Size for fully-connected layer #1: int, default 128",
+        )
+        parser.add_argument(
+            "--fc2_size",
+            type=int,
+            default=32,
+            help="Size for fully-connected layer #2: int, default 32",
         )
         parser.add_argument(
             "--raw_num_filters",

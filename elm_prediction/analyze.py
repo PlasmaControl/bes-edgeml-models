@@ -28,12 +28,10 @@ try:
     from .data_preprocessing import *
     from .src import utils, dataset
     from .options.test_arguments import TestArguments
-    from .models import multi_features_model, multi_features_ds_model
 except ImportError:
     from elm_prediction.data_preprocessing import *
     from elm_prediction.src import utils, dataset
     from elm_prediction.options.test_arguments import TestArguments
-    from elm_prediction.models import multi_features_ds_model
 
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
@@ -681,29 +679,8 @@ def main(
         log_file=(output_dir / 'analysis.log').as_posix(),
     )
 
-    # instantiate model
-    if args.model_name == 'multi_features_ds':
-        raw_model = (
-            multi_features_ds_model.RawFeatureModel(args)
-            if args.raw_num_filters > 0
-            else None
-        )
-        fft_model = (
-            multi_features_ds_model.FFTFeatureModel(args)
-            if args.fft_num_filters > 0
-            else None
-        )
-        dwt_model = (
-            multi_features_ds_model.DWTFeatureModel(args)
-            if args.dwt_num_filters > 0
-            else None
-        )
-        model_cls_args = (args, raw_model, fft_model, dwt_model)
-    else:
-        model_cls_args = (args, )
-
-    model_cls = utils.create_model(args.model_name)
-    model = model_cls(*model_cls_args)
+    model_cls = utils.create_model_class(args.model_name)
+    model = model_cls(args)
 
     if args.device.startswith('cuda'):
         args.device = 'cuda'

@@ -82,15 +82,15 @@ def get_logger(
     return logger
 
 
-def as_minutes_seconds(s: float) -> str:
-    m = math.floor(s / 60)
-    s -= m * 60
-    m, s = int(m), int(s)
-    return f"{m:2d}m {s:2d}s"
 
 
 def time_since(since: int, percent: float) -> str:
     """Helper function to time the training and evaluation process"""
+    def as_minutes_seconds(s: float) -> str:
+        m = math.floor(s / 60)
+        s -= m * 60
+        m, s = int(m), int(s)
+        return f"{m:2d}m {s:2d}s"
     now = time.time()
     elapsed = now - since
     total_estimated = elapsed / percent
@@ -98,7 +98,7 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def create_data(data_name: str) -> object:
+def create_data_class(data_name: str) -> object:
     """
     Helper function to import the data preprocessing module as per the command
     line argument `--data_preproc`.
@@ -187,11 +187,12 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     """
     print("\t\t\t\tMODEL SUMMARY")
     summary(model, input_size=input_size)
-    print(f"Output size: {model(x).shape}")
+    print(f'Batched input size: {x.shape}')
+    print(f"Batched output size: {model(x).shape}")
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 
-def create_model(model_name: str) -> object:
+def create_model_class(model_name: str) -> object:
     """
     Helper function to import the module for the model being used as per the
     command line argument `--model_name`.

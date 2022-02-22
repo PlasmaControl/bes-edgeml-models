@@ -243,9 +243,6 @@ class MultiFeaturesDsModel(nn.Module):
     def __init__(
         self,
         args: argparse.Namespace,
-        raw_features_model: Union[RawFeatureModel, None],
-        fft_features_model: Union[FFTFeatureModel, None],
-        dwt_features_model: Union[DWTFeatureModel, None],
     ):
         """Encapsulate all the feature models to create a composite model that
         uses all the feature maps. It takes in the class instances of
@@ -257,17 +254,24 @@ class MultiFeaturesDsModel(nn.Module):
         Args:
         -----
             args (argparse.Namespace): Command line arguments.
-            raw_features_model (RawFeatureModel): Instance of `RawFeatureModel` class.
-            fft_features_model (FFTFeatureModel): Instance of `FFTFeatureModel` class.
-            dwt_features_model (CWTFeatureModel): Instance of `CWTFeatureModel` class.
-            dropout_rate (float, optional): Dropout probability. Defaults to 0.4.
-            negative_slope (float, optional): Slope of activation functions. Defaults to 0.02.
         """
         super(MultiFeaturesDsModel, self).__init__()
         self.args = args
-        self.raw_features_model = raw_features_model
-        self.fft_features_model = fft_features_model
-        self.dwt_features_model = dwt_features_model
+        self.raw_features_model = (
+            RawFeatureModel(args)
+            if args.raw_num_filters > 0
+            else None
+        )
+        self.fft_features_model = (
+            FFTFeatureModel(args)
+            if args.fft_num_filters > 0
+            else None
+        )
+        self.dwt_features_model = (
+            DWTFeatureModel(args)
+            if args.dwt_num_filters > 0
+            else None
+        )
         input_features = 0
         for model in [
             self.raw_features_model,
@@ -276,9 +280,9 @@ class MultiFeaturesDsModel(nn.Module):
         ]:
             if model is not None:
                 input_features += model.num_filters
-        self.fc1 = nn.Linear(in_features=input_features, out_features=128)
-        self.fc2 = nn.Linear(in_features=128, out_features=32)
-        self.fc3 = nn.Linear(in_features=32, out_features=1)
+        self.fc1 = nn.Linear(in_features=input_features, out_features=args.fc1_size)
+        self.fc2 = nn.Linear(in_features=args.fc1_size, out_features=args.fc2_size)
+        self.fc3 = nn.Linear(in_features=args.fc2_size, out_features=1)
         self.dropout = nn.Dropout(p=self.args.mf_dropout_rate)
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
 
