@@ -56,7 +56,7 @@ def get_all_data(
         Tuple[tuple, tuple, tuple]: Tuple containing three tuples for train, validation
                     and test data respectively.
     """
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, logger)
     train_data, valid_data, test_data = data_obj.get_data()
     return train_data, valid_data, test_data

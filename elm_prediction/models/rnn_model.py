@@ -44,7 +44,7 @@ if __name__ == "__main__":
     args, parser = TrainArguments().parse(verbose=True)
     LOGGER = utils.get_logger(script_name="test_lstm_logs")
     model = RNNModel(args)
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     # create train, valid and test data
     train_data, valid_data, test_data = data_obj.get_data(

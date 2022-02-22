@@ -146,7 +146,7 @@ def make(
 
 
 def get_model(args: argparse.Namespace) -> object:
-    model_cls = utils.create_model(args.model_name)
+    model_cls = utils.create_model_class(args.model_name)
     if args.model_name == "feature_gradients":
         spatial = feature_gradients_model.SpatialFeatures(args)
         temporal = feature_gradients_model.TemporalFeatures()
@@ -496,7 +496,7 @@ if __name__ == "__main__":
             f"output_logs_{args.model_name}{args.filename_suffix}.log",
         ),
     )
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     train_loop(
         args,

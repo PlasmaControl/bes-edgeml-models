@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # create the logger object and instantiate the model
     LOGGER = utils.get_logger(script_name=__name__)
-    model_cls = utils.create_model(args.model_name)
+    model_cls = utils.create_model_class(args.model_name)
     model = model_cls(args)
     device = torch.device("cpu")
     model = model.to(device)
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     model.conv.register_forward_hook(get_activation("conv"))
 
     # create data object from data preprocessing pipeline
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
 
     # load all the ELM events (need to use `--use_all_data` command line arg in

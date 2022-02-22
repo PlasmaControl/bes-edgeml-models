@@ -102,7 +102,7 @@ def pool_features(
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
     LOGGER = utils.get_logger(script_name=__name__)
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     train_data, valid_data, test_data = data_obj.get_data()
 

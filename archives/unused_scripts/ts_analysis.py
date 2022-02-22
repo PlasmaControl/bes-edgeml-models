@@ -97,7 +97,7 @@ def decompose_signal(
 if __name__ == "__main__":
     args, parser = TestArguments().parse(verbose=True)
     LOGGER = utils.get_logger(script_name=__name__)
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
     train_data, _, _ = data_obj.get_data()
     signals, labels, valid_indices, window_start = train_data

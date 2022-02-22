@@ -17,7 +17,7 @@ if __name__ == "__main__":
     output_dir = "automatic_label_plots"
     args, parser = TestArguments().parse(verbose=True)
     LOGGER = utils.get_logger(script_name=__name__)
-    data_cls = utils.create_data(args.data_preproc)
+    data_cls = utils.create_data_class(args.data_preproc)
     paths = utils.create_output_paths(args, infer_mode=True)
     roc_dir = paths[-1]
     data_obj = data_cls(args, LOGGER)
