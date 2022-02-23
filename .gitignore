@@ -9,14 +9,16 @@ jobs/
 viz/
 figures/
 model_checkpoints/
-wandb/
+outputs/
+run_dir*/
+
+*.code-workspace
 
 # tensorboard/
 train_features_df_*.csv
 valid_features_df_*.csv
 
 *.onnx
-slurm*
 *.db
 *.log
 .DS_Store
@@ -170,3 +172,9 @@ cython_debug/
 *.pth
 *.pkl
 *.hdf5
+*.png
+*.pkl
+
+
+# test data
+!labeled-elm-events-10elms.hdf5
