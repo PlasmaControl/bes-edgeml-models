@@ -66,37 +66,29 @@ def train_loop(
     if args.device == 'auto':
         args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    data_cls = utils.create_data_class(args.data_preproc)
-    data_obj = data_cls(args, LOGGER)
-
     with args_file.open('wb') as f:
         pickle.dump(args, f)
 
     if _rank is not None:
         # override args.device for multi-GPU distributed data parallel training
         args.device = f'cuda:{_rank}'
-        LOGGER.info(f'Distributed data parallel: process rank {_rank} on GPU {args.device}')
-
-    LOGGER.info("-" * 30)
-
-    if not args.dry_run:
-        LOGGER.info(f"Test data will be saved to: {test_data_file}")
-    LOGGER.info("-" * 30)
+        LOGGER.info(f'  Distributed data parallel: process rank {_rank} on GPU {args.device}')
 
     # create train, valid and test data
-    train_data, valid_data, _ = data_obj.get_data(
-        shuffle_sample_indices=args.shuffle_sample_indices,
-    )
+    data_cls = utils.create_data_class(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+    train_data, valid_data, test_data = data_obj.get_data()
 
     # dump test data into a file
     if not args.dry_run:
+        LOGGER.info(f"  Test data will be saved to: {test_data_file}")
         with open(test_data_file, "wb") as f:
             pickle.dump(
                 {
-                    "signals": valid_data[0],
-                    "labels": valid_data[1],
-                    "sample_indices": valid_data[2],
-                    "window_start": valid_data[3],
+                    "signals": test_data[0],
+                    "labels": test_data[1],
+                    "sample_indices": test_data[2],
+                    "window_start": test_data[3],
                 },
                 f,
             )
@@ -130,7 +122,7 @@ def train_loop(
 
     # device
     device = torch.device(args.device)
-    LOGGER.info(f'On device {device}')
+    LOGGER.info(f'------>  Target device: {device}')
 
     # model class and model instance
     model_class = utils.create_model_class(args.model_name)
@@ -141,9 +133,7 @@ def train_loop(
     if _rank is not None:
         model = DistributedDataParallel(model, device_ids=[_rank])
 
-    LOGGER.info("-" * 50)
-    LOGGER.info(f"       Training with model: {args.model_name}       ")
-    LOGGER.info("-" * 50)
+    LOGGER.info(f"------>  Model: {args.model_name}       ")
 
     # display model details
     if args.model_name == "rnn":
@@ -179,10 +169,10 @@ def train_loop(
     x = x.to(device)
     LOGGER.info("\t\t\t\tMODEL SUMMARY")
     summary(model, input_size=input_size)
-    LOGGER.info(f'Batched input size: {x.shape}')
-    LOGGER.info(f"Batched output size: {model(x).shape}")
+    LOGGER.info(f'  Batched input size: {x.shape}')
+    LOGGER.info(f"  Batched output size: {model(x).shape}")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    LOGGER.info(f"Model contains {n_params} trainable parameters!")
+    LOGGER.info(f"  Model contains {n_params} trainable parameters!")
 
     # optimizer
     optimizer = torch.optim.Adam(
@@ -258,8 +248,8 @@ def train_loop(
         f1_scores = np.append(f1_scores, f1)
         elapsed = time.time() - start_time
 
-        LOGGER.info(f"Ep: {epoch+1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
-        LOGGER.info(f"Ep: {epoch+1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
+        LOGGER.info(f"Epoch: {epoch+1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
+        LOGGER.info(f"Epoch: {epoch+1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
 
         # update and save outputs
         outputs['train_loss'] = train_loss
@@ -273,9 +263,9 @@ def train_loop(
         # track best f1 score and save model
         if f1 > best_score:
             best_score = f1
-            LOGGER.info(f"Ep: {epoch+1:03d} \tBest Score: {best_score:.3f}")
+            LOGGER.info(f"Epoch: {epoch+1:03d} \tBest Score: {best_score:.3f}")
             if not args.dry_run:
-                LOGGER.info(f"Ep: {epoch+1:03d} \tSaving model to: {checkpoint_file}")
+                LOGGER.info(f"Epoch: {epoch+1:03d} \tSaving model to: {checkpoint_file}")
                 model_data = {
                     "model": model.state_dict(), 
                     "preds": preds,
@@ -289,7 +279,7 @@ def train_loop(
             for key, item in outputs.items():
                 trial.set_user_attr(key, item.tolist())
             if trial.should_prune():
-                LOGGER.info("Trial pruned by Optuna")
+                LOGGER.info("--------> Trial pruned by Optuna")
                 for handler in LOGGER.handlers[:]:
                     handler.close()
                     LOGGER.removeHandler(handler)

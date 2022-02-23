@@ -57,7 +57,8 @@ class BaseData:
                 print("CSV file containing the automatic labels not found.")
 
     def get_data(
-        self, shuffle_sample_indices: bool = False, fold: int = None
+        self,
+        # shuffle_sample_indices: bool = False
     ) -> Union[
         Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]],
         Tuple[
@@ -88,42 +89,37 @@ class BaseData:
             max_elms=self.args.max_elms,
         )
         self.logger.info("Reading ELM events and creating datasets")
-        self.logger.info("-" * 30)
-        self.logger.info("  Creating training data")
-        self.logger.info("-" * 30)
+        self.logger.info("-------> Creating training data")
         if self.args.use_all_data:
             all_elms = np.concatenate(
                 [training_elms, validation_elms, test_elms]
             )
             all_data = self._preprocess_data(
                 all_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
+                shuffle_sample_indices=True,
             )
         else:
             train_data = self._preprocess_data(
                 training_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
+                shuffle_sample_indices=True,
             )
-            self.logger.info("-" * 30)
-            self.logger.info("  Creating validation data")
-            self.logger.info("-" * 30)
+            self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
                 validation_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
+                shuffle_sample_indices=False,
             )
-            self.logger.info("-" * 30)
-            self.logger.info("  Creating test data")
-            self.logger.info("-" * 30)
+            self.logger.info("--------> Creating test data")
             test_data = self._preprocess_data(
                 test_elms,
-                shuffle_sample_indices=shuffle_sample_indices,
+                shuffle_sample_indices=False,
             )
 
         self.hf.close()
-        if self.hf:
-            self.logger.info("File is open.")
-        else:
-            self.logger.info("File is closed.")
+        assert(not self.hf)
+        # if self.hf:
+        #     self.logger.info("Data file is open.")
+        # else:
+        #     self.logger.info("Data file is closed.")
 
         return (
             (all_elms, all_data)
@@ -165,33 +161,27 @@ class BaseData:
         """
         # limit the data according to the max number of events passed
         if max_elms is not None and max_elms != -1:
-            self.logger.info(f"Limiting data read to {max_elms} events.")
+            self.logger.info(f"  Limiting data read to {max_elms} events.")
             n_elms = max_elms
         else:
             n_elms = len(self.elm_indices)
 
         # split the data into train, validation and test sets
-        training_elms, test_elms = model_selection.train_test_split(
+        training_elms, test_validate_elms = model_selection.train_test_split(
             self.elm_indices[:n_elms],
-            test_size=self.args.fraction_test,
+            test_size=self.args.fraction_test + self.args.fraction_valid,
             shuffle=True,
             random_state=self.args.seed,
         )
-
-        self.logger.info(
-            "Creating training and validation datasets by simple splitting"
-        )
-        training_elms, validation_elms = model_selection.train_test_split(
-            training_elms,
-            test_size=self.args.fraction_valid,
+        test_elms, validation_elms = model_selection.train_test_split(
+            test_validate_elms,
+            test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
             shuffle=True,
             random_state=self.args.seed,
         )
-        self.logger.info(f"Number of training ELM events: {training_elms.size}")
-        self.logger.info(
-            f"Number of validation ELM events: {validation_elms.size}"
-        )
-        self.logger.info(f"Number of test ELM events: {test_elms.size}")
+        self.logger.info(f"  Training ELM events: {training_elms.size}")
+        self.logger.info(f"  Validation ELM events: {validation_elms.size}")
+        self.logger.info(f"  Test ELM events: {test_elms.size}")
 
         return training_elms, validation_elms, test_elms
 
