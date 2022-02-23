@@ -36,10 +36,20 @@ class BaseData:
 
         self.logger = logger
         self.df = pd.DataFrame()
-        self.elm_indices, self.hf = self._read_file()
-        self.logger.info(
-            f"Total frames in input data file: {self._get_total_frames()}"
-        )
+
+        self.logger.info(f"-------->  Data file: {self.datafile}")
+
+        # get ELM indices from datafile
+        with h5py.File(self.datafile, "r") as hf:
+            self.elm_indices = np.array(
+                [ int(key) for key in hf ], 
+                dtype=np.int32,
+                )
+            count = sum( [ hf[key]['labels'].shape[0] for key in hf ] )
+
+        self.logger.info(f"  Number of ELM events: {len(self.elm_indices)}")
+        self.logger.info(f"  Total time frames: {count}")
+
         if self.args.data_preproc == "automatic_labels":
             try:
                 csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
@@ -58,13 +68,12 @@ class BaseData:
 
     def get_data(
         self,
-        # shuffle_sample_indices: bool = False
     ) -> Union[
-        Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray]],
+        Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]],
         Tuple[
-            Tuple[ndarray, ndarray, ndarray, ndarray],
-            Tuple[ndarray, ndarray, ndarray, ndarray],
-            Tuple[ndarray, ndarray, ndarray, ndarray],
+            Tuple[ndarray, ndarray, ndarray, ndarray, ndarray],
+            Tuple[ndarray, ndarray, ndarray, ndarray, ndarray],
+            Tuple[ndarray, ndarray, ndarray, ndarray, ndarray],
         ],
     ]:
         """Method to create data for training, validation and testing.
@@ -83,22 +92,17 @@ class BaseData:
         train_data = None
         validation_data = None
         test_data = None
-        all_elms = None
         all_data = None
-        training_elms, validation_elms, test_elms = self._partition_elms(
-            max_elms=self.args.max_elms,
-        )
-        self.logger.info("Reading ELM events and creating datasets")
-        self.logger.info("-------> Creating training data")
+        self.logger.info("  Reading ELM events and creating datasets")
         if self.args.use_all_data:
-            all_elms = np.concatenate(
-                [training_elms, validation_elms, test_elms]
-            )
             all_data = self._preprocess_data(
-                all_elms,
+                self.elm_indices,
                 shuffle_sample_indices=True,
             )
+            output = (self.elm_indices, all_data)
         else:
+            training_elms, validation_elms, test_elms = self._partition_elms()
+            self.logger.info("-------> Creating training data")
             train_data = self._preprocess_data(
                 training_elms,
                 shuffle_sample_indices=True,
@@ -113,34 +117,12 @@ class BaseData:
                 test_elms,
                 shuffle_sample_indices=False,
             )
-
-        self.hf.close()
-        assert(not self.hf)
-        # if self.hf:
-        #     self.logger.info("Data file is open.")
-        # else:
-        #     self.logger.info("Data file is closed.")
-
-        return (
-            (all_elms, all_data)
-            if self.args.use_all_data
-            else (
-                train_data,
-                validation_data,
-                test_data,
-            )
-        )
-
-    def _get_total_frames(self):
-        count = 0
-        for elm_index in self.elm_indices:
-            elm_key = f"{elm_index:05d}"
-            elm_event = self.hf[elm_key]
-            count += np.array(elm_event["labels"]).shape[0]
-        return count
+            output = (train_data, validation_data, test_data)
+        return output
 
     def _partition_elms(
-        self, max_elms: int = None
+        self, 
+        # max_elms: int = None,
     ) -> Tuple[ndarray, ndarray, ndarray]:
         """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
@@ -160,9 +142,9 @@ class BaseData:
                 validation and test ELM indices.
         """
         # limit the data according to the max number of events passed
-        if max_elms is not None and max_elms != -1:
-            self.logger.info(f"  Limiting data read to {max_elms} events.")
-            n_elms = max_elms
+        if self.args.max_elms is not None and self.args.max_elms != -1:
+            self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
+            n_elms = self.args.max_elms
         else:
             n_elms = len(self.elm_indices)
 
@@ -184,22 +166,6 @@ class BaseData:
         self.logger.info(f"  Test ELM events: {test_elms.size}")
 
         return training_elms, validation_elms, test_elms
-
-    def _read_file(self) -> Tuple[ndarray, h5py.File]:
-        """Helper function to read a HDF5 file.
-
-        Returns:
-        --------
-            Tuple[ndarray, h5py.File]: Tuple containing ELM indices and file object.
-        """
-        assert os.path.exists(self.datafile)
-        self.logger.info(f"Found datafile: {self.datafile}")
-
-        # get ELM indices from datafile
-        hf = h5py.File(self.datafile, "r")
-        self.logger.info(f"Number of ELM events in the datafile: {len(hf)}")
-        elm_index = np.array([int(key) for key in hf], dtype=np.int32)
-        return elm_index, hf
 
     def _get_valid_indices(
         self,

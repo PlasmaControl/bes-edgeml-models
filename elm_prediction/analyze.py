@@ -76,6 +76,7 @@ def predict(
     labels = test_data[1]
     _ = test_data[2]  # sample_indices
     window_start = test_data[3]
+    elm_indices = test_data[4]
     num_elms = len(window_start)
     elm_predictions = dict()
     # iterate through each ELM event
@@ -179,6 +180,7 @@ def predict(
             "macro_labels": macro_labels,
             "macro_predictions": macro_predictions,
             "elm_time": elm_time,
+            "elm_index": elm_indices[i_elm],
         }
     return elm_predictions
 
@@ -325,38 +327,77 @@ def plot_all(
     """Helper function to plot the time series plots for all the ELM events in
     the test set on multiple pages.
     """
-    elm_id = list(elm_predictions.keys())
-    num_pages = len(elm_id) // 12 + 1
-    elm_ids_per_page = [elm_id[i * 12 : (i + 1) * 12] for i in range(num_pages)]
+    elm_ids = list(elm_predictions.keys())
+    print('elm_ids:', elm_ids)
+    n_elms = len(elm_ids)
+    num_pages = n_elms // 12 + 1 if n_elms%12 > 0 else n_elms // 12
 
-    # iterate through pages
-    for page_num, page in enumerate(elm_ids_per_page):
-        print(f"Drawing plots on page: {page_num+1}")
-        if len(page) == 12:
-            rows = args.num_rows
-            cols = args.num_cols
-            figsize = (12, 14)
-        else:
-            remaining_elms = len(elm_id) - 12 * (num_pages - 1)
-            if remaining_elms <= 4:
-                rows = remaining_elms
-                cols = 1
-                figsize = (8, 12)
-            else:
-                rows = 4
-                cols = int(np.ceil(remaining_elms / rows))
-                figsize = (12, 14)
-        elm_range = f"{page_num*12 + 1}-{page_num*12 + 12}"
-        plot(
-            args,
-            elm_predictions,
-            plot_dir,
-            page,
-            elm_range=elm_range,
-            n_rows=rows,
-            n_cols=cols,
-            figsize=figsize,
-        )
+    nrows = 3
+    ncols = 4
+    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols*4, nrows*3))
+
+    for i_page in range(num_pages):
+        elms = elm_ids[i_page * 12 : (i_page + 1) * 12]
+        for i_elm, elm in enumerate(elms):
+            plt.sca(axes.flat[i_elm])
+            plt.cla()
+            signals = elm_predictions[elm]["signals"]
+            labels = elm_predictions[elm]["labels"]
+            predictions = elm_predictions[elm]["micro_predictions"]
+            elm_time = elm_predictions[elm]["elm_time"]
+            elm_index = elm_predictions[elm]["elm_index"]
+            if i_page==0 and i_elm==0:
+                print('First ELM event')
+                print(f'signals.shape: {signals.shape}')
+                print(f'labels.shape: {labels.shape}')
+                print(f'predictions.shape: {predictions.shape}')
+                print(f'elm_time.shape: {elm_time.shape}')
+            active_elm = np.where(labels > 0)[0]
+            active_elm_start = active_elm[0]
+            active_elm_end = active_elm[-1]
+            # plot signal, labels, and prediction
+            plt.plot(
+                elm_time,
+                signals[:, 2, 6] / np.max(signals[:, 2, 6]),
+                label="BES ch 22",
+            )
+            plt.plot(
+                elm_time,
+                labels + 0.02,
+                label="Ground truth",
+            )
+            plt.plot(
+                elm_time,
+                predictions,
+                label="Prediction",
+                lw=1.5,
+            )
+            plt.axvline(
+                active_elm_start - args.truncate_buffer,
+                ymin=0,
+                ymax=0.9,
+                c="k",
+                ls="--",
+                alpha=0.65,
+                label="Buffer limits",
+            )
+            plt.axvline(
+                active_elm_end,
+                ymin=0,
+                ymax=0.9,
+                c="k",
+                ls="--",
+                alpha=0.65,
+            )
+            plt.xlabel("Time (micro-s)", fontsize=11)
+            plt.ylabel("Signal | label", fontsize=11)
+            plt.tick_params(axis="x", labelsize=11)
+            plt.tick_params(axis="y", labelsize=11)
+            plt.ylim([None, 1.1])
+            plt.legend(fontsize=9)
+            plt.title(f'ELM index {elm_index}', fontsize=12)
+        plt.tight_layout()
+        plt.show()
 
 
 def show_metrics(
@@ -572,7 +613,7 @@ def model_predict(
     targets = []
     # create pytorch dataset for test set
     test_dataset = dataset.ELMDataset(
-        args, *data, logger=logger, phase="testing"
+        args, *data[0:4], logger=logger, phase="testing"
     )
     # dataloader
     data_loader = torch.utils.data.DataLoader(
@@ -664,18 +705,20 @@ def main(
     with open(test_data_file, "rb") as f:
         test_data = pickle.load(f)
 
-    signals = np.array(test_data["signals"])
-    labels = np.array(test_data["labels"])
-    sample_indices = np.array(test_data["sample_indices"])
-    window_start = np.array(test_data["window_start"])
+    signals = test_data["signals"]
+    labels = test_data["labels"]
+    sample_indices = test_data["sample_indices"]
+    window_start = test_data["window_start"]
+    elm_indices = test_data["elm_indices"]
 
     LOGGER.info("-------->  Test data information")
     LOGGER.info(f"  Signals shape: {signals.shape}")
     LOGGER.info(f"  Labels shape: {labels.shape}")
     LOGGER.info(f"  Sample indices shape: {sample_indices.shape}")
-    LOGGER.info(f"  Window start indices: {window_start}")
+    LOGGER.info(f"  Window start indices: {window_start.shape}")
+    LOGGER.info(f"  ELM indices: {elm_indices.shape}")
 
-    test_data = (signals, labels, sample_indices, window_start)
+    test_data = (signals, labels, sample_indices, window_start, elm_indices)
     model_predict(args, LOGGER, model, device, test_data)
 
     # get prediction dictionary containing truncated signals, labels,
@@ -684,23 +727,22 @@ def main(
 
     plot_all(args, pred_dict, plot_dir)
 
-    # show metrics for micro/macro predictions
-    for mode in ['micro', 'macro']:
-        targets, predictions = get_dict_values(pred_dict, mode=mode)
-        show_metrics(
-            args,
-            targets,
-            predictions,
-            clf_report_dir,
-            roc_dir,
-            plot_dir,
-            pred_mode=mode,
-        )
+    # # show metrics for micro/macro predictions
+    # for mode in ['micro', 'macro']:
+    #     targets, predictions = get_dict_values(pred_dict, mode=mode)
+    #     show_metrics(
+    #         args,
+    #         targets,
+    #         predictions,
+    #         clf_report_dir,
+    #         roc_dir,
+    #         plot_dir,
+    #         pred_mode=mode,
+    #     )
 
 
 if __name__ == "__main__":
     args_file = Path('run_dir/args.pkl')
-    assert(args_file.exists())
     with args_file.open('rb') as f:
         args = pickle.load(f)
     args = TestArguments().parse(verbose=True, existing_namespace=args)

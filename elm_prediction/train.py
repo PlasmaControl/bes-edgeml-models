@@ -89,16 +89,17 @@ def train_loop(
                     "labels": test_data[1],
                     "sample_indices": test_data[2],
                     "window_start": test_data[3],
+                    "elm_indices": test_data[4],
                 },
                 f,
             )
 
     # create datasets
     train_dataset = dataset.ELMDataset(
-        args, *train_data, logger=LOGGER, phase="training"
+        args, *train_data[0:4], logger=LOGGER, phase="training"
     )
     valid_dataset = dataset.ELMDataset(
-        args, *valid_data, logger=LOGGER, phase="validation"
+        args, *valid_data[0:4], logger=LOGGER, phase="validation"
     )
 
     # training and validation dataloaders
@@ -297,6 +298,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         arg_list = [
+            '--max_elms', '5',
+            '--n_epochs', '1',
         ]
     else:
         # use command line arguments in `sys.argv`

@@ -5,6 +5,7 @@ modifications and transformations.
 from typing import Tuple
 
 import numpy as np
+import h5py
 
 try:
     from .base_data import BaseData
@@ -46,80 +47,68 @@ class UnprocessedData(BaseData):
             elm_indices = self.elm_indices
 
         # iterate through all the ELM indices
-        for elm_index in elm_indices:
-            elm_key = f"{elm_index:05d}"
-            elm_event = self.hf[elm_key]
-            _signals = np.array(elm_event["signals"], dtype=np.float32)
-            # transposing so that the time dimension comes forward
-            _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-            if not self.args.automatic_labels:
-                try:
-                    _labels = np.array(elm_event["labels"], dtype=np.float32)
-                except KeyError:
-                    _labels = np.array(elm_event["manual_labels"], dtype=np.float32)
-            else:
-                try:
+        with h5py.File(self.datafile, 'r') as hf:
+            for elm_index in elm_indices:
+                elm_key = f"{elm_index:05d}"
+                elm_event = hf[elm_key]
+                _signals = np.array(elm_event["signals"], dtype=np.float32)
+                # transposing so that the time dimension comes forward
+                _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
+                if self.args.automatic_labels:
                     _labels = np.array(elm_event["automatic_labels"], dtype=np.float32)
-                except KeyError:
-                    print(
-                        f"`--automatic_labels` are parsed but the HDF5 file containing automatic labels is not used!"
+                else:
+                    try:
+                        _labels = np.array(elm_event["labels"], dtype=np.float32)
+                    except KeyError:
+                        _labels = np.array(elm_event["manual_labels"], dtype=np.float32)
+
+                if self.args.normalize_data:
+                    _signals = _signals.reshape(-1, 64)
+                    _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
+                    _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
+                    _signals = _signals.reshape(-1, 8, 8)
+
+                if self.args.truncate_inputs:
+                    active_elm_indices = np.where(_labels > 0)[0]
+                    elm_end_index = active_elm_indices[-1] + self.args.truncate_buffer
+                    _signals = _signals[:elm_end_index, ...]
+                    _labels = _labels[:elm_end_index]
+
+                if len(_labels) < 2000:
+                    continue
+                else:
+                    # get all the allowed indices till current time step
+                    (
+                        signals,
+                        labels,
+                        valid_t0,
+                        window_start,
+                        elm_start,
+                        elm_stop,
+                    ) = self._get_valid_indices(
+                        _signals=_signals,
+                        _labels=_labels,
+                        window_start_indices=window_start,
+                        elm_start_indices=elm_start,
+                        elm_stop_indices=elm_stop,
+                        valid_t0=valid_t0,
+                        labels=labels,
+                        signals=signals,
                     )
 
-            if self.args.normalize_data:
-                _signals = _signals.reshape(-1, 64)
-                _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
-                _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
-                _signals = _signals.reshape(-1, 8, 8)
-
-            if self.args.truncate_inputs:
-                active_elm_indices = np.where(_labels > 0)[0]
-                elm_end_index = active_elm_indices[-1] + self.args.truncate_buffer
-                _signals = _signals[:elm_end_index, ...]
-                _labels = _labels[:elm_end_index]
-
-            if len(_labels) < 2000:
-                continue
-            else:
-                # get all the allowed indices till current time step
-                indices_data = self._get_valid_indices(
-                    _signals=_signals,
-                    _labels=_labels,
-                    window_start_indices=window_start,
-                    elm_start_indices=elm_start,
-                    elm_stop_indices=elm_stop,
-                    valid_t0=valid_t0,
-                    labels=labels,
-                    signals=signals,
-                )
-                (
-                    signals,
-                    labels,
-                    valid_t0,
-                    window_start,
-                    elm_start,
-                    elm_stop,
-                ) = indices_data
-
-        _labels = np.array(labels)
-
         # valid indices for data sampling
-        valid_indices = np.arange(valid_t0.size, dtype="int")
-        valid_indices = valid_indices[valid_t0 == 1]
-        sample_indices = valid_indices
-        # sample_indices = self._oversample_data(
-        #     _labels, valid_indices, elm_start, elm_stop
-        # )
+        sample_indices = np.arange(valid_t0.size, dtype="int")
+        sample_indices = sample_indices[valid_t0 == 1]
 
         if shuffle_sample_indices:
             np.random.shuffle(sample_indices)
 
         self.logger.info(
-            "Data tensors -> signals, labels, valid_indices, sample_indices, window_start_indices:"
+            "Data tensors -> signals, labels, sample_indices, window_start_indices:"
         )
         for tensor in [
             signals,
             labels,
-            valid_indices,
             sample_indices,
             window_start,
         ]:
@@ -128,25 +117,4 @@ class UnprocessedData(BaseData):
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
             self.logger.info(tmp)
-        return signals, labels, sample_indices, window_start
-
-
-# if __name__ == "__main__":
-#     import os
-#     import sys
-
-#     sys.path.append(os.getcwd())
-#     from src import utils
-#     from options.base_arguments import BaseArguments
-
-#     args, _ = BaseArguments().parse()
-
-#     # create the logger object
-#     logger = utils.get_logger(
-#         script_name=__name__,
-#         stream_handler=True,
-#         # log_file=f"output_logs.log",
-#     )
-#     data = UnprocessedData(args, logger)
-#     train_data, _, _ = data.get_data()
-#     print(train_data)
+        return signals, labels, sample_indices, window_start, elm_indices
