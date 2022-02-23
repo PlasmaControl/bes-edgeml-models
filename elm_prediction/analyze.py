@@ -39,36 +39,6 @@ palette = list(sns.color_palette("muted").as_hex())
 LABELS = ["no ELM", "ELM"]
 
 
-def get_test_data(
-    args: argparse.Namespace,
-    file_name: str,
-) -> tuple:
-    """Read the pickle file(s) containing the test data and return the data attributes
-    such as signals, labels, sample_indices, and window_start_indices.
-
-    Args:
-    -----
-        args (argparse.Namespace): Argparse namespace object containing all the
-            base and test arguments.
-        file_name (str): Name of the test data file.
-
-    Returns:
-    --------
-        Tuple containing signals, labels, valid_indices and window_start_indices.
-    """
-    # read the pickle file and load the contents
-    with open(file_name, "rb") as f:
-        test_data = pickle.load(f)
-
-    signals = np.array(test_data["signals"])
-    labels = np.array(test_data["labels"])
-    sample_indices = np.array(test_data["sample_indices"])
-    window_start = np.array(test_data["window_start"])
-    data_attrs = (signals, labels, sample_indices, window_start)
-
-    return data_attrs
-
-
 def predict(
     args: argparse.Namespace,
     model: object,
@@ -389,18 +359,6 @@ def plot_all(
         )
 
 
-def show_details(test_data: tuple) -> None:
-    print("Test data information")
-    signals = test_data[0]
-    labels = test_data[1]
-    sample_indices = test_data[2]
-    window_start = test_data[3]
-    print(f"Signals shape: {signals.shape}")
-    print(f"Labels shape: {labels.shape}")
-    print(f"Sample indices shape: {sample_indices.shape}")
-    print(f"Window start indices: {window_start}")
-
-
 def show_metrics(
     args: argparse.Namespace,
     y_true: np.ndarray,
@@ -624,7 +582,7 @@ def model_predict(
         drop_last=True,
     )
     inputs, _ = next(iter(data_loader))
-    print(f"Input size: {inputs.shape}")
+    logger.info(f"Input size: {inputs.shape}")
     # iterate through the dataloader
     for images, labels in tqdm(data_loader):
         images = images.to(device)
@@ -639,8 +597,8 @@ def model_predict(
     f1_thresh = 0.35  # threshold for F1-score
     f1 = metrics.f1_score(targets, (predictions > f1_thresh).astype(int))
     # display ROC and F1-score
-    print(f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
-    print(f"F1 score on test data: {f1:.4f}")
+    logger.info(f"ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
+    logger.info(f"F1 score on test data: {f1:.4f}")
 
 
 def get_dict_values(pred_dict: dict, mode: str):
@@ -688,12 +646,12 @@ def main(
 
     model = model.to(device)
 
-    # load the model checkpoint and other paths
+    # restore paths
     test_data_file, checkpoint_file, clf_report_dir, plot_dir, roc_dir = \
         utils.create_output_paths(args, infer_mode=True)
 
-    LOGGER.info(f"Using model checkpoint: {checkpoint_file}")
-
+    # load the model checkpoint
+    LOGGER.info(f"  Model checkpoint: {checkpoint_file}")
     model.load_state_dict(
         torch.load(
             checkpoint_file,
@@ -701,14 +659,23 @@ def main(
         )["model"]
     )
 
-    # get the test data and dataloader
-    LOGGER.info(f"Using test data file: {test_data_file}")
+    # restore test data
+    LOGGER.info(f"  Test data file: {test_data_file}")
+    with open(test_data_file, "rb") as f:
+        test_data = pickle.load(f)
 
-    # get the data
-    test_data = get_test_data(args, file_name=test_data_file)
+    signals = np.array(test_data["signals"])
+    labels = np.array(test_data["labels"])
+    sample_indices = np.array(test_data["sample_indices"])
+    window_start = np.array(test_data["window_start"])
 
-    show_details(test_data)
+    LOGGER.info("-------->  Test data information")
+    LOGGER.info(f"  Signals shape: {signals.shape}")
+    LOGGER.info(f"  Labels shape: {labels.shape}")
+    LOGGER.info(f"  Sample indices shape: {sample_indices.shape}")
+    LOGGER.info(f"  Window start indices: {window_start}")
 
+    test_data = (signals, labels, sample_indices, window_start)
     model_predict(args, LOGGER, model, device, test_data)
 
     # get prediction dictionary containing truncated signals, labels,
@@ -717,32 +684,18 @@ def main(
 
     plot_all(args, pred_dict, plot_dir)
 
-    # show metrics for micro predictions
-    targets_micro, predictions_micro = get_dict_values(
-        pred_dict, mode="micro"
-    )
-    show_metrics(
-        args,
-        targets_micro,
-        predictions_micro,
-        clf_report_dir,
-        roc_dir,
-        plot_dir,
-        pred_mode="micro",
-    )
-    # show metrics for macro predictions
-    targets_macro, predictions_macro = get_dict_values(
-        pred_dict, mode="macro"
-    )
-    show_metrics(
-        args,
-        targets_macro,
-        predictions_macro,
-        clf_report_dir,
-        roc_dir,
-        plot_dir,
-        pred_mode="macro",
-    )
+    # show metrics for micro/macro predictions
+    for mode in ['micro', 'macro']:
+        targets, predictions = get_dict_values(pred_dict, mode=mode)
+        show_metrics(
+            args,
+            targets,
+            predictions,
+            clf_report_dir,
+            roc_dir,
+            plot_dir,
+            pred_mode=mode,
+        )
 
 
 if __name__ == "__main__":

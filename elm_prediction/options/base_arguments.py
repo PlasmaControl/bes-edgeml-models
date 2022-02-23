@@ -175,13 +175,13 @@ class BaseArguments:
         parser.add_argument(
             "--fraction_valid",
             type=float,
-            default=0.15,
+            default=0.1,
             help="size of the validation dataset.",
         )
         parser.add_argument(
             "--fraction_test",
             type=float,
-            default=0.1,
+            default=0.15,
             help="size of the test dataset.",
         )
         parser.add_argument(
