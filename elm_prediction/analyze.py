@@ -28,10 +28,12 @@ try:
     from .data_preprocessing import *
     from .src import utils, dataset
     from .options.test_arguments import TestArguments
+    from . import package_dir
 except ImportError:
     from elm_prediction.data_preprocessing import *
     from elm_prediction.src import utils, dataset
     from elm_prediction.options.test_arguments import TestArguments
+    from elm_prediction import package_dir
 
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
@@ -207,7 +209,7 @@ def plot_inference_on_elm_events(
 
     nrows = 3
     ncols = 4
-    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols*3.5, nrows*2.625))
+    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols*4, nrows*3))
 
     for i_page in range(num_pages):
         elms = elm_ids[i_page * 12 : (i_page + 1) * 12]
@@ -244,6 +246,10 @@ def plot_inference_on_elm_events(
             plt.legend(fontsize=9)
             plt.title(f'ELM index {elm_index}', fontsize=12)
         plt.tight_layout()
+        if save:
+            filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
+            print(f'Saving file: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
         if plt.isinteractive():
             if click_through_pages:
                 # interactive; halt/block after each page
@@ -255,10 +261,6 @@ def plot_inference_on_elm_events(
         else:
             # non-interactive for figure generation in scripts without viewing
             pass
-        if save:
-            filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
-            print(f'Saving file: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
 
 def plot_confusion_matrix(
@@ -269,6 +271,7 @@ def plot_confusion_matrix(
     roc_dir: str,
     plot_dir: str,
     pred_mode: str,
+    save: Boolean = False,
 ) -> None:
     """Show metrics like confusion matrix and classification report for both
     micro and macro predictions.
@@ -284,178 +287,112 @@ def plot_confusion_matrix(
         plot_dir (str): Output directory path to save confusion matrix plots.
         pred_mode (str): Whether to calculate metrics for micro or macro predictions.
     """
-    if pred_mode == "micro":
-        if np.array_equal(y_probas, y_probas.astype(bool)):
-            raise ValueError(
-                "Metrics for micro mode require micro_predictions but macro_predictions are passed."
-            )
+    assert pred_mode in ['micro','macro']
+
+    if pred_mode == 'micro':
+        assert y_probas.dtype not in [np.dtype('int'), np.dtype('bool')]
         # calculate predictions from the probabilities
         y_preds = (y_probas > args.threshold).astype(int)
-
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_preds)
-
-        # calculate the log of the confusion matrix scaled by the
-        # total error (false positives + false negatives)
-        # cm_log = np.log(cm)
-        x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
-        coords = tuple(zip(x, y))
-        total_error = np.sum(cm[coords])
-        cm_scaled = cm / total_error
-
-        # classification report
         cr = metrics.classification_report(y_true, y_preds, output_dict=True)
-        df = pd.DataFrame(cr).transpose()
-        print(f"Classification report:\n{df}")
-
-        # ROC details
-        fpr, tpr, thresh = metrics.roc_curve(y_true, y_probas)
-        roc_details = pd.DataFrame()
-        roc_details["fpr"] = fpr
-        roc_details["tpr"] = tpr
-        roc_details["threshold"] = thresh
-
-        # plots
-        fig = plt.figure(figsize=(8, 6), dpi=100)
-        ax = fig.add_subplot()
-        sns.heatmap(
-            cm,
-            xticklabels=LABELS,
-            yticklabels=LABELS,
-            annot=True,
-            ax=ax,
-            annot_kws={"size": 14},
-            # fmt=".3f",
-            fmt="d",
-            norm=LogNorm(),
-        )
-        plt.setp(ax.get_yticklabels(), rotation=0)
-        ax.set_xlabel("Predicted Label", fontsize=14)
-        ax.set_ylabel("True Label", fontsize=14)
-        ax.text(
-            x=0.5,
-            y=1.05,
-            s="Micro predictions",
-            fontsize=18,
-            ha="center",
-            va="bottom",
-            transform=ax.transAxes,
-        )
-        ax.text(
-            x=0.5,
-            y=1.01,
-            s=f"Signal window: {args.signal_window_size}, Label look ahead: {args.label_look_ahead}",
-            fontsize=12,
-            alpha=0.75,
-            ha="center",
-            va="bottom",
-            transform=ax.transAxes,
-        )
-        plt.tight_layout()
-        if not args.dry_run:
-            df.to_csv(
-                os.path.join(
-                    report_dir,
-                    f"{args.model_name}_classification_report_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
-                ),
-                index=True,
-            )
-            roc_details.to_csv(
-                os.path.join(
-                    roc_dir,
-                    f"{args.model_name}_roc_details_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
-                ),
-                index=False,
-            )
-            fig.savefig(
-                os.path.join(
-                    plot_dir,
-                    f"{args.model_name}_confusion_matrix_micro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
-                ),
-                dpi=100,
-            )
-        plt.show()
-    elif pred_mode == "macro":
-        if not np.array_equal(y_probas, y_probas.astype(bool)):
-            raise ValueError(
-                "Metrics for macro mode require macro_predictions but micro_predictions are passed."
-            )
-
+    else:
+        assert y_probas.dtype != np.dtype('float')
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_probas)
         cr = metrics.classification_report(y_true, y_probas, output_dict=True)
-        df = pd.DataFrame(cr).transpose()
-        print(f"Classification report:\n{df}")
 
-        # ROC details
-        fpr, tpr, thresh = metrics.roc_curve(y_true, y_probas)
-        roc_details = pd.DataFrame()
-        roc_details["fpr"] = fpr
-        roc_details["tpr"] = tpr
-        roc_details["threshold"] = thresh
+    # calculate the log of the confusion matrix scaled by the
+    # total error (false positives + false negatives)
+    # cm_log = np.log(cm)
+    # x, y = np.where(~np.eye(cm.shape[0], dtype=bool))
+    # coords = tuple(zip(x, y))
+    # total_error = np.sum(cm[coords])
+    # cm_scaled = cm / total_error
 
-        # plot
-        fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot()
-        sns.heatmap(
-            cm,
-            annot=True,
-            xticklabels=LABELS,
-            yticklabels=LABELS,
-            ax=ax,
-            annot_kws={"size": 14},
-            fmt="d",
-        )
-        plt.setp(ax.get_yticklabels(), rotation=0)
-        ax.set_xlabel("Predicted Label", fontsize=14)
-        ax.set_ylabel("True Label", fontsize=14)
-        ax.text(
-            x=0.5,
-            y=1.05,
-            s="Macro predictions",
-            fontsize=18,
-            ha="center",
-            va="bottom",
-            transform=ax.transAxes,
-        )
-        ax.text(
-            x=0.5,
-            y=1.01,
-            s=f"Signal window: {args.signal_window_size}, Label look ahead: {args.label_look_ahead}",
-            fontsize=12,
-            alpha=0.75,
-            ha="center",
-            va="bottom",
-            transform=ax.transAxes,
-        )
+    # classification report
+    df = pd.DataFrame(cr).transpose()
+    print(f"Classification report:\n{df}")
+    df.to_csv(
+        os.path.join(
+            report_dir,
+            f"classification_report_{pred_mode}.csv",
+        ),
+        index=True,
+    )
+
+    # ROC curve
+    fpr, tpr, thresh = metrics.roc_curve(y_true, y_probas)
+    roc_details = pd.DataFrame()
+    roc_details["fpr"] = fpr
+    roc_details["tpr"] = tpr
+    roc_details["threshold"] = thresh
+    roc_details.to_csv(
+        os.path.join(
+            roc_dir,
+            f"roc_details_{pred_mode}.csv",
+        ),
+        index=False,
+    )
+
+    # plots confusion matrix
+    plt.figure()
+    ax = plt.subplot()
+    sns.heatmap(
+        cm,
+        xticklabels=LABELS,
+        yticklabels=LABELS,
+        annot=True,
+        ax=ax,
+        annot_kws={"size": 14},
+        # fmt=".3f",
+        fmt="d",
+        norm=LogNorm() if pred_mode=='micro' else None,
+    )
+    plt.setp(ax.get_yticklabels(), rotation=0)
+    ax.set_xlabel("Predicted Label", fontsize=14)
+    ax.set_ylabel("True Label", fontsize=14)
+    ax.text(
+        x=0.5,
+        y=1.08,
+        s=f"{pred_mode} predictions",
+        fontsize=14,
+        ha="center",
+        va="bottom",
+        transform=ax.transAxes,
+    )
+    ax.text(
+        x=0.5,
+        y=1.02,
+        s=f"Signal window: {args.signal_window_size}, Label look ahead: {args.label_look_ahead}",
+        fontsize=12,
+        alpha=0.75,
+        ha="center",
+        va="bottom",
+        transform=ax.transAxes,
+    )
+    plt.tight_layout()
+    if save:
+        filepath = Path(plot_dir) / f"confusion_matrix_{pred_mode}.pdf"
+        print(f'Saving matrix figure: {filepath.as_posix()}')
+        plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+
+    # plot ROC curve if micro
+    if pred_mode == 'micro':
+        plt.figure()
+        plt.plot(fpr, tpr)
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.title('ROC curve')
         plt.tight_layout()
-        if not args.dry_run:
-            df.to_csv(
-                os.path.join(
-                    report_dir,
-                    f"{args.model_name}_classification_report_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
-                ),
-                index=True,
-            )
-            roc_details.to_csv(
-                os.path.join(
-                    roc_dir,
-                    f"{args.model_name}_roc_details_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.csv",
-                ),
-                index=False,
-            )
-            fig.savefig(
-                os.path.join(
-                    plot_dir,
-                    f"{args.model_name}_confusion_matrix_macro_lookahead_{args.label_look_ahead}_{args.data_preproc}{args.filename_suffix}.png",
-                ),
-                dpi=100,
-            )
-        plt.show()
-    else:
-        raise ValueError(
-            f"Expected pred_mode to be either `micro` or`macro` but {pred_mode} is passed."
-        )
+        if save:
+            filepath = Path(plot_dir) / f"roc_{pred_mode}.pdf"
+            print(f'Saving roc plot: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+
+
+    if plt.isinteractive():
+        plt.show(block=False)
 
 
 def calc_roc_and_f1(
@@ -494,11 +431,13 @@ def calc_roc_and_f1(
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
     # display ROC and F1-score
-    logger.info(f"  ROC score on test data: {metrics.roc_auc_score(targets, predictions):.4f}")
+    roc_auc = metrics.roc_auc_score(targets, predictions)
+    logger.info(f"  ROC score on test data: {roc_auc:.4f}")
     logger.info(f'  Threshold for F1: {args.threshold:.2f}')
     # f1_thresh = 0.35  # threshold for F1-score
     f1 = metrics.f1_score(targets, (predictions > args.threshold).astype(int))
     logger.info(f"  F1 score on test data: {f1:.4f}")
+    return roc_auc, f1, args.threshold
 
 
 def get_micro_macro_values(pred_dict: dict, mode: str):
@@ -507,12 +446,9 @@ def get_micro_macro_values(pred_dict: dict, mode: str):
     targets = []
     predictions = []
     for vals in pred_dict.values():
-        for k, v in vals.items():
-            if k == f"{mode}_predictions":
-                predictions.append(v)
-            label_key = 'labels' if mode=='micro' else 'macro_labels'
-            if k == label_key:
-                targets.append(v)
+        predictions.append(vals[f"{mode}_predictions"])
+        label_key = 'labels' if mode=='micro' else 'macro_labels'
+        targets.append(vals[label_key])
     return np.concatenate(targets), np.concatenate(predictions)
 
 
@@ -525,7 +461,7 @@ def main(
     """Actual function encapsulating all analysis function and making inference."""
 
     output_dir = Path(args.output_dir)
-    assert(output_dir.exists())
+    assert output_dir.exists()
 
     if interactive:
         plt.ion()
@@ -577,7 +513,7 @@ def main(
     LOGGER.info(f"  ELM indices: {elm_indices.shape}")
 
     test_data = (signals, labels, sample_indices, window_start, elm_indices)
-    calc_roc_and_f1(args, LOGGER, model, device, test_data)
+    roc, f1, threshold = calc_roc_and_f1(args, LOGGER, model, device, test_data)
 
     # get micro/macro predictions for truncated signals, labels,
     pred_dict = inference_on_elm_events(args, model, device, test_data)
@@ -592,16 +528,20 @@ def main(
     # plot micro/macro confusion matrices
     for mode in ['micro', 'macro']:
         targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
-    #     plot_confusion_matrix(args, targets, predictions,
-    #         clf_report_dir, roc_dir, plot_dir, pred_mode=mode)
+        plot_confusion_matrix(args, targets, predictions,
+            clf_report_dir, roc_dir, plot_dir, 
+            pred_mode=mode, save=save)
 
     if plt.isinteractive():
+        print('Close plots to exit')
         plt.show(block=True)
 
 
 if __name__ == "__main__":
-    args_file = Path('run_dir/args.pkl')
+    plt.close('all')
+
+    args_file = package_dir / 'run_dir/args.pkl'
     with args_file.open('rb') as f:
         args = pickle.load(f)
     args = TestArguments().parse(verbose=True, existing_namespace=args)
-    main(args, interactive=True, click_through_pages=True, save=True)
+    main(args, interactive=True, click_through_pages=False, save=True)
