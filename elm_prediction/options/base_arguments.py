@@ -273,13 +273,13 @@ class BaseArguments:
         parser.add_argument(
             "--raw_num_filters",
             type=int,
-            default=16,
+            default=8,
             help="Number of features for RawFeatureModel: int >= 0",
         )
         parser.add_argument(
             "--fft_num_filters",
             type=int,
-            default=16,
+            default=8,
             help="Number of features for FFTFeatureModel: int >= 0",
         )
         parser.add_argument(
@@ -291,7 +291,7 @@ class BaseArguments:
         parser.add_argument(
             "--dwt_num_filters",
             type=int,
-            default=16,
+            default=8,
             help="Number of features for D(C)WTFeatureModel: int >= 0",
         )
         parser.add_argument(

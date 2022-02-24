@@ -298,8 +298,10 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         arg_list = [
-            '--max_elms', '5',
-            '--n_epochs', '1',
+            # '--max_elms', '5',
+            '--n_epochs', '3',
+            '--fraction_valid', '0.2',
+            '--fraction_test', '0.2'
         ]
     else:
         # use command line arguments in `sys.argv`
