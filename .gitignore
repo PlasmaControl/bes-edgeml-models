@@ -176,5 +176,5 @@ cython_debug/
 *.pkl
 
 
-# test data
-!labeled-elm-events-10elms.hdf5
+# exclusions
+!sample-labeled*.hdf5
