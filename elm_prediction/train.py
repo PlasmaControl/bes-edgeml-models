@@ -53,8 +53,9 @@ def train_loop(
         desc (bool): If true, prints the model architecture and details.
     """
     # output directory and files
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    args.output_dir = output_dir.as_posix()
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
