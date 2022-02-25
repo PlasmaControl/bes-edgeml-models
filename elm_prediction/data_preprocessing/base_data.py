@@ -89,10 +89,6 @@ class BaseData:
         --------
             Tuple: Tuple containing data for training, validation and test sets.
         """
-        train_data = None
-        validation_data = None
-        test_data = None
-        all_data = None
         self.logger.info("  Reading ELM events and creating datasets")
         if self.args.use_all_data:
             all_data = self._preprocess_data(
@@ -232,6 +228,9 @@ class BaseData:
             return None
         # `t0` time points up to `largest_t0` are valid
         _valid_t0[:largest_t0+1] = 1
+
+        # adjust labels so active ELM is true for all post-onset time points
+        _labels[active_elm_indices[0]+1:] = 1
 
         # # `t0` within sws+la of end are invalid
         # _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
