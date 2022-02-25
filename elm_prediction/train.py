@@ -172,7 +172,7 @@ def train_loop(
     LOGGER.info("\t\t\t\tMODEL SUMMARY")
     if _rank is None:
         # skip torchinfo.summary if DistributedDataParallel
-        torchinfo.summary(model, input_size=input_size)
+        torchinfo.summary(model, input_size=input_size, device=device)
     LOGGER.info(f'  Batched input size: {x.shape}')
     LOGGER.info(f"  Batched output size: {model(x).shape}")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
