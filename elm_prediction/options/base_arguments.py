@@ -133,12 +133,21 @@ class BaseArguments:
             help="if true, use automatic labels from the HDF5 file instead of manual labels..",
         )
         parser.add_argument(
-            "--use_all_data",
-            action="store_true",
-            default=False,
-            help="if true, don't split the data into training, testing and validation "
-            "sets.",
-        )
+                "--balance_data",
+                nargs='?',
+                const='clip_outside',
+                default=False,
+                help="Balance pre-ELM and ELM classes. Must be used with truncate_data."
+                     "clip_outside to remove leading or trailing indices."
+                     "clip_inside to remove interior indices between ELM and pre-ELM."
+                     "clip_even to resize larger class evenly to match smaller class.",
+                choices=['clip_outside', 'clip_inside', 'clip_even']
+            )
+        parser.add_argument("--use_all_data",
+                action="store_true",
+                default=False,
+                help="if true, don't split the data into training, testing and validation "
+                     "sets.", )
         parser.add_argument(
             "--add_tensorboard",
             action="store_true",
