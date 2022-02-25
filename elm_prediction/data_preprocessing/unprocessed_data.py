@@ -74,27 +74,30 @@ class UnprocessedData(BaseData):
                     _signals = _signals[:elm_end_index, ...]
                     _labels = _labels[:elm_end_index]
 
-                if len(_labels) < 2000:
+                # if len(_labels) < 2000:
+                #     continue
+                # get all the allowed indices till current time step
+                result = self._get_valid_indices(
+                    _signals=_signals,
+                    _labels=_labels,
+                    window_start_indices=window_start,
+                    elm_start_indices=elm_start,
+                    elm_stop_indices=elm_stop,
+                    valid_t0=valid_t0,
+                    labels=labels,
+                    signals=signals,
+                )
+                if result is None:
+                    # insufficient pre-ELM period, continue
                     continue
-                else:
-                    # get all the allowed indices till current time step
-                    (
-                        signals,
-                        labels,
-                        valid_t0,
-                        window_start,
-                        elm_start,
-                        elm_stop,
-                    ) = self._get_valid_indices(
-                        _signals=_signals,
-                        _labels=_labels,
-                        window_start_indices=window_start,
-                        elm_start_indices=elm_start,
-                        elm_stop_indices=elm_stop,
-                        valid_t0=valid_t0,
-                        labels=labels,
-                        signals=signals,
-                    )
+                (
+                    signals,
+                    labels,
+                    valid_t0,
+                    window_start,
+                    elm_start,
+                    elm_stop,
+                ) = result
 
         # valid indices for data sampling
         sample_indices = np.arange(valid_t0.size, dtype="int")

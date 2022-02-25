@@ -544,4 +544,4 @@ if __name__ == "__main__":
     with args_file.open('rb') as f:
         args = pickle.load(f)
     args = TestArguments().parse(verbose=True, existing_namespace=args)
-    main(args, interactive=True, click_through_pages=False, save=True)
+    main(args, interactive=False, click_through_pages=False, save=True)

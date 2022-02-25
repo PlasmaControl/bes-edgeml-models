@@ -212,35 +212,50 @@ class BaseData:
                 signals, labels, valid_t0, start and stop indices appended with current
                 time data point.
         """
-        # allowed indices; time data points which can be used for creating the data chunks
-        _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
-        _valid_t0[
-            -(self.args.signal_window_size + self.args.label_look_ahead) + 1 :
-        ] = 0
+        # indices for active elm times in each elm event
+        active_elm_indices = np.nonzero(_labels >= 0.5)[0]
 
-        # indices for active elm events in each elm event
-        active_elm_events = np.nonzero(_labels >= 0.5)[0]
+        # `t0` is first index (or earliest time, or trailing time point) for signal window
+        # `_valid_t0` denotes valid `t0` time points for signal window
+        # initialize to zeros
+        _valid_t0 = np.zeros(_labels.shape, dtype=np.int32)
+        # largest `t0` index with signal window in pre-ELM period
+        largest_t0 = active_elm_indices[0] - self.args.signal_window_size
+        if largest_t0 < 0:
+            return None
+        # `t0` time points up to `largest_t0` are valid
+        _valid_t0[:largest_t0+1] = 1
+
+        # # `t0` within sws+la of end are invalid
+        # _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
+        # sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
+        # _valid_t0[ -sws_plus_la + 1 : ] = 0
 
         if signals is None:
-            # initialize arrays
+            # lists for elm event start, active elm start, active elm stop
             window_start_indices = np.array([0])
-            elm_start_indices = active_elm_events[0]
-            elm_stop_indices = active_elm_events[-1]
+            elm_start_indices = active_elm_indices[0]
+            elm_stop_indices = active_elm_indices[-1]
+            # concat valid_t0, signals, and labels
             valid_t0 = _valid_t0
             signals = _signals
             labels = _labels
         else:
-            # concat on axis 0 (time dimension)
+            # append lists for elm event start, active elm start, active elm stop
             last_index = len(labels) - 1
             window_start_indices = np.append(
-                window_start_indices, last_index + 1
+                window_start_indices, 
+                last_index + 1
             )
             elm_start_indices = np.append(
-                elm_start_indices, active_elm_events[0] + last_index + 1
+                elm_start_indices, 
+                active_elm_indices[0] + last_index + 1
             )
             elm_stop_indices = np.append(
-                elm_stop_indices, active_elm_events[-1] + last_index + 1
+                elm_stop_indices, 
+                active_elm_indices[-1] + last_index + 1
             )
+            # concat on axis 0 (time dimension)
             valid_t0 = np.concatenate([valid_t0, _valid_t0])
             signals = np.concatenate([signals, _signals], axis=0)
             labels = np.concatenate([labels, _labels], axis=0)
