@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 import torch.distributed
 from torch.nn.parallel import DistributedDataParallel
-from torchinfo import summary
+import torchinfo
 
 try:
     import optuna
@@ -170,7 +170,9 @@ def train_loop(
     x = torch.rand(*input_size)
     x = x.to(device)
     LOGGER.info("\t\t\t\tMODEL SUMMARY")
-    summary(model, input_size=input_size)
+    if _rank is None:
+        # skip torchinfo.summary if DistributedDataParallel
+        torchinfo.summary(model, input_size=input_size)
     LOGGER.info(f'  Batched input size: {x.shape}')
     LOGGER.info(f"  Batched output size: {model(x).shape}")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
