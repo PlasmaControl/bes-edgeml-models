@@ -135,7 +135,8 @@ class BaseArguments:
         parser.add_argument(
                 "--balance_data",
                 nargs='?',
-                default='clip_outside',
+                const='clip_outside',
+                default=False,
                 help="Balance pre-ELM and ELM classes. Must be used with truncate_data."
                      "clip_outside to remove leading or trailing indices."
                      "clip_inside to remove interior indices between ELM and pre-ELM."
