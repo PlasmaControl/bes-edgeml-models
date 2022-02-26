@@ -4,6 +4,12 @@ import logging
 import torch
 import numpy as np
 
+try:
+    from ..options.train_arguments import TrainArguments
+    from ..src import utils
+except ImportError:
+    from elm_prediction.options.train_arguments import TrainArguments
+    from elm_prediction.src import utils
 
 class ELMDataset(torch.utils.data.Dataset):
     def __init__(
@@ -70,3 +76,16 @@ class ELMDataset(torch.utils.data.Dataset):
 
         return signal_window, label
 
+
+if __name__=="__main__":
+    arg_list = [
+        '--use_all_data', 
+    ]
+    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    LOGGER = utils.get_logger(script_name=__name__)
+    data_cls = utils.create_data_class(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+    elm_indices, all_data = data_obj.get_data(verbose=True)
+    all_dataset = ELMDataset(
+        args, *all_data[0:4], logger=LOGGER, phase="training"
+    )
