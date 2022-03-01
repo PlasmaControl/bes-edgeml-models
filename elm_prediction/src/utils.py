@@ -8,6 +8,7 @@ import argparse
 import importlib
 from typing import Union, Tuple
 from pathlib import Path
+from traceback import print_tb
 
 import torch
 from torchinfo import summary
@@ -39,6 +40,77 @@ class MetricMonitor:
         self.count += n
         self.avg = self.sum / self.count
 
+
+class logParse:
+    """Initiate the logger to log the progress into a file.
+
+    Args:
+    -----
+        script_name (str): Name of the scripts outputting the logs.
+        log_file (str): Name of the log file.
+        stream_handler (bool, optional): Whether or not to show logs in the
+            console. Defaults to True.
+
+    Returns:
+    --------
+        logging.getLogger: Logger object.
+    """
+
+    def __init__(self, script_name: str = None, log_file: Union[str, Path] = None, stream_handler: bool = True,
+                 log_exceptions: bool = True):
+
+        self.logger = None
+        self.script_name = script_name
+        self.log_file = log_file
+        self.stream_handler = stream_handler
+        self.log_exceptions = log_exceptions
+
+        if not (stream_handler and log_file):
+            raise TypeError('Logger must have Handler')
+
+    def __call__(self):
+
+        logger = logging.getLogger(name=self.script_name)
+        logger.setLevel(logging.INFO)
+
+        if self.log_file is not None:
+            log_path = Path(self.log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
+            # create handlers
+            f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
+            # create formatters and add it to the handlers
+            f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
+            f_handler.setFormatter(f_format)
+            # add handlers to the logger
+            logger.addHandler(f_handler)
+
+        # display the logs in console
+        if self.stream_handler:
+            s_handler = logging.StreamHandler()
+            s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
+            s_handler.setFormatter(s_format)
+            logger.addHandler(s_handler)
+
+        self.logger = logger
+
+        if self.log_exceptions:
+            sys.excepthook = self.log_exceptions_()
+
+        return logger
+
+    def log_exceptions_(self):
+        def my_handler(type, value, tb):
+            print_tb(tb)
+            self.logger.exception(f' {type.__name__}: {value}')
+
+        return my_handler
+
+    @staticmethod
+    def getGlobalLogger():
+        logger = logging.getLogger('__main__')
+        if not logger.hasHandlers():
+            raise AttributeError('No logger exists. Logger must be declared.')
+        return logger
 
 # log the model and data preprocessing outputs
 def get_logger(
