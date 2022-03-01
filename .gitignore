@@ -162,10 +162,10 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-/visualizations/outputs/
-/visualizations/PATH/
+/elm_prediction/visualizations/outputs/
+/elm_prediction/visualizations/PATH/
 /logs/
-/visualizations/notes/
+/elm_prediction/visualizations/notes/
 /src/outputs
 /outputs
 
