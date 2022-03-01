@@ -23,8 +23,7 @@ from torch import nn
 from torch.optim import SGD
 
 from analyze import *
-from src.utils import logParse, create_output_paths
-from visualizations.utils.utils import get_model
+from src.utils import logParse, create_output_paths, get_model
 from src.train_VAE import ELBOLoss
 
 
