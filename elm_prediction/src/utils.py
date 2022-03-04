@@ -2,6 +2,7 @@
 """
 from genericpath import exists
 import os
+import pickle
 import sys
 import logging
 import time
@@ -13,6 +14,7 @@ from typing import Union, Tuple
 from pathlib import Path
 from traceback import print_tb
 
+import numpy as np
 import torch
 from torchinfo import summary
 
@@ -116,6 +118,35 @@ class logParse:
         if not logger.hasHandlers():
             raise AttributeError('No logger exists. Logger must be declared.')
         return logger
+
+
+def get_test_dataset(args: argparse.Namespace, file_name: str, logger: logging.getLogger = None, ) -> Tuple[
+    tuple, dataset.ELMDataset]:
+    """Read the pickle file containing the test data and return PyTorch dataset
+    and data attributes such as signals, labels, sample_indices, and
+    window_start_indices.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the
+            base and test arguments.
+        file_name (str): Name of the test data file.
+        logger (logging.getLogger): Logger object that adds inference logs to
+            a file. Defaults to None.
+        transforms: Image transforms to perform data augmentation on the given
+            input. Defaults to None.
+    """
+    with open(file_name, "rb") as f:
+        test_data = pickle.load(f)
+
+    signals = np.array(test_data["signals"])
+    labels = np.array(test_data["labels"])
+    sample_indices = np.array(test_data["sample_indices"])
+    window_start = np.array(test_data["window_start"])
+    data_attrs = (signals, labels, sample_indices, window_start)
+    test_dataset = dataset.ELMDataset(args, *data_attrs, logger=logger, phase="testing")
+
+    return data_attrs, test_dataset
 
 # log the model and data preprocessing outputs
 def get_logger(
