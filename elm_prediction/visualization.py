@@ -21,6 +21,7 @@ from sklearn import decomposition as comp
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from torch import nn
 from torch.optim import SGD
+# from .elm_prediction import package_dir
 
 from analyze import *
 from src.utils import logParse, create_output_paths, get_model
@@ -73,9 +74,7 @@ class Visualizations:
     def __init__(self, cl_args=None) -> object:
         self.args = cl_args if cl_args else args
         self.logger = logParse.getGlobalLogger()
-        self.gen_suffix_type = '_' + re.split('[_.]', self.args.input_file)[
-            -2] if 'generated' in self.args.input_file else ''
-        self.filename_suffix = self.args.filename_suffix + self.gen_suffix_type
+        self.filename_suffix = self.args.filename_suffix
         self.test_data, self.test_set, self.test_loader = self._get_test_dataset()
         self.model = get_model(self.args, self.logger)
         self.device: torch.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -624,10 +623,9 @@ class PCA():
         self.test_data = viz.test_data
         self.test_loader = viz.test_loader
         self.test_set = viz.test_set
-        self.gen_suffix_type = viz.gen_suffix_type
         self.layer = layer
         self.usr_elm_index = np.array([elm_index]).reshape(-1, ) if elm_index is not None else elm_index
-        self.filename_suffix = self.args.filename_suffix + self.gen_suffix_type
+        self.filename_suffix = self.args.filename_suffix
 
         self.n_components = 5
         self.batch_num = 1
@@ -1403,10 +1401,9 @@ if __name__ == "__main__":
     # TODO: Larger signal window size
     # TODO: Histogram of distribution of data
 
-    args, parser = TestArguments().parse(verbose=True)
+    args = TestArguments().parse(verbose=True)
 
-    logger = logParse(script_name=__name__, log_file=os.path.join(args.log_dir, f" output_logs_{args.model_name}_"
-                                                                                f"{args.filename_suffix}.log"))()
+    logger = logParse(script_name=__name__, args=args)()
 
     lookaheads = np.arange(1000, 1001, 1000)
     for lah in lookaheads:
