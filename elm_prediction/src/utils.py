@@ -2,17 +2,21 @@
 """
 from genericpath import exists
 import os
+import sys
 import logging
 import time
 import math
 import argparse
 import importlib
+from collections import OrderedDict
 from typing import Union, Tuple
 from pathlib import Path
 from traceback import print_tb
 
 import torch
 from torchinfo import summary
+
+from elm_prediction import package_dir
 
 
 class MetricMonitor:
@@ -57,16 +61,16 @@ class logParse:
         logging.getLogger: Logger object.
     """
 
-    def __init__(self, script_name: str = None, log_file: Union[str, Path] = None, stream_handler: bool = True,
+    def __init__(self, script_name: str = None, args: argparse.Namespace = None, stream_handler: bool = True,
                  log_exceptions: bool = True):
 
         self.logger = None
         self.script_name = script_name
-        self.log_file = log_file
+        self.log_file = os.path.join(package_dir, 'logs', f'{args.model_name}.log')
         self.stream_handler = stream_handler
         self.log_exceptions = log_exceptions
 
-        if not (stream_handler and log_file):
+        if not (stream_handler and self.log_file):
             raise TypeError('Logger must have Handler')
 
     def __call__(self):
@@ -295,3 +299,34 @@ def create_model_class(
             model = cls
 
     return model
+
+def get_model(args: argparse.Namespace,
+              logger: logging.Logger):
+    _, model_cpt_path = src.utils.create_output_paths(args)
+    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
+    model_name = args.model_name + gen_type_suffix
+    accepted_preproc = ['wavelet', 'unprocessed']
+
+    model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
+                                                  f'{gen_type_suffix}'
+                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
+                                                  f'{"_" + args.balance_data if args.balance_data else ""}.pth')
+
+    raw_model = (multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
+
+    logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
+    model_cls = src.utils.create_model(args.model_name)
+    if 'MULTI' in args.model_name.upper():
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model = model_cls(args)
+    state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
+    model.load_state_dict(state_dict)
+    logger.info(f'Loaded {model_name} state dict.')
+
+    model.layers = OrderedDict([child for child in model.named_modules() if hasattr(child[1], 'weight')])
+
+    return model.to(args.device)
