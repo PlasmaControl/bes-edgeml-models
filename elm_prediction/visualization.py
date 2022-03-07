@@ -5,13 +5,14 @@ Under supervision of Dr. David Smith, U. Wisconsin for the ELM prediction and cl
 """
 from __future__ import annotations
 
-from typing import Union
+import os
+import pickle
 
 import numpy as np
-import re
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.subplots
+import seaborn as sns
 import torch
 from flashtorch.activmax import GradientAscent
 import matplotlib.pyplot as plt
@@ -23,9 +24,11 @@ from torch import nn
 from torch.optim import SGD
 # from .elm_prediction import package_dir
 
-from analyze import *
+# from analyze import *
 from src.utils import logParse, create_output_paths, get_model
 from src.train_VAE import ELBOLoss
+from src.dataset import ELMDataset
+from options.test_arguments import TestArguments
 
 
 class GradientAscent3D(GradientAscent):
@@ -92,11 +95,21 @@ class Visualizations:
                                   f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
 
         print(f"Using test data file: {test_fname}")
-        test_data, test_set = get_test_dataset(self.args, file_name=test_fname, logger=self.logger)
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=self.args.batch_size, shuffle=False,
+
+        with open(test_fname, "rb") as f:
+            test_data = pickle.load(f)
+
+        signals = np.array(test_data["signals"])
+        labels = np.array(test_data["labels"])
+        sample_indices = np.array(test_data["sample_indices"])
+        window_start = np.array(test_data["window_start"])
+        data_attrs = (signals, labels, sample_indices, window_start)
+        test_dataset = ELMDataset(args, *data_attrs, logger=logger, phase="testing")
+
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=self.args.batch_size, shuffle=False,
                                                   drop_last=True)
 
-        return test_data, test_set, test_loader
+        return data_attrs, test_dataset, test_loader
 
     def feature_map(self, layer: str):
 

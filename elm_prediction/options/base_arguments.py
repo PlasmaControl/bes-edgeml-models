@@ -4,8 +4,8 @@ from typing import Union
 
 try:
     from .. import sample_labeled_elm_data_file
-except ImportError:
-    from elm_prediction import sample_labeled_elm_data_file
+except (ImportError, ValueError):
+    from ...elm_prediction import sample_labeled_elm_data_file
 
 
 class BaseArguments:
