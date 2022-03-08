@@ -82,6 +82,22 @@ def inference_on_elm_events(
     elm_indices = test_data[4]
     num_elms = len(window_start)
     elm_predictions = dict()
+
+    activations = []
+
+    def get_activation():
+        def hook(model, input, output):
+            o = output.cpu().detach().squeeze().tolist()
+            activations.append(o)
+
+        return hook
+
+    (act_layer, weight_layer) = get_layer(model, hook_layer)
+
+    act_layer.register_forward_hook(get_activation())
+    weights = weight_layer.weight.cpu().detach().squeeze().numpy()
+    ### ------------ /Forward Hook ---------- ###
+
     # iterate through each ELM event
     for i_elm in range(num_elms):
         print(f"Processing elm event with start index: {window_start[i_elm]}")
