@@ -11,9 +11,11 @@ from collections import OrderedDict
 from pathlib import Path
 from traceback import print_tb
 from typing import Union, Tuple
+import re
 
 import torch
 from torchinfo import summary
+from elm_prediction import package_dir
 
 
 class MetricMonitor:
@@ -294,7 +296,7 @@ def create_model_class(model_name: str) -> object:
 
 def get_model(args: argparse.Namespace,
               logger: logging.Logger):
-    _, model_cpt_path = src.utils.create_output_paths(args)
+    _, model_cpt_path = create_output_paths(args)
     gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
     model_name = args.model_name + gen_type_suffix
     accepted_preproc = ['wavelet', 'unprocessed']
@@ -310,7 +312,7 @@ def get_model(args: argparse.Namespace,
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
-    model_cls = src.utils.create_model(args.model_name)
+    model_cls = create_model(args.model_name)
     if 'MULTI' in args.model_name.upper():
         model = model_cls(args, raw_model, fft_model, cwt_model)
     else:

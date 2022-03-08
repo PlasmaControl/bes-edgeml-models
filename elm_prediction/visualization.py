@@ -85,14 +85,12 @@ class Visualizations:
 
     def _get_test_dataset(self):
 
-        (test_data_dir, model_ckpt_dir, clf_report_dir, plot_dir, roc_dir,) = create_output_paths(self.args,
+        (test_fname, model_ckpt_dir, clf_report_dir, plot_dir, roc_dir,) = create_output_paths(self.args,
                                                                                                   infer_mode=True)
 
         # get the test data and dataloader
         accepted_preproc = ['wavelet', 'unprocessed']
-        test_fname = os.path.join(test_data_dir,
-                                  f'test_data_lookahead_{self.args.label_look_ahead}{self.filename_suffix}'
-                                  f'{"_" + self.args.data_preproc if self.args.data_preproc in accepted_preproc else ""}.pkl', )
+        test_fname = os.path.join('elm_prediction', test_fname)
 
         print(f"Using test data file: {test_fname}")
 
