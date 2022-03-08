@@ -1423,7 +1423,7 @@ if __name__ == "__main__":
     for lah in lookaheads:
         args.label_look_ahead = lah
         viz = Visualizations(cl_args=args)
-        pca = PCA(viz, layer='fc3', elm_index=[0])
+        pca = PCA(viz, layer='fc2', elm_index=[0])
         pca.perform_PCA()
         pca.plot_pca(plot_type='compare')
 
