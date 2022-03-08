@@ -423,7 +423,7 @@ class VAEVisualization(Visualizations):
         args_copy = copy(self.args)
         args_copy.model_name = 'feature'
         args_copy.balance_data = False
-        model = get_model(args_copy, self.logger)
+        model = get_model(args_copy)
         model.eval()
 
         return model

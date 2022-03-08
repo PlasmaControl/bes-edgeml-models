@@ -296,31 +296,21 @@ def create_model_class(model_name: str) -> object:
 
 
 def get_model(args: argparse.Namespace,
-              logger: logging.Logger):
+              logger: logging.Logger = None):
+    logger = logParse.getGlobalLogger()
     _, model_cpt_path = create_output_paths(args)
-    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
-    model_name = args.model_name + gen_type_suffix
     accepted_preproc = ['wavelet', 'unprocessed']
 
     model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
-                                                  f'{gen_type_suffix}'
                                                   f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
                                                   f'{"_" + args.balance_data if args.balance_data else ""}.pth')
 
-    raw_model = (multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
-    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
-
-    logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
+    logger.info(f'Found {args.model_name} state dict at {model_cpt_file}.')
     model_cls = create_model_class(args.model_name)
-    if 'MULTI' in args.model_name.upper():
-        model = model_cls(args, raw_model, fft_model, cwt_model)
-    else:
-        model = model_cls(args)
+    model = model_cls(args)
     state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
     model.load_state_dict(state_dict)
-    logger.info(f'Loaded {model_name} state dict.')
+    logger.info(f'Loaded {args.model_name} state dict.')
 
     model.layers = OrderedDict([child for child in model.named_modules() if hasattr(child[1], 'weight')])
 
