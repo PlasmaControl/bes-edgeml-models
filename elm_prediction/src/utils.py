@@ -298,13 +298,9 @@ def create_model_class(model_name: str) -> object:
 def get_model(args: argparse.Namespace,
               logger: logging.Logger = None):
     logger = logParse.getGlobalLogger()
-    _, model_cpt_path = create_output_paths(args)
+    _, model_cpt_file = create_output_paths(args)
     accepted_preproc = ['wavelet', 'unprocessed']
-
-    model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
-                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
-                                                  f'{"_" + args.balance_data if args.balance_data else ""}.pth')
-
+    model_cpt_file = os.path.join(package_dir, model_cpt_file)
     logger.info(f'Found {args.model_name} state dict at {model_cpt_file}.')
     model_cls = create_model_class(args.model_name)
     model = model_cls(args)

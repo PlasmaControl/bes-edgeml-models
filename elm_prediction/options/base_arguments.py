@@ -306,6 +306,13 @@ class BaseArguments:
             default=-1,
             help="Wavelet decomposition level: int >=1 (-1 (default) = max dwt level)",
         )
+        parser.add_argument('--balance_data',
+                            nargs='?',
+                            const='clip_outside',
+                            default=False,
+                            choices=['clip_outside', 'clip_inside', 'even'],
+                            help='Balance ELM and pre-ELM class data. Removes data points from the start, end, '
+                                 'or evenly throughout.')
 
         self.initialized = True
 

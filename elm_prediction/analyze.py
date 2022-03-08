@@ -46,6 +46,7 @@ def inference_on_elm_events(
     model: object,
     device: torch.device,
     test_data: tuple,
+    hook_layer: str
 ) -> dict:
     """Function to create micro and macro predictions for each ELM event in the
     test data. Micro predictions are basically the model predictions calculated

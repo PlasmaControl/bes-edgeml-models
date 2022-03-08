@@ -24,7 +24,7 @@ from torch import nn
 from torch.optim import SGD
 # from .elm_prediction import package_dir
 
-# from analyze import *
+from analyze import *
 from src.utils import logParse, create_output_paths, get_model
 from src.train_VAE import ELBOLoss
 from src.dataset import ELMDataset
@@ -659,8 +659,10 @@ class PCA():
 
         # get prediction dictionary containing truncated signals, labels,
         # micro-/macro-predictions and elm_time
-        pred_dict = predict(args=self.args, test_data=self.test_data, model=self.model, device=self.device,
-                            hook_layer=self.layer)
+        pred_dict = inference_on_elm_events(args=self.args,
+                                            test_data=self.test_data,
+                                            model=self.model,
+                                            hook_layer=self.layer)
 
         return pred_dict
 
