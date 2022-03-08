@@ -662,6 +662,7 @@ class PCA():
         pred_dict = inference_on_elm_events(args=self.args,
                                             test_data=self.test_data,
                                             model=self.model,
+                                            device=self.device,
                                             hook_layer=self.layer)
 
         return pred_dict
@@ -1017,7 +1018,7 @@ class PCA():
         label_arr = np.empty(ends[-1])
 
         for i_start, i_end, elm_dic in zip(starts, ends, list(dic.values())):
-            arr[i_start:i_end] = elm_dic[key].squeeze()
+            arr[i_start:len(elm_dic[key])] = elm_dic[key].squeeze()
             label_arr[i_start:i_end] = elm_dic['labels'].squeeze()
 
         return {key: arr, 'labels': label_arr, 'elm_start_idx': starts, 'elm_end_idx': ends}
@@ -1422,7 +1423,7 @@ if __name__ == "__main__":
     for lah in lookaheads:
         args.label_look_ahead = lah
         viz = Visualizations(cl_args=args)
-        pca = PCA(viz, layer='conv', elm_index=[0, 1, 2])
+        pca = PCA(viz, layer='fc3', elm_index=[0])
         pca.perform_PCA()
         pca.plot_pca(plot_type='compare')
 

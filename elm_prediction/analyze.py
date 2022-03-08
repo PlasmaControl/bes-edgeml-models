@@ -77,9 +77,9 @@ def inference_on_elm_events(
     signals = test_data[0]
     print(f"Signals shape: {signals.shape}")
     labels = test_data[1]
-    _ = test_data[2]  # sample_indices
+    elm_indices = test_data[2]  # sample_indices # Not sure what this is,
     window_start = test_data[3]
-    elm_indices = test_data[4]
+    # elm_indices = test_data[4]
     num_elms = len(window_start)
     elm_predictions = dict()
 
@@ -192,9 +192,11 @@ def inference_on_elm_events(
         print(f"Signals shape: {elm_signals.shape}")
         print(f"Labels shape: {elm_labels.shape}")
         print(f"Time shape: {elm_time.shape}")
+        activations_ = activations
+        activations = []
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals,
-            "activations": activations,
+            "activations": np.asarray(activations_),
             "labels": elm_labels,
             "micro_predictions": micro_predictions,
             "macro_labels": macro_labels,
