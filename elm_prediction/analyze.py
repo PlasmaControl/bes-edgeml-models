@@ -194,6 +194,7 @@ def inference_on_elm_events(
         print(f"Time shape: {elm_time.shape}")
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals,
+            "activations": activations,
             "labels": elm_labels,
             "micro_predictions": micro_predictions,
             "macro_labels": macro_labels,
@@ -407,7 +408,6 @@ def plot_confusion_matrix(
             print(f'Saving roc plot: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
-
     if plt.isinteractive():
         plt.show(block=False)
 
@@ -418,7 +418,7 @@ def calc_roc_and_f1(
     model: object,
     device: torch.device,
     data: tuple,
-) -> None:
+) -> tuple:
     """Make predictions on the validation set to assess the model's performance
     on the test/validation set using metrics like ROC or F1-scores.
     """
@@ -552,6 +552,18 @@ def main(
     if plt.isinteractive():
         print('Close plots to exit')
         plt.show(block=True)
+
+
+def get_layer(model: object, layer: str):
+    layer_dict = model.layers
+
+    layer_idx = list(layer_dict.keys()).index(layer)
+    weight_idx = layer_idx + 1 if layer_idx != len(layer_dict) - 1 else layer_idx
+
+    act_layer = layer_dict[layer]
+    weight_layer = list(layer_dict.items())[weight_idx][1]
+
+    return act_layer, weight_layer
 
 
 if __name__ == "__main__":
