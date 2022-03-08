@@ -294,6 +294,7 @@ def create_model_class(model_name: str) -> object:
 
     return model
 
+
 def get_model(args: argparse.Namespace,
               logger: logging.Logger):
     _, model_cpt_path = create_output_paths(args)
@@ -312,7 +313,7 @@ def get_model(args: argparse.Namespace,
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
-    model_cls = create_model(args.model_name)
+    model_cls = create_model_class(args.model_name)
     if 'MULTI' in args.model_name.upper():
         model = model_cls(args, raw_model, fft_model, cwt_model)
     else:
