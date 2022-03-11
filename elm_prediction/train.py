@@ -78,7 +78,7 @@ def train_loop(
     # create train, valid and test data
     data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_data, valid_data, test_data = data_obj.get_data()
+    train_data, valid_data, test_data = data_obj.get_data(verbose=True)
 
     # dump test data into a file
     if not args.dry_run:

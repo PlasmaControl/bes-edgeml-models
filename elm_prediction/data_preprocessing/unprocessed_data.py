@@ -111,16 +111,17 @@ class UnprocessedData(BaseData):
         sample_indices = np.arange(valid_t0.size, dtype="int")
         sample_indices = sample_indices[valid_t0 == 1]
 
-        shifted_sample_indices = (
-            sample_indices + 
-            self.args.signal_window_size +
-            self.args.label_look_ahead
-            )
-
-        sampled_labels = labels[ shifted_sample_indices ]
         if verbose:
+            shifted_sample_indices = (
+                sample_indices 
+                + self.args.signal_window_size
+                + self.args.label_look_ahead
+                -1
+                )
+            sampled_labels = labels[ shifted_sample_indices ]
             n_active_elm = np.count_nonzero(sampled_labels)
             n_inactive_elm = np.count_nonzero(sampled_labels-1)
+            self.logger.info(" Dataset summary")
             self.logger.info(f"  Count of non-ELM labels: {n_inactive_elm}")
             self.logger.info(f"  Count of ELM labels: {n_active_elm}")
             self.logger.info(f"  Ratio: {n_active_elm/n_inactive_elm:.3f}")
