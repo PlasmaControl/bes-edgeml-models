@@ -297,11 +297,19 @@ class BaseArguments:
             default=1,
             help="FFT bins for FFTFeatureModel; power of 2: 1(default)|2|4...",
         )
+        parser.add_argument("--dct_num_filters",
+                type=int,
+                default=8,
+                help="Number of features for DCTFeatureModel: int >= 0", )
+        parser.add_argument("--dct_nbins",
+                type=int,
+                default=1,
+                help="DCT bins for DCTFeatureModel; power of 2: 1(default)|2|4...", )
         parser.add_argument(
             "--dwt_num_filters",
             type=int,
             default=8,
-            help="Number of features for D(C)WTFeatureModel: int >= 0",
+            help="Number of features for DWTFeatureModel: int >= 0",
         )
         parser.add_argument(
             "--dwt_wavelet",

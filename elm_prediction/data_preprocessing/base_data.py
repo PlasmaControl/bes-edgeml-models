@@ -276,6 +276,60 @@ class BaseData:
             elm_stop_indices,
         )
 
+    def _create_target(self,
+                        signals,
+                        class_labels,
+                        valid_t0,
+                        window_start_indices,
+                        elm_start_indices,
+                        elm_stop_indices):
+
+        """Function to create time-to ELM target variable from class labels. Truncates all inputs to only
+        use pre-ELM indices.
+
+        Args:
+        -----
+            signals (np.ndarray): NumPy array containing the inputs.
+            class_labels (np.ndarray): NumPy array containing the labels.
+            window_start_indices (np.ndarray, optional): Array containing the
+                start indices of the ELM events till (t-1)th time data point. Defaults
+                to None.
+            elm_start_indices (np.ndarray, optional): Array containing the start
+                indices of the active ELM events till (t-1)th time data point.
+                Defaults to None.
+            elm_stop_indices (np.ndarray, optional): Array containing the end
+                vertices of the active ELM events till (t-1)th time data point.
+                Defaults to None.
+            valid_t0 (np.ndarray, optional): Array containing all the allowed
+                vertices of the ELM events till (t-1)th time data point. Defaults
+                to None.
+            labels (torch.Tensor, optional): Tensor containing the labels of the ELM
+                events till (t-1)th time data point. Defaults to None.
+            signals (torch.Tensor, optional): Tensor containing the input signals of
+                the ELM events till (t-1)th time data point. Defaults to None.
+
+        Returns:
+        --------
+            Tuple[ np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray ]: Tuple containing
+                signals, labels, valid_t0, start and stop indices appended with current
+                time data point.
+        """
+        pelm_idx = class_labels.argmax()  # get all pre elm indices, ignore truncate buffer
+        t_to_elm = np.arange(pelm_idx, 0, -1)
+
+
+
+        #TODO: fix window_start
+
+
+        return (signals[0:pelm_idx],
+                t_to_elm,
+                valid_t0,
+                window_start_indices,
+                elm_start_indices,
+                elm_stop_indices,)
+
+
     def _balance_data(self, train, valid, test):
 
         clip_type = self.args.balance_data
