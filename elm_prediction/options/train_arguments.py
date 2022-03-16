@@ -49,6 +49,12 @@ class TrainArguments(BaseArguments):
             default=2000,
             help="frequency of showing validation results on screen.",
         )
+        parser.add_argument(
+                "--save_onnx",
+                action="store_true",
+                default=False,
+                help="Save the trained model in onnx format."
+        )
         self.is_train = True
 
         return parser
