@@ -4,9 +4,10 @@ from typing import Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
+from elm_prediction.src import torch_dct as dct
 
 import pywt
-from pytorch_wavelets import DWT1DForward
+from pytorch_wavelets.dwt.transform1d import DWT1DForward
 
 
 class _FeatureBase(nn.Module):
@@ -48,7 +49,9 @@ class _FeatureBase(nn.Module):
         return x
 
     def _conv_dropout_relu_flatten(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.relu(self.dropout3d(self.conv(x)))
+        x = self.conv(x)
+        x = self.dropout3d(x)
+        x = self.relu(x)
         x = torch.flatten(x, 1)
         return x
 
@@ -157,10 +160,76 @@ class FFTFeatureModel(_FeatureBase):
             ffts = torch.empty(size=fft_bins_size, dtype=x.dtype, device=x.device)
             for i in torch.arange(self.nbins):
                 bin_data = x[:, :, i * self.nfft : (i + 1) * self.nfft, :, :]
-                ffts[:, i : i + 1, :, :, :] = torch.abs(
+                ffts[:, i: i + 1, :, :, :] = torch.abs(
                     torch.fft.rfft(bin_data, dim=2)
                 )
             x = torch.mean(ffts, dim=1, keepdim=True)
+        x = self._conv_dropout_relu_flatten(x)
+        return x
+
+
+class DCTFeatureModel(_FeatureBase):
+    def __init__(self, *args, **kwargs):
+        """
+        Use the raw BES channels values as input and perform a Fast Fourier Transform
+        to input signals. This function takes in a 5-dimensional
+        tensor of size: `(N, 1, signal_window_size, 8, 8)`, N=batch_size and
+        performs a DCT followed by an absolute value of the input tensor. It
+        then performs a 3-d convolution with a filter size identical to the spatial
+        dimensions of the input so that the receptive field is the same
+        size as input in both spatial and temporal axes. Again, we will use the
+        feature map and combine it with other features before feeding it into a
+        classifier.
+
+        Args:
+        -----
+            args (argparse.Namespace): Command line arguments containing the information
+                about signal_window.
+            dropout_rate (float, optional): Fraction of total hidden units that will
+                be turned off for drop out. Defaults to 0.2.
+            negative_slope (float, optional): Slope of LeakyReLU activation for negative
+                `x`. Defaults to 0.02.
+            num_filters (int, optional): Dimensionality of the output space.
+                Essentially, it gives the number of output kernels after convolution.
+                Defaults to 10.
+        """
+        super(DCTFeatureModel, self).__init__(*args, **kwargs)
+
+        self.nbins = self.args.dct_nbins
+        assert np.log2(self.nbins) % 1 == 0  # ensure power of 2
+
+        self.ndct = self.time_points // self.nbins
+
+        self.nfreqs = self.ndct // 2 + 1
+
+        self.num_filters = self.args.dct_num_filters
+        filter_size = (self.time_points, 8//self.maxpool_size, 8//self.maxpool_size)
+        self.conv = nn.Conv3d(
+            in_channels=1,
+            out_channels=self.num_filters,
+            kernel_size=filter_size,
+        )
+
+    def forward(self, x):
+        x = x.to(self.args.device)  # needed for PowerPC architecture
+        x = self._time_interval_and_maxpool(x)
+        if self.nbins == 1:
+            # DCT for full time domain
+            x = dct.dct_3d(x)
+        else:
+            # calc binned DCTs, then average
+            dct_bins_size = [
+                self.args.batch_size,
+                self.nbins,
+                self.nfreqs,
+                8 // self.maxpool_size,
+                8 // self.maxpool_size,
+            ]
+            dcts = torch.empty(size=dct_bins_size, dtype=x.dtype, device=x.device)
+            for i in torch.arange(self.nbins):
+                bin_data = x[:, :, i * self.ndct : (i + 1) * self.ndct, :, :]
+                dcts[:, i: i + 1, :, :, :] = dct.dct_3d(bin_data)
+            x = torch.mean(dcts, dim=1, keepdim=True)
         x = self._conv_dropout_relu_flatten(x)
         return x
 
@@ -267,16 +336,23 @@ class MultiFeaturesDsModel(nn.Module):
             if args.fft_num_filters > 0
             else None
         )
-        self.dwt_features_model = (
-            DWTFeatureModel(args)
-            if args.dwt_num_filters > 0
+        self.dct_features_model = (
+            DCTFeatureModel(args)
+            if args.dct_num_filters > 0
             else None
         )
+        self.dwt_features_model = (
+                DWTFeatureModel(args)
+                if args.dwt_num_filters > 0
+                else None
+        )
+
         input_features = 0
         for model in [
             self.raw_features_model,
             self.fft_features_model,
             self.dwt_features_model,
+            self.dct_features_model
         ]:
             if model is not None:
                 input_features += model.num_filters
@@ -296,10 +372,13 @@ class MultiFeaturesDsModel(nn.Module):
         dwt_features = (
             self.dwt_features_model(x) if self.dwt_features_model else None
         )
+        dct_features = (
+                self.dct_features_model(x) if self.dct_features_model else None
+        )
 
         active_features_list = [
             features
-            for features in [raw_features, fft_features, dwt_features]
+            for features in [raw_features, fft_features, dwt_features, dct_features]
             if features is not None
         ]
         x = torch.cat(active_features_list, dim=1)

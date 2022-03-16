@@ -34,10 +34,8 @@ except ImportError:
     from elm_prediction.src import utils, trainer, dataset
 
 
-def train_loop(
-    args: argparse.Namespace,
-    trial = None,  # optuna `trial` object
-    _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
+def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
+        _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
@@ -76,51 +74,35 @@ def train_loop(
         LOGGER.info(f'  Distributed data parallel: process rank {_rank} on GPU {args.device}')
 
     # create train, valid and test data
-    data_cls = utils.create_data_class(args.data_preproc)
+    data_cls = utils.create_data_class('regression')
     data_obj = data_cls(args, LOGGER)
-    train_data, valid_data, test_data = data_obj.get_data(verbose=True)
+    train_data, valid_data, test_data = data_obj.get_data()
 
     # dump test data into a file
     if not args.dry_run:
         LOGGER.info(f"  Test data will be saved to: {test_data_file}")
         with open(test_data_file, "wb") as f:
-            pickle.dump(
-                {
-                    "signals": test_data[0],
-                    "labels": test_data[1],
-                    "sample_indices": test_data[2],
-                    "window_start": test_data[3],
-                    "elm_indices": test_data[4],
-                },
-                f,
-            )
+            pickle.dump({"signals": test_data[0], "labels": test_data[1], "sample_indices": test_data[2],
+                    "window_start": test_data[3], "elm_indices": test_data[4], }, f, )
 
     # create datasets
-    train_dataset = dataset.ELMDataset(
-        args, *train_data[0:4], logger=LOGGER, phase="training"
-    )
-    valid_dataset = dataset.ELMDataset(
-        args, *valid_data[0:4], logger=LOGGER, phase="validation"
-    )
+    train_dataset = dataset.ELMDataset(args, *train_data[0:4], logger=LOGGER, phase="training")
+    valid_dataset = dataset.ELMDataset(args, *valid_data[0:4], logger=LOGGER, phase="validation")
 
     # training and validation dataloaders
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            drop_last=True, )
 
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
+    valid_loader = torch.utils.data.DataLoader(valid_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=True,
+            drop_last=True, )
 
     # device
     device = torch.device(args.device)
@@ -142,31 +124,13 @@ def train_loop(
         input_size = (args.batch_size, args.signal_window_size, 64)
     else:
         if args.data_preproc == "interpolate":
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                args.interpolate_size,
-                args.interpolate_size,
-            )
+            input_size = (args.batch_size, 1, args.signal_window_size, args.interpolate_size, args.interpolate_size,)
         elif args.data_preproc == "gradient":
-            input_size = (
-                args.batch_size,
-                6,
-                args.signal_window_size,
-                8,
-                8,
-            )
+            input_size = (args.batch_size, 6, args.signal_window_size, 8, 8,)
         elif args.data_preproc == "rnn":
             input_size = (args.batch_size, args.signal_window_size, 64)
         else:
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                8,
-                8,
-            )
+            input_size = (args.batch_size, 1, args.signal_window_size, 8, 8,)
     x = torch.rand(*input_size)
     x = x.to(device)
     LOGGER.info("\t\t\t\tMODEL SUMMARY")
@@ -179,35 +143,29 @@ def train_loop(
     LOGGER.info(f"  Model contains {n_params} trainable parameters!")
 
     # optimizer
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # get the lr scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-        factor=0.5,
-        patience=2,
-        verbose=True,
-    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+            mode="min",
+            factor=0.5,
+            patience=2,
+            verbose=True, )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    criterion = nn.MSELoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
-    engine = trainer.Run(
-        model,
-        device=device,
-        criterion=criterion,
-        optimizer=optimizer,
-        use_focal_loss=args.focal_loss,
-        use_rnn=use_rnn,
-    )
+    engine = trainer.Run(model,
+            device=device,
+            criterion=criterion,
+            optimizer=optimizer,
+            use_focal_loss=args.focal_loss,
+            use_rnn=use_rnn, )
 
     # containers to hold train and validation losses
     train_loss = np.empty(0)
@@ -222,18 +180,11 @@ def train_loop(
         start_time = time.time()
 
         # train over an epoch
-        avg_loss = engine.train(
-            train_loader, 
-            epoch, 
-            print_every=args.train_print_every,
-        )
+        avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every, )
         train_loss = np.append(train_loss, avg_loss)
 
         # evaluate validation data
-        avg_val_loss, preds, valid_labels = engine.evaluate(
-            valid_loader, 
-            print_every=args.valid_print_every
-        )
+        avg_val_loss, preds, valid_labels = engine.evaluate(valid_loader, print_every=args.valid_print_every)
         valid_loss = np.append(valid_loss, avg_val_loss)
 
         # step the learning rate scheduler
@@ -252,8 +203,8 @@ def train_loop(
         f1_scores = np.append(f1_scores, f1)
         elapsed = time.time() - start_time
 
-        LOGGER.info(f"Epoch: {epoch+1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
-        LOGGER.info(f"Epoch: {epoch+1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
 
         # update and save outputs
         outputs['train_loss'] = train_loss
@@ -267,24 +218,21 @@ def train_loop(
         # track best f1 score and save model
         if f1 > best_score:
             best_score = f1
-            LOGGER.info(f"Epoch: {epoch+1:03d} \tBest Score: {best_score:.3f}")
+            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_score:.3f}")
             if not args.dry_run:
-                LOGGER.info(f"Epoch: {epoch+1:03d} \tSaving model to: {checkpoint_file}")
-                model_data = {
-                    "model": model.state_dict(), 
-                    "preds": preds,
-                }
+                LOGGER.info(f"Epoch: {epoch + 1:03d} \tSaving model to: {checkpoint_file}")
+                model_data = {"model": model.state_dict(), "preds": preds, }
                 torch.save(model_data, checkpoint_file)
                 if args.save_onnx:
                     input_name = ['signal_window']
                     output_name = ['micro_prediction']
-                    torch.onnx.export(model, x[0].unsqueeze(0),
+                    torch.onnx.export(model,
+                                      x[0].unsqueeze(0),
                                       f'{args.output_dir}/checkpoint.onnx',
                                       input_names=input_name,
                                       output_names=output_name,
                                       verbose=True,
-                                      opset_version=11
-                                      )
+                                      opset_version=11)
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
@@ -310,15 +258,10 @@ def train_loop(
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        arg_list = [
-            # '--max_elms', '5',
-            '--n_epochs', '3',
-            '--fraction_valid', '0.2',
-            '--fraction_test', '0.2'
-        ]
+        arg_list = [# '--max_elms', '5',
+                '--n_epochs', '3', '--fraction_valid', '0.2', '--fraction_test', '0.2']
     else:
         # use command line arguments in `sys.argv`
         arg_list = None
     args = TrainArguments().parse(verbose=True, arg_list=arg_list)
     train_loop(args)
-    
