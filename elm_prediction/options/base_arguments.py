@@ -315,6 +315,12 @@ class BaseArguments:
             default=-1,
             help="Wavelet decomposition level: int >=1 (-1 (default) = max dwt level)",
         )
+        parser.add_argument(
+                "--export_onnx",
+                action='store_true',
+                default=False,
+                help="Export model to ONNX format."
+        )
 
         self.initialized = True
 
