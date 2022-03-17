@@ -1,50 +1,44 @@
 import sys
 import pytest
 
-from elm_prediction.options.train_arguments import TrainArguments
 from elm_prediction.train import train_loop
 
-arg_list_default = [
-    '--max_elms', '10',
-    '--n_epochs', '1',
-    '--fraction_valid', '0.2',
-    '--fraction_test', '0.2'
-]
+
+DEFAULT_INPUT_ARGS = {
+    'max_elms':10,
+    'n_epochs':1,
+    'fraction_valid':0.2,
+    'fraction_test':0.2,
+}
+
 
 def test_train_loop_raw_only():
-    arg_list = arg_list_default.copy()
-    arg_list.extend([
-        '--output_dir', 'run_dir/raw_only',
-    ])
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['output_dir'] = 'run_dir/raw_only'
+    train_loop(input_args)
+
+def test_train_loop_list_args():
+    input_args = [f"--{key}={value}" for key, value in DEFAULT_INPUT_ARGS.items()]
+    input_args.extend(['--output_dir', 'run_dir/list_args'])
+    train_loop(input_args)
 
 def test_train_loop_fft():
-    arg_list = arg_list_default.copy()
-    arg_list.extend([
-        '--fft_num_filters', '8',
-        '--output_dir', 'run_dir/fft',
-    ])
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['output_dir'] = 'run_dir/fft'
+    input_args['fft_num_filters'] = 8
+    train_loop(input_args)
 
 def test_train_loop_dwt():
-    arg_list = arg_list_default.copy()
-    arg_list.extend([
-        '--dwt_num_filters', '8',
-        '--output_dir', 'run_dir/dwt',
-    ])
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['output_dir'] = 'run_dir/dwt'
+    input_args['dwt_num_filters'] = 8
+    train_loop(input_args)
 
 def test_train_loop_dct():
-    arg_list = arg_list_default.copy()
-    arg_list.extend([
-        '--dct_num_filters', '8',
-        '--output_dir', 'run_dir/dct',
-    ])
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['output_dir'] = 'run_dir/dct'
+    input_args['dct_num_filters'] = 8
+    train_loop(input_args)
 
 
 if __name__=="__main__":

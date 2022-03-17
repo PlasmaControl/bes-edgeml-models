@@ -354,25 +354,28 @@ class BaseArguments:
         # return args, parser
         return args
 
-    def _print_args(self, args):
-        """Print command line arguments.
-        It will print both current arguments as well as the default values (if different).
-        """
-        message = ""
+    def make_args_summary_string(self):
+        message = "\n"
         message += "------------- Parameters used: -------------\n"
-        for k, v in sorted(vars(args).items()):
+        for k, v in sorted(vars(self.args).items()):
             comment = ""
             default = self.parser.get_default(k)
             if v != default:
                 comment = f"\t[default: {default}]"
             message += f"{str(k):>20}: {str(v):<15} {comment}\n"
         message += "-------------- End ---------------\n"
+        return message
 
+
+    def _print_args(self, args):
+        """Print command line arguments.
+        It will print both current arguments as well as the default values (if different).
+        """
+        message = self.make_args_summary_string(args)
         print(message)
 
     def parse(
         self,
-        verbose: bool = False,
         arg_list: Union[list, None] = None,
         existing_namespace = None,
     ):
@@ -384,9 +387,6 @@ class BaseArguments:
             arg_list=arg_list,
             existing_namespace=existing_namespace,
             )
-        if verbose:
-            self._print_args(args)
 
         self.args = args
-        # return args, parser
         return args

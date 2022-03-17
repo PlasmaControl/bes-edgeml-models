@@ -543,5 +543,5 @@ if __name__ == "__main__":
     args_file = package_dir / 'run_dir/args.pkl'
     with args_file.open('rb') as f:
         args = pickle.load(f)
-    args = TestArguments().parse(verbose=True, existing_namespace=args)
+    args = TestArguments().parse(existing_namespace=args)
     main(args, interactive=False, click_through_pages=False, save=True)

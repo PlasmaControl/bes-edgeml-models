@@ -81,7 +81,7 @@ if __name__=="__main__":
     arg_list = [
         '--use_all_data', 
     ]
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    args = TrainArguments().parse(arg_list=arg_list)
     LOGGER = utils.get_logger(script_name=__name__)
     data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)

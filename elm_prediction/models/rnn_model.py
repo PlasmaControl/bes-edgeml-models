@@ -41,7 +41,7 @@ if __name__ == "__main__":
     from options.train_arguments import TrainArguments
     from src import dataset, utils
 
-    args, parser = TrainArguments().parse(verbose=True)
+    args = TrainArguments().parse()
     LOGGER = utils.get_logger(script_name="test_lstm_logs")
     model = RNNModel(args)
     data_cls = utils.create_data_class(args.data_preproc)

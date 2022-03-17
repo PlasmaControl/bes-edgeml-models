@@ -50,5 +50,5 @@ if __name__=='__main__':
     else:
         # use command line arguments in `sys.argv`
         arg_list = None
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    args = TrainArguments().parse(arg_list=arg_list)
     distributed_train_loop(args)

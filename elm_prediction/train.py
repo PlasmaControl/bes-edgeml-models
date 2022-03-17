@@ -9,6 +9,7 @@ import sys
 import time
 import pickle
 import argparse
+import io
 from typing import Union
 from pathlib import Path
 
@@ -35,7 +36,9 @@ except ImportError:
 
 
 def train_loop(
-    args: argparse.Namespace,
+    input_args: Union[list,dict,None] = None,
+    # args: argparse.Namespace,
+    # args_summary: Union[str, None] = None,
     trial = None,  # optuna `trial` object
     _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
@@ -52,28 +55,47 @@ def train_loop(
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
+
+    # parse args
+    if isinstance(input_args, dict):
+        # format dict into list
+        arg_list = []
+        for key, value in input_args.items():
+            if isinstance(value, bool):
+                if value is True:
+                    arg_list.append(f'--{key}')
+            else:
+                arg_list.append(f'--{key}={value}')
+        input_args = arg_list
+    args_obj = TrainArguments()
+    args = args_obj.parse(arg_list=input_args)
+
     # output directory and files
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    args.output_dir = output_dir.as_posix()
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
-    LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
-
-    if args.device == 'auto':
-        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+    # save args
     with args_file.open('wb') as f:
         pickle.dump(args, f)
 
+    # create LOGGER
+    LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
+    LOGGER.info(args_obj.make_args_summary_string())
+
+    # setup device
+    if args.device == 'auto':
+        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if _rank is not None:
         # override args.device for multi-GPU distributed data parallel training
         args.device = f'cuda:{_rank}'
         LOGGER.info(f'  Distributed data parallel: process rank {_rank} on GPU {args.device}')
+    device = torch.device(args.device)
+    LOGGER.info(f'------>  Target device: {device}')
 
     # create train, valid and test data
     data_cls = utils.create_data_class(args.data_preproc)
@@ -122,10 +144,6 @@ def train_loop(
         drop_last=True,
     )
 
-    # device
-    device = torch.device(args.device)
-    LOGGER.info(f'------>  Target device: {device}')
-
     # model class and model instance
     model_class = utils.create_model_class(args.model_name)
     model = model_class(args)
@@ -169,10 +187,14 @@ def train_loop(
             )
     x = torch.rand(*input_size)
     x = x.to(device)
-    LOGGER.info("\t\t\t\tMODEL SUMMARY")
     if _rank is None:
         # skip torchinfo.summary if DistributedDataParallel
+        tmp_io = io.StringIO()
+        sys.stdout = tmp_io
         torchinfo.summary(model, input_size=input_size, device=device)
+        sys.stdout = sys.__stdout__
+        LOGGER.info("\t\t\t\tMODEL SUMMARY")
+        LOGGER.info(tmp_io.getvalue())
     LOGGER.info(f'  Batched input size: {x.shape}')
     LOGGER.info(f"  Batched output size: {model(x).shape}")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -310,15 +332,14 @@ def train_loop(
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        arg_list = [
-            '--max_elms', '10',
-            '--n_epochs', '1',
-            '--fraction_valid', '0.2',
-            '--fraction_test', '0.2'
-        ]
+        input_args = {
+            'max_elms':10,
+            'n_epochs':1,
+            'fraction_valid':0.2,
+            'fraction_test':0.2,
+        }
     else:
         # use command line arguments in `sys.argv`
-        arg_list = None
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+        input_args = None
+    train_loop(input_args=input_args)
     
