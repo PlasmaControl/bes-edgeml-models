@@ -2,7 +2,7 @@
 Data class to package BES data for training using PyTorch without any 
 modifications and transformations.
 """
-from typing import Tuple
+from typing import Union, Tuple
 
 import numpy as np
 import h5py
@@ -22,7 +22,8 @@ class UnprocessedData(BaseData):
         self,
         elm_indices: np.ndarray = None,
         shuffle_sample_indices: bool = False,
-        verbose = False,
+        save: bool = False,  # -1 for all ELMs or int for max_elms
+        verbose: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
@@ -53,12 +54,13 @@ class UnprocessedData(BaseData):
 
         # iterate through all the ELM indices
         with h5py.File(self.datafile, 'r') as hf:
-            for elm_index in elm_indices:
+            for i_elm, elm_index in enumerate(elm_indices):
                 elm_key = f"{elm_index:05d}"
                 if verbose:
                     self.logger.info(f' ELM index {elm_index}')
                 elm_event = hf[elm_key]
                 _signals = np.array(elm_event["signals"], dtype=np.float32)
+                _time = np.array(elm_event["time"], dtype=np.float32)
                 # transposing so that the time dimension comes forward
                 _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
                 if self.args.automatic_labels:
@@ -80,10 +82,7 @@ class UnprocessedData(BaseData):
                     elm_end_index = active_elm_indices[-1] + self.args.truncate_buffer
                     _signals = _signals[:elm_end_index, ...]
                     _labels = _labels[:elm_end_index]
-
-                # if len(_labels) < 2000:
-                #     continue
-                # get all the allowed indices till current time step
+                
                 result = self._get_valid_indices(
                     _signals=_signals,
                     _labels=_labels,
@@ -94,6 +93,7 @@ class UnprocessedData(BaseData):
                     labels=labels,
                     signals=signals,
                     verbose=verbose,
+                    save=save,
                 )
                 if result is None:
                     # insufficient pre-ELM period, continue
@@ -107,7 +107,7 @@ class UnprocessedData(BaseData):
                     elm_stop,
                 ) = result
 
-        # valid indices for data sampling
+       # valid indices for data sampling
         sample_indices = np.arange(valid_t0.size, dtype="int")
         sample_indices = sample_indices[valid_t0 == 1]
 

@@ -343,6 +343,8 @@ if __name__ == "__main__":
             'n_epochs':2,
             'fraction_valid':0.2,
             'fraction_test':0.2,
+            'signal_window_size':128,
+            'label_look_ahead':200,
         }
     else:
         # use command line arguments in `sys.argv`

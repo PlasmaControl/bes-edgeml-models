@@ -6,10 +6,12 @@ import os
 import logging
 import argparse
 from typing import Tuple, Union
+from pathlib import Path
 
 import h5py
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from numpy import ndarray
 from sklearn import model_selection
 
@@ -118,6 +120,7 @@ class BaseData:
                 test_elms,
                 shuffle_sample_indices=False,
                 verbose=verbose,
+                save=True,
             )
 
             if self.args.balance_data:
@@ -129,52 +132,13 @@ class BaseData:
 
         return output
 
-    def _partition_elms(
-        self, 
-        # max_elms: int = None,
-    ) -> Tuple[ndarray, ndarray, ndarray]:
-        """Partition all the ELM events into training, validation and test indices.
-        Training and validation sets are created based on simple splitting with
-        validation set being `fraction_validate` of the training set or by K-fold
-        cross-validation.
-
-        Args:
-        -----
-            max_elms (int, optional): Maximum number of ELM events to be used.
-                Defaults to None (Take the entire data).
-            fold (int, optional): Fold index for K-fold cross-validation. Defaults
-                to None.
-
-        Returns:
-        --------
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing training,
-                validation and test ELM indices.
-        """
-        # limit the data according to the max number of events passed
-        if self.args.max_elms is not None and self.args.max_elms != -1:
-            self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
-            n_elms = self.args.max_elms
-        else:
-            n_elms = len(self.elm_indices)
-
-        # split the data into train, validation and test sets
-        training_elms, test_validate_elms = model_selection.train_test_split(
-            self.elm_indices[:n_elms],
-            test_size=self.args.fraction_test + self.args.fraction_valid,
-            shuffle=True,
-            random_state=self.args.seed,
-        )
-        test_elms, validation_elms = model_selection.train_test_split(
-            test_validate_elms,
-            test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
-            shuffle=True,
-            random_state=self.args.seed,
-        )
-        self.logger.info(f"  Training ELM events: {training_elms.size}")
-        self.logger.info(f"  Validation ELM events: {validation_elms.size}")
-        self.logger.info(f"  Test ELM events: {test_elms.size}")
-
-        return training_elms, validation_elms, test_elms
+    def _preprocess_data(
+        self,
+        elm_indices: np.ndarray = None,
+        shuffle_sample_indices: bool = False,
+        **kwargs,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        raise NotImplementedError
 
     def _get_valid_indices(
         self,
@@ -186,6 +150,7 @@ class BaseData:
         valid_t0: np.ndarray = None,
         labels: np.ndarray = None,
         signals: np.ndarray = None,
+        save: bool = False,  # -1 for all ELMs or int for max_elms
         verbose=False,
     ) -> Tuple[
         np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
@@ -245,7 +210,7 @@ class BaseData:
             assert _labels[largest_t0_index+self.args.signal_window_size-1] == 0
             assert _labels[largest_t0_index+self.args.signal_window_size] == 1
 
-            if active_elm_indices[-1]+500 <= _valid_t0.size-1:
+            if (active_elm_indices[-1]+500 <= _valid_t0.size-1) and False:
                 # add post-ELM valid t0's
                 post_elm_start = active_elm_indices[-1]+500
                 post_elm_end = _valid_t0.size - (self.args.signal_window_size + self.args.label_look_ahead) - 1
@@ -255,7 +220,7 @@ class BaseData:
 
         elif valid_indices_method == 2:
             # adjust labels so active ELM is true for all post-onset time points
-            _labels[active_elm_indices[0]+1:] = 1
+            # _labels[active_elm_indices[0]+1:] = 1
 
             # # `t0` within sws+la of end are invalid
             _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
@@ -271,6 +236,44 @@ class BaseData:
             self.logger.info(f'  Post-ELM time points {_labels.size - active_elm_indices[-1]-1}')
             self.logger.info(f'  Cound valid t0: {np.count_nonzero(_valid_t0)}')
             self.logger.info(f'  Cound invalid t0: {np.count_nonzero(_valid_t0-1)}')
+
+        if save:
+            plt.ioff()
+            plt.figure()
+            # _time = np.arange(_labels.size)
+            plt.plot(_signals[:,2,3]/10, label='BES 20')
+            plt.plot(_signals[:,2,5]/10, label='BES 22')
+            plt.plot(_labels, label='Label')
+            _valid_t0_tmp = _valid_t0 * 0.05
+            valid_t0_indices = np.nonzero(_valid_t0)[0]
+            valid_tstop_indices = valid_t0_indices + self.args.signal_window_size - 1
+            _valid_tstop = np.zeros(_labels.shape)
+            _valid_tstop[valid_tstop_indices] = 0.1
+            assert _valid_tstop[active_elm_indices[0]-1] > 0
+            # assert _valid_tstop[active_elm_indices[0]] == 0
+            valid_label_indices = valid_tstop_indices + self.args.label_look_ahead
+            # print(valid_label_indices[-1] , _labels.size-1)
+            assert valid_label_indices.max() <= _labels.size-1
+            _valid_label = np.zeros(_labels.shape)
+            _valid_label[valid_label_indices] = 0.15
+            # assert _valid_label[-1] > 0
+            _valid_t0_tmp[_valid_t0_tmp == 0] = np.nan
+            _valid_tstop[_valid_tstop == 0] = np.nan
+            _valid_label[_valid_label == 0] = np.nan
+            plt.plot(_valid_t0_tmp, label='Valid t0')
+            plt.plot(_valid_tstop, label='Valid tstop')
+            plt.plot(_valid_label, label='Valid label')
+            # plt.title(f"ELM index {elm_key}")
+            plt.legend(fontsize='small')
+            plt.xlabel('Time (mu-s)')
+            plt.tight_layout()
+            if window_start_indices is not None:
+                fignum = window_start_indices.size + 1
+            else:
+                fignum = 1
+            filename = Path(self.args.output_dir) / f"preprocessed_test_elm_{fignum:03d}.pdf"
+            plt.savefig(filename.as_posix(), format="pdf", transparent=True)
+            plt.close()
 
         if signals is None:
             # lists for elm event start, active elm start, active elm stop
@@ -309,6 +312,53 @@ class BaseData:
             elm_start_indices,
             elm_stop_indices,
         )
+
+    def _partition_elms(
+        self, 
+        # max_elms: int = None,
+    ) -> Tuple[ndarray, ndarray, ndarray]:
+        """Partition all the ELM events into training, validation and test indices.
+        Training and validation sets are created based on simple splitting with
+        validation set being `fraction_validate` of the training set or by K-fold
+        cross-validation.
+
+        Args:
+        -----
+            max_elms (int, optional): Maximum number of ELM events to be used.
+                Defaults to None (Take the entire data).
+            fold (int, optional): Fold index for K-fold cross-validation. Defaults
+                to None.
+
+        Returns:
+        --------
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing training,
+                validation and test ELM indices.
+        """
+        # limit the data according to the max number of events passed
+        if self.args.max_elms is not None and self.args.max_elms != -1:
+            self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
+            n_elms = self.args.max_elms
+        else:
+            n_elms = len(self.elm_indices)
+
+        # split the data into train, validation and test sets
+        training_elms, test_validate_elms = model_selection.train_test_split(
+            self.elm_indices[:n_elms],
+            test_size=self.args.fraction_test + self.args.fraction_valid,
+            shuffle=True,
+            # random_state=self.args.seed,
+        )
+        test_elms, validation_elms = model_selection.train_test_split(
+            test_validate_elms,
+            test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
+            shuffle=True,
+            # random_state=self.args.seed,
+        )
+        self.logger.info(f"  Training ELM events: {training_elms.size}")
+        self.logger.info(f"  Validation ELM events: {validation_elms.size}")
+        self.logger.info(f"  Test ELM events: {test_elms.size}")
+
+        return training_elms, validation_elms, test_elms
 
     def _balance_data(self, train, valid, test):
 
@@ -357,11 +407,3 @@ class BaseData:
             new[x] = (np.array(clipped[0]), np.array(clipped[1]), np.array(clipped[2]), new_start_idxs)
 
         return new
-
-    def _preprocess_data(
-        self,
-        elm_indices: np.ndarray = None,
-        shuffle_sample_indices: bool = False,
-        **kwargs,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        raise NotImplementedError
