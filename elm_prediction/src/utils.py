@@ -1,5 +1,6 @@
 """Various utility functions used for data preprocessing, training and validation.
 """
+from genericpath import exists
 import os
 import logging
 import time
@@ -126,8 +127,9 @@ def create_data_class(data_name: str) -> object:
 
 def create_output_paths(
     args: argparse.Namespace, 
-    infer_mode: bool = False
-) -> Tuple:
+    infer_mode: bool = False,
+) -> Union[Tuple[Path,Path],
+           Tuple[Path,Path,Path,Path,Path]]:
     """
     Helper function to create various output paths to save model checkpoints,
     test data, plots, etc.
@@ -139,15 +141,18 @@ def create_output_paths(
     Returns:
         Tuple containing output paths.
     """
-    test_data_file = (Path(args.output_dir) / args.test_data_file).as_posix()
-    checkpoint_file = (Path(args.output_dir) / args.checkpoint_file).as_posix()
+
+    output_dir = Path(args.output_dir)
+
+    test_data_file = output_dir / args.test_data_file
+    checkpoint_file = output_dir / args.checkpoint_file
 
     if infer_mode:
-        clf_report_dir = os.path.join(args.output_dir, "classification_reports")
-        plot_dir = os.path.join(args.output_dir, "plots")
-        roc_dir = os.path.join(args.output_dir, "roc")
+        clf_report_dir = output_dir / "classification_reports"
+        plot_dir = output_dir / "plots"
+        roc_dir = output_dir / "roc"
         for p in [clf_report_dir, plot_dir, roc_dir]:
-            os.makedirs(p, exist_ok=True)
+            p.mkdir(exist_ok=True)
         output = (
             test_data_file,
             checkpoint_file,

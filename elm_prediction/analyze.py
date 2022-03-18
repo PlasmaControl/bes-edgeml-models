@@ -37,7 +37,6 @@ except ImportError:
 
 
 sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
-palette = list(sns.color_palette("muted").as_hex())
 LABELS = ["no ELM", "ELM"]
 
 
@@ -295,12 +294,22 @@ def plot_confusion_matrix(
         y_preds = (y_probas > args.threshold).astype(int)
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_preds)
-        cr = metrics.classification_report(y_true, y_preds, output_dict=True)
+        cr = metrics.classification_report(
+            y_true, 
+            y_preds, 
+            output_dict=True,
+            zero_division=0,
+        )
     else:
         assert y_probas.dtype != np.dtype('float')
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_probas)
-        cr = metrics.classification_report(y_true, y_probas, output_dict=True)
+        cr = metrics.classification_report(
+            y_true, 
+            y_probas, 
+            output_dict=True,
+            zero_division=0,
+        )
 
     # calculate the log of the confusion matrix scaled by the
     # total error (false positives + false negatives)
@@ -435,7 +444,11 @@ def calc_roc_and_f1(
     logger.info(f"  ROC score on test data: {roc_auc:.4f}")
     logger.info(f'  Threshold for F1: {args.threshold:.2f}')
     # f1_thresh = 0.35  # threshold for F1-score
-    f1 = metrics.f1_score(targets, (predictions > args.threshold).astype(int))
+    f1 = metrics.f1_score(
+        targets, 
+        (predictions > args.threshold).astype(int),
+        zero_division=0,
+    )
     logger.info(f"  F1 score on test data: {f1:.4f}")
     return roc_auc, f1, args.threshold
 
@@ -452,13 +465,18 @@ def get_micro_macro_values(pred_dict: dict, mode: str):
     return np.concatenate(targets), np.concatenate(predictions)
 
 
-def main(
-    args: argparse.Namespace,
+def do_analysis(
+    # args: argparse.Namespace,
+    args_file: Union[Path, str, None] = None,
     interactive: Boolean = True,  # True to view immediately; False to only generate PDFs in script without viewing
     click_through_pages: Boolean = True,  # True to click through multiple pages of ELM inference
     save: Boolean = False,
 ) -> None:
     """Actual function encapsulating all analysis function and making inference."""
+    args_file = Path(args_file)
+    with args_file.open('rb') as f:
+        args = pickle.load(f)
+    args = TestArguments().parse(existing_namespace=args)
 
     output_dir = Path(args.output_dir)
     assert output_dir.exists()
@@ -480,6 +498,8 @@ def main(
 
     if args.device.startswith('cuda'):
         args.device = 'cuda'
+    if args.device == 'auto':
+        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(args.device)
 
     model = model.to(device)
@@ -489,14 +509,14 @@ def main(
         utils.create_output_paths(args, infer_mode=True)
 
     # load the model checkpoint
-    LOGGER.info(f"  Model checkpoint: {checkpoint_file}")
-    load_obj = torch.load(checkpoint_file, map_location=device)
+    LOGGER.info(f"  Model checkpoint: {checkpoint_file.as_posix()}")
+    load_obj = torch.load(checkpoint_file.as_posix(), map_location=device)
     model_dict = load_obj['model']
     model.load_state_dict(model_dict)
 
     # restore test data
-    LOGGER.info(f"  Test data file: {test_data_file}")
-    with open(test_data_file, "rb") as f:
+    LOGGER.info(f"  Test data file: {test_data_file.as_posix()}")
+    with test_data_file.open("rb") as f:
         test_data = pickle.load(f)
 
     signals = test_data["signals"]
@@ -520,17 +540,27 @@ def main(
 
     print(f'Interactive?: {plt.isinteractive()}')
 
-    plot_inference_on_elm_events(args, pred_dict,
-        plot_dir=plot_dir,
+    plot_inference_on_elm_events(
+        args, 
+        pred_dict,
+        plot_dir=plot_dir.as_posix(),
         click_through_pages=click_through_pages,
-        save=save)
+        save=save,
+    )
 
     # plot micro/macro confusion matrices
     for mode in ['micro', 'macro']:
         targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
-        plot_confusion_matrix(args, targets, predictions,
-            clf_report_dir, roc_dir, plot_dir, 
-            pred_mode=mode, save=save)
+        plot_confusion_matrix(
+            args, 
+            targets, 
+            predictions,
+            clf_report_dir.as_posix(), 
+            roc_dir.as_posix(), 
+            plot_dir.as_posix(), 
+            pred_mode=mode, 
+            save=save,
+        )
 
     if plt.isinteractive():
         print('Close plots to exit')
@@ -539,9 +569,5 @@ def main(
 
 if __name__ == "__main__":
     plt.close('all')
-
     args_file = package_dir / 'run_dir/args.pkl'
-    with args_file.open('rb') as f:
-        args = pickle.load(f)
-    args = TestArguments().parse(existing_namespace=args)
-    main(args, interactive=False, click_through_pages=False, save=True)
+    do_analysis(args_file, interactive=True, click_through_pages=True, save=True)
