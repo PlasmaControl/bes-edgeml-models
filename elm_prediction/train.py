@@ -5,10 +5,12 @@ To train an ELM prediction model, call `train_loop()` using
 a recipe similar to `if __name__=="main"` block.
 """
 
+from codecs import ignore_errors
 import sys
 import time
 import pickle
-import argparse
+import shutil
+import io
 from typing import Union
 from pathlib import Path
 
@@ -35,55 +37,74 @@ except ImportError:
 
 
 def train_loop(
-    args: argparse.Namespace,
+    input_args: Union[list,dict,None] = None,
     trial = None,  # optuna `trial` object
     _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
-    """Actual function to put the model to training. Use command line arg
-    `--dry_run` to not create test data file and model checkpoint.
+    """Run a training pipeline: parse inputs, prepare data, create model, train over epochs.
 
     Args:
     -----
-        args (argparse.Namespace): Namespace object that stores all the command
-            line arguments.
-        data_obj (object): Data object that creates train, validation and test data.
-        test_datafile_name (str): Name of the pickle file that stores the test data.
-        fold (Union[int, None]): Integer index for the fold if using k-fold cross
-        validation. Defaults to None.
-        desc (bool): If true, prints the model architecture and details.
+        input_args (list|dict): (Optional) Input arguements as dict or list of strings
+        trial: (Optional) Optuna trial object to report training progress and enable pruning
+        _rank: (Optional) Used for Distributed Data Parallel training by `distributed_train.py`
     """
+
+    # parse input args
+    args_obj = TrainArguments()
+    if input_args and isinstance(input_args, dict):
+        # format dict into list
+        arg_list = []
+        for key, value in input_args.items():
+            if isinstance(value, bool):
+                if value is True:
+                    arg_list.append(f'--{key}')
+            else:
+                arg_list.append(f'--{key}={value}')
+        input_args = arg_list
+    args = args_obj.parse(arg_list=input_args)
+
     # output directory and files
-    output_dir = Path(args.output_dir).resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    args.output_dir = output_dir.as_posix()
+    output_dir = Path(args.output_dir)
+    shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
+    output_dir.mkdir(parents=True)
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
+    # create LOGGER
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
+    LOGGER.info(args_obj.make_args_summary_string())
 
-    if args.device == 'auto':
-        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    LOGGER.info(f"  Output directory: {output_dir.resolve().as_posix()}")
 
+    # save args
+    LOGGER.info(f"  Saving argument file: {args_file.as_posix()}")
     with args_file.open('wb') as f:
         pickle.dump(args, f)
+    LOGGER.info(f"  File size: {args_file.stat().st_size/1e3:.1f} kB")
 
+    # setup device
+    if args.device == 'auto':
+        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if _rank is not None:
         # override args.device for multi-GPU distributed data parallel training
         args.device = f'cuda:{_rank}'
         LOGGER.info(f'  Distributed data parallel: process rank {_rank} on GPU {args.device}')
+    device = torch.device(args.device)
+    LOGGER.info(f'------>  Target device: {device}')
 
     # create train, valid and test data
     data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_data, valid_data, test_data = data_obj.get_data()
+    train_data, valid_data, test_data = data_obj.get_data(verbose=True)
 
     # dump test data into a file
     if not args.dry_run:
-        LOGGER.info(f"  Test data will be saved to: {test_data_file}")
-        with open(test_data_file, "wb") as f:
+        LOGGER.info(f"  Test data will be saved to: {test_data_file.as_posix()}")
+        with test_data_file.open('wb') as f:
             pickle.dump(
                 {
                     "signals": test_data[0],
@@ -94,6 +115,7 @@ def train_loop(
                 },
                 f,
             )
+        LOGGER.info(f"  File size: {test_data_file.stat().st_size/1e6:.1f} MB")
 
     # create datasets
     train_dataset = dataset.ELMDataset(
@@ -121,10 +143,6 @@ def train_loop(
         pin_memory=True,
         drop_last=True,
     )
-
-    # device
-    device = torch.device(args.device)
-    LOGGER.info(f'------>  Target device: {device}')
 
     # model class and model instance
     model_class = utils.create_model_class(args.model_name)
@@ -169,10 +187,14 @@ def train_loop(
             )
     x = torch.rand(*input_size)
     x = x.to(device)
-    LOGGER.info("\t\t\t\tMODEL SUMMARY")
     if _rank is None:
         # skip torchinfo.summary if DistributedDataParallel
+        tmp_io = io.StringIO()
+        sys.stdout = tmp_io
         torchinfo.summary(model, input_size=input_size, device=device)
+        sys.stdout = sys.__stdout__
+        LOGGER.info("\t\t\t\tMODEL SUMMARY")
+        LOGGER.info(tmp_io.getvalue())
     LOGGER.info(f'  Batched input size: {x.shape}')
     LOGGER.info(f"  Batched output size: {model(x).shape}")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -265,26 +287,32 @@ def train_loop(
             pickle.dump(outputs, f)
 
         # track best f1 score and save model
-        if f1 > best_score:
+        if f1 > best_score or epoch == 0:
             best_score = f1
             LOGGER.info(f"Epoch: {epoch+1:03d} \tBest Score: {best_score:.3f}")
             if not args.dry_run:
-                LOGGER.info(f"Epoch: {epoch+1:03d} \tSaving model to: {checkpoint_file}")
+                LOGGER.info(f"  Saving model to: {checkpoint_file.as_posix()}")
                 model_data = {
                     "model": model.state_dict(), 
                     "preds": preds,
                 }
-                torch.save(model_data, checkpoint_file)
+                torch.save(model_data, checkpoint_file.as_posix())
+                LOGGER.info(f"  File size: {checkpoint_file.stat().st_size/1e3:.1f} kB")                
                 if args.save_onnx:
                     input_name = ['signal_window']
                     output_name = ['micro_prediction']
-                    torch.onnx.export(model, x[0].unsqueeze(0),
-                                      f'{args.output_dir}/checkpoint.onnx',
-                                      input_names=input_name,
-                                      output_names=output_name,
-                                      verbose=True,
-                                      opset_version=11
-                                      )
+                    onnx_file = Path(args.output_dir) / 'checkpoint.onnx'
+                    LOGGER.info(f"  Saving to ONNX: {onnx_file.as_posix()}")
+                    torch.onnx.export(
+                        model, 
+                        x[0].unsqueeze(0),
+                        onnx_file.as_posix(),
+                        input_names=input_name,
+                        output_names=output_name,
+                        verbose=True,
+                        opset_version=11
+                    )
+                    LOGGER.info(f"  File size: {onnx_file.stat().st_size/1e3:.1f} kB")                
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
@@ -310,15 +338,14 @@ def train_loop(
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        arg_list = [
-            # '--max_elms', '5',
-            '--n_epochs', '3',
-            '--fraction_valid', '0.2',
-            '--fraction_test', '0.2'
-        ]
+        input_args = {
+            'max_elms':10,
+            'n_epochs':2,
+            'fraction_valid':0.2,
+            'fraction_test':0.2,
+        }
     else:
         # use command line arguments in `sys.argv`
-        arg_list = None
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+        input_args = None
+    train_loop(input_args=input_args)
     

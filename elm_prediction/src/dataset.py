@@ -4,6 +4,12 @@ import logging
 import torch
 import numpy as np
 
+try:
+    from ..options.train_arguments import TrainArguments
+    from ..src import utils
+except ImportError:
+    from elm_prediction.options.train_arguments import TrainArguments
+    from elm_prediction.src import utils
 
 class ELMDataset(torch.utils.data.Dataset):
     def __init__(
@@ -38,23 +44,21 @@ class ELMDataset(torch.utils.data.Dataset):
         self.sample_indices = sample_indices
         self.window_start = window_start
         self.logger = logger
-        self.logger.info("-" * 40)
-        self.logger.info(f" Creating pytorch dataset for {phase} ")
-        self.logger.info("-" * 40)
-        self.logger.info(f"Signals shape: {signals.shape}")
-        self.logger.info(f"Labels shape: {labels.shape}")
-        self.logger.info(f"Sample indices shape: {sample_indices.shape}")
+        self.logger.info(f"------>  Creating pytorch dataset for {phase} ")
+        self.logger.info(f"  Signals shape: {signals.shape}")
+        self.logger.info(f"  Labels shape: {labels.shape}")
+        self.logger.info(f"  Sample indices shape: {sample_indices.shape}")
 
     def __len__(self):
         return len(self.sample_indices)
 
     def __getitem__(self, idx: int):
-        elm_idx = self.sample_indices[idx]
+        time_idx = self.sample_indices[idx]
         signal_window = self.signals[
-            elm_idx : elm_idx + self.args.signal_window_size
+            time_idx : time_idx + self.args.signal_window_size
         ]
         label = self.labels[
-            elm_idx
+            time_idx
             + self.args.signal_window_size
             + self.args.label_look_ahead
             - 1
@@ -72,3 +76,16 @@ class ELMDataset(torch.utils.data.Dataset):
 
         return signal_window, label
 
+
+if __name__=="__main__":
+    arg_list = [
+        '--use_all_data', 
+    ]
+    args = TrainArguments().parse(arg_list=arg_list)
+    LOGGER = utils.get_logger(script_name=__name__)
+    data_cls = utils.create_data_class(args.data_preproc)
+    data_obj = data_cls(args, LOGGER)
+    elm_indices, all_data = data_obj.get_data(verbose=True)
+    all_dataset = ELMDataset(
+        args, *all_data[0:4], logger=LOGGER, phase="training"
+    )

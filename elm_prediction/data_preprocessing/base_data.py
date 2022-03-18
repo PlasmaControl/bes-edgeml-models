@@ -1,6 +1,7 @@
 """
 Data class to package BES data for training using PyTorch
 """
+from multiprocessing.sharedctypes import Value
 import os
 import logging
 import argparse
@@ -68,6 +69,7 @@ class BaseData:
 
     def get_data(
         self,
+        verbose=False,
     ) -> Union[
         Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]],
         Tuple[
@@ -89,15 +91,12 @@ class BaseData:
         --------
             Tuple: Tuple containing data for training, validation and test sets.
         """
-        train_data = None
-        validation_data = None
-        test_data = None
-        all_data = None
         self.logger.info("  Reading ELM events and creating datasets")
         if self.args.use_all_data:
             all_data = self._preprocess_data(
                 self.elm_indices,
-                shuffle_sample_indices=True,
+                shuffle_sample_indices=False,
+                verbose=verbose,
             )
             output = (self.elm_indices, all_data)
         else:
@@ -106,16 +105,19 @@ class BaseData:
             train_data = self._preprocess_data(
                 training_elms,
                 shuffle_sample_indices=True,
+                verbose=verbose,
             )
             self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
                 validation_elms,
                 shuffle_sample_indices=False,
+                verbose=verbose,
             )
             self.logger.info("--------> Creating test data")
             test_data = self._preprocess_data(
                 test_elms,
                 shuffle_sample_indices=False,
+                verbose=verbose,
             )
 
             if self.args.balance_data:
@@ -184,6 +186,7 @@ class BaseData:
         valid_t0: np.ndarray = None,
         labels: np.ndarray = None,
         signals: np.ndarray = None,
+        verbose=False,
     ) -> Tuple[
         np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
     ]:
@@ -222,21 +225,52 @@ class BaseData:
         # indices for active elm times in each elm event
         active_elm_indices = np.nonzero(_labels >= 0.5)[0]
 
-        # `t0` is first index (or earliest time, or trailing time point) for signal window
-        # `_valid_t0` denotes valid `t0` time points for signal window
-        # initialize to zeros
-        _valid_t0 = np.zeros(_labels.shape, dtype=np.int32)
-        # largest `t0` index with signal window in pre-ELM period
-        largest_t0 = active_elm_indices[0] - self.args.signal_window_size
-        if largest_t0 < 0:
-            return None
-        # `t0` time points up to `largest_t0` are valid
-        _valid_t0[:largest_t0+1] = 1
+        valid_indices_method = 1
 
-        # # `t0` within sws+la of end are invalid
-        # _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
-        # sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
-        # _valid_t0[ -sws_plus_la + 1 : ] = 0
+        if valid_indices_method == 1:
+            # `t0` is first index (or earliest time, or trailing time point) for signal window
+            # `_valid_t0` denotes valid `t0` time points for signal window
+            # initialize to zeros
+            _valid_t0 = np.zeros(_labels.shape, dtype=np.int32)
+            # largest `t0` index with signal window in pre-ELM period
+            largest_t0_index = active_elm_indices[0] - self.args.signal_window_size
+            if largest_t0_index < 0:
+                return None
+            # `t0` time points up to `largest_t0` are valid
+            _valid_t0[ : largest_t0_index+1 ] = 1
+            # confirm expected behavior
+            assert _valid_t0[largest_t0_index] == 1
+            assert _valid_t0[largest_t0_index+1] == 0
+            assert (_labels[largest_t0_index:largest_t0_index+self.args.signal_window_size]).size == self.args.signal_window_size
+            assert _labels[largest_t0_index+self.args.signal_window_size-1] == 0
+            assert _labels[largest_t0_index+self.args.signal_window_size] == 1
+
+            if active_elm_indices[-1]+500 <= _valid_t0.size-1:
+                # add post-ELM valid t0's
+                post_elm_start = active_elm_indices[-1]+500
+                post_elm_end = _valid_t0.size - (self.args.signal_window_size + self.args.label_look_ahead) - 1
+                _valid_t0[ post_elm_start : post_elm_end] = 1
+                assert _labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+                assert _labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+
+        elif valid_indices_method == 2:
+            # adjust labels so active ELM is true for all post-onset time points
+            _labels[active_elm_indices[0]+1:] = 1
+
+            # # `t0` within sws+la of end are invalid
+            _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
+            sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
+            _valid_t0[ -sws_plus_la + 1 : ] = 0
+        else:
+            raise ValueError
+
+        if verbose:
+            self.logger.info(f'  Total time points {_labels.size}')
+            self.logger.info(f'  Pre-ELM time points {active_elm_indices[0]}')
+            self.logger.info(f'  Active ELM time points {active_elm_indices.size}')
+            self.logger.info(f'  Post-ELM time points {_labels.size - active_elm_indices[-1]-1}')
+            self.logger.info(f'  Cound valid t0: {np.count_nonzero(_valid_t0)}')
+            self.logger.info(f'  Cound invalid t0: {np.count_nonzero(_valid_t0-1)}')
 
         if signals is None:
             # lists for elm event start, active elm start, active elm stop
