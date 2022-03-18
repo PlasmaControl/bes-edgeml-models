@@ -258,10 +258,9 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        arg_list = [# '--max_elms', '5',
+        input_args = [# '--max_elms', '5',
                 '--n_epochs', '3', '--fraction_valid', '0.2', '--fraction_test', '0.2']
     else:
         # use command line arguments in `sys.argv`
-        arg_list = None
-    args = TrainArguments().parse(arg_list=arg_list)
-    train_loop(args)
+        input_args = None
+    train_loop(input_args)
