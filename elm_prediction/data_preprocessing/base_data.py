@@ -6,12 +6,10 @@ import os
 import logging
 import argparse
 from typing import Tuple, Union
-from pathlib import Path
 
 import h5py
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from numpy import ndarray
 from sklearn import model_selection
 
@@ -38,7 +36,7 @@ class BaseData:
         assert(os.path.exists(self.datafile))
 
         self.logger = logger
-        self.df = pd.DataFrame()
+        # self.df = pd.DataFrame()
 
         self.logger.info(f"-------->  Data file: {self.datafile}")
 
@@ -53,21 +51,21 @@ class BaseData:
         self.logger.info(f"  Number of ELM events: {len(self.elm_indices)}")
         self.logger.info(f"  Total time frames: {count}")
 
-        if self.args.data_preproc == "automatic_labels":
-            try:
-                csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
-                self.labels_df = pd.read_csv(
-                    os.path.join(
-                        csv_path,
-                        f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
-                    )
-                )
-                self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
-                    lambda x: f"{x:05d}"
-                )
-                print(self.labels_df.info())
-            except FileNotFoundError:
-                print("CSV file containing the automatic labels not found.")
+        # if self.args.data_preproc == "automatic_labels":
+        #     try:
+        #         csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
+        #         self.labels_df = pd.read_csv(
+        #             os.path.join(
+        #                 csv_path,
+        #                 f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
+        #             )
+        #         )
+        #         self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
+        #             lambda x: f"{x:05d}"
+        #         )
+        #         print(self.labels_df.info())
+        #     except FileNotFoundError:
+        #         print("CSV file containing the automatic labels not found.")
 
     def get_data(
         self,
@@ -114,13 +112,14 @@ class BaseData:
                 validation_elms,
                 shuffle_sample_indices=False,
                 verbose=verbose,
+                save_filename='validation',
             )
             self.logger.info("--------> Creating test data")
             test_data = self._preprocess_data(
                 test_elms,
                 shuffle_sample_indices=False,
                 verbose=verbose,
-                save=True,
+                save_filename='test',
             )
 
             if self.args.balance_data:
@@ -142,19 +141,10 @@ class BaseData:
 
     def _get_valid_indices(
         self,
-        _signals: np.ndarray,
-        _labels: np.ndarray,
-        window_start_indices: np.ndarray = None,
-        elm_start_indices: np.ndarray = None,
-        elm_stop_indices: np.ndarray = None,
-        valid_t0: np.ndarray = None,
-        labels: np.ndarray = None,
-        signals: np.ndarray = None,
-        save: bool = False,  # -1 for all ELMs or int for max_elms
+        signals: np.ndarray,
+        labels: np.ndarray,
         verbose=False,
-    ) -> Tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
-    ]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to concatenate the signals and labels for the ELM events
         for a given mode. It also creates allowed indices to sample from with respect
         to signal window size and label look ahead. See the README to know more
@@ -188,7 +178,7 @@ class BaseData:
                 time data point.
         """
         # indices for active elm times in each elm event
-        active_elm_indices = np.nonzero(_labels >= 0.5)[0]
+        active_elm_indices = np.nonzero(labels >= 0.5)[0]
 
         valid_indices_method = 1
 
@@ -196,126 +186,51 @@ class BaseData:
             # `t0` is first index (or earliest time, or trailing time point) for signal window
             # `_valid_t0` denotes valid `t0` time points for signal window
             # initialize to zeros
-            _valid_t0 = np.zeros(_labels.shape, dtype=np.int32)
+            valid_t0 = np.zeros(labels.shape, dtype=np.int32)
             # largest `t0` index with signal window in pre-ELM period
             largest_t0_index = active_elm_indices[0] - self.args.signal_window_size
             if largest_t0_index < 0:
                 return None
             # `t0` time points up to `largest_t0` are valid
-            _valid_t0[ : largest_t0_index+1 ] = 1
+            valid_t0[ : largest_t0_index+1 ] = 1
             # confirm expected behavior
-            assert _valid_t0[largest_t0_index] == 1
-            assert _valid_t0[largest_t0_index+1] == 0
-            assert (_labels[largest_t0_index:largest_t0_index+self.args.signal_window_size]).size == self.args.signal_window_size
-            assert _labels[largest_t0_index+self.args.signal_window_size-1] == 0
-            assert _labels[largest_t0_index+self.args.signal_window_size] == 1
+            assert valid_t0[largest_t0_index] == 1
+            assert valid_t0[largest_t0_index+1] == 0
+            assert (labels[largest_t0_index:largest_t0_index+self.args.signal_window_size]).size == self.args.signal_window_size
+            assert labels[largest_t0_index+self.args.signal_window_size-1] == 0
+            assert labels[largest_t0_index+self.args.signal_window_size] == 1
 
-            if (active_elm_indices[-1]+500 <= _valid_t0.size-1) and False:
+            if (active_elm_indices[-1]+500 <= valid_t0.size-1) and False:
                 # add post-ELM valid t0's
                 post_elm_start = active_elm_indices[-1]+500
-                post_elm_end = _valid_t0.size - (self.args.signal_window_size + self.args.label_look_ahead) - 1
-                _valid_t0[ post_elm_start : post_elm_end] = 1
-                assert _labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
-                assert _labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+                post_elm_end = valid_t0.size - (self.args.signal_window_size + self.args.label_look_ahead) - 1
+                valid_t0[ post_elm_start : post_elm_end] = 1
+                assert labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+                assert labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
 
         elif valid_indices_method == 2:
             # adjust labels so active ELM is true for all post-onset time points
             # _labels[active_elm_indices[0]+1:] = 1
 
             # # `t0` within sws+la of end are invalid
-            _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
+            valid_t0 = np.ones(labels.shape, dtype=np.int32)
             sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
-            _valid_t0[ -sws_plus_la + 1 : ] = 0
+            valid_t0[ -sws_plus_la + 1 : ] = 0
         else:
             raise ValueError
 
         if verbose:
-            self.logger.info(f'  Total time points {_labels.size}')
+            self.logger.info(f'  Total time points {labels.size}')
             self.logger.info(f'  Pre-ELM time points {active_elm_indices[0]}')
             self.logger.info(f'  Active ELM time points {active_elm_indices.size}')
-            self.logger.info(f'  Post-ELM time points {_labels.size - active_elm_indices[-1]-1}')
-            self.logger.info(f'  Cound valid t0: {np.count_nonzero(_valid_t0)}')
-            self.logger.info(f'  Cound invalid t0: {np.count_nonzero(_valid_t0-1)}')
+            self.logger.info(f'  Post-ELM time points {labels.size - active_elm_indices[-1]-1}')
+            self.logger.info(f'  Cound valid t0: {np.count_nonzero(valid_t0)}')
+            self.logger.info(f'  Cound invalid t0: {np.count_nonzero(valid_t0-1)}')
 
-        if save:
-            plt.ioff()
-            plt.figure()
-            # _time = np.arange(_labels.size)
-            plt.plot(_signals[:,2,3]/10, label='BES 20')
-            plt.plot(_signals[:,2,5]/10, label='BES 22')
-            plt.plot(_labels, label='Label')
-            _valid_t0_tmp = _valid_t0 * 0.05
-            valid_t0_indices = np.nonzero(_valid_t0)[0]
-            valid_tstop_indices = valid_t0_indices + self.args.signal_window_size - 1
-            _valid_tstop = np.zeros(_labels.shape)
-            _valid_tstop[valid_tstop_indices] = 0.1
-            assert _valid_tstop[active_elm_indices[0]-1] > 0
-            # assert _valid_tstop[active_elm_indices[0]] == 0
-            valid_label_indices = valid_tstop_indices + self.args.label_look_ahead
-            # print(valid_label_indices[-1] , _labels.size-1)
-            assert valid_label_indices.max() <= _labels.size-1
-            _valid_label = np.zeros(_labels.shape)
-            _valid_label[valid_label_indices] = 0.15
-            # assert _valid_label[-1] > 0
-            _valid_t0_tmp[_valid_t0_tmp == 0] = np.nan
-            _valid_tstop[_valid_tstop == 0] = np.nan
-            _valid_label[_valid_label == 0] = np.nan
-            plt.plot(_valid_t0_tmp, label='Valid t0')
-            plt.plot(_valid_tstop, label='Valid tstop')
-            plt.plot(_valid_label, label='Valid label')
-            # plt.title(f"ELM index {elm_key}")
-            plt.legend(fontsize='small')
-            plt.xlabel('Time (mu-s)')
-            plt.tight_layout()
-            if window_start_indices is not None:
-                fignum = window_start_indices.size + 1
-            else:
-                fignum = 1
-            filename = Path(self.args.output_dir) / f"preprocessed_test_elm_{fignum:03d}.pdf"
-            plt.savefig(filename.as_posix(), format="pdf", transparent=True)
-            plt.close()
-
-        if signals is None:
-            # lists for elm event start, active elm start, active elm stop
-            window_start_indices = np.array([0])
-            elm_start_indices = active_elm_indices[0]
-            elm_stop_indices = active_elm_indices[-1]
-            # concat valid_t0, signals, and labels
-            valid_t0 = _valid_t0
-            signals = _signals
-            labels = _labels
-        else:
-            # append lists for elm event start, active elm start, active elm stop
-            last_index = len(labels) - 1
-            window_start_indices = np.append(
-                window_start_indices, 
-                last_index + 1
-            )
-            elm_start_indices = np.append(
-                elm_start_indices, 
-                active_elm_indices[0] + last_index + 1
-            )
-            elm_stop_indices = np.append(
-                elm_stop_indices, 
-                active_elm_indices[-1] + last_index + 1
-            )
-            # concat on axis 0 (time dimension)
-            valid_t0 = np.concatenate([valid_t0, _valid_t0])
-            signals = np.concatenate([signals, _signals], axis=0)
-            labels = np.concatenate([labels, _labels], axis=0)
-
-        return (
-            signals,
-            labels,
-            valid_t0,
-            window_start_indices,
-            elm_start_indices,
-            elm_stop_indices,
-        )
+        return (signals, labels, valid_t0)
 
     def _partition_elms(
         self, 
-        # max_elms: int = None,
     ) -> Tuple[ndarray, ndarray, ndarray]:
         """Partition all the ELM events into training, validation and test indices.
         Training and validation sets are created based on simple splitting with
@@ -339,20 +254,20 @@ class BaseData:
             self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
             n_elms = self.args.max_elms
         else:
-            n_elms = len(self.elm_indices)
+            n_elms = self.elm_indices.size
 
         # split the data into train, validation and test sets
         training_elms, test_validate_elms = model_selection.train_test_split(
             self.elm_indices[:n_elms],
             test_size=self.args.fraction_test + self.args.fraction_valid,
             shuffle=True,
-            # random_state=self.args.seed,
+            random_state=self.args.seed,
         )
         test_elms, validation_elms = model_selection.train_test_split(
             test_validate_elms,
             test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
             shuffle=True,
-            # random_state=self.args.seed,
+            random_state=self.args.seed,
         )
         self.logger.info(f"  Training ELM events: {training_elms.size}")
         self.logger.info(f"  Validation ELM events: {validation_elms.size}")

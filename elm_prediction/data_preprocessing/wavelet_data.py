@@ -99,8 +99,8 @@ class WaveletData(BaseData):
 
                 # get all the allowed indices till current time step
                 indices_data = self._get_valid_indices(
-                    _signals=_signals,
-                    _labels=_labels,
+                    signals=_signals,
+                    labels=_labels,
                     window_start_indices=window_start,
                     elm_start_indices=elm_start,
                     elm_stop_indices=elm_stop,
