@@ -104,23 +104,26 @@ class UnprocessedData(BaseData):
                     plt.plot(signals[:,2,3]/10, label='BES 20')
                     plt.plot(signals[:,2,5]/10, label='BES 22')
                     plt.plot(labels, label='Label')
-                    _valid_t0_tmp = valid_t0 * 0.1
+                    _valid_t0 = np.array(valid_t0, copy=True, dtype=float)
+                    _valid_tstop = np.zeros(labels.size)
+                    _valid_label = np.zeros(labels.size)
                     valid_t0_indices = np.nonzero(valid_t0)[0]
                     valid_tstop_indices = valid_t0_indices + self.args.signal_window_size - 1
-                    _valid_tstop = np.zeros(labels.shape)
-                    _valid_tstop[valid_tstop_indices] = 0.2
-                    # assert _valid_tstop[active_elm_indices[0]-1] > 0
-                    # assert _valid_tstop[active_elm_indices[0]] == 0
                     valid_label_indices = valid_tstop_indices + self.args.label_look_ahead
-                    # print(valid_label_indices[-1] , _labels.size-1)
-                    assert valid_label_indices.max() <= labels.size-1
-                    _valid_label = np.zeros(labels.shape)
+                    assert _valid_t0[0] == 1
+                    assert valid_tstop_indices[-1] <= labels.size-1
+                    assert valid_label_indices[-1] <= labels.size-1
+                    _valid_t0[valid_t0_indices] = 0.1
+                    _valid_tstop[valid_tstop_indices] = 0.2
                     _valid_label[valid_label_indices] = 0.3
-                    # assert _valid_label[-1] > 0
-                    _valid_t0_tmp[_valid_t0_tmp == 0] = np.nan
+                    _valid_t0[_valid_t0 == 0] = np.nan
                     _valid_tstop[_valid_tstop == 0] = np.nan
                     _valid_label[_valid_label == 0] = np.nan
-                    plt.plot(_valid_t0_tmp, label='Valid t0')
+                    # assert _valid_tstop[active_elm_indices[0]-1] > 0
+                    # assert _valid_tstop[active_elm_indices[0]] == 0
+                    # print(valid_label_indices[-1] , _labels.size-1)
+                    # assert _valid_label[-1] > 0
+                    plt.plot(_valid_t0, label='Valid t0')
                     plt.plot(_valid_tstop, label='Valid tstop')
                     plt.plot(_valid_label, label='Valid label')
                     plt.title(f"ELM index {elm_key}")
@@ -147,6 +150,9 @@ class UnprocessedData(BaseData):
                     packaged_signals = np.concatenate([packaged_signals, signals], axis=0)
                     packaged_labels = np.concatenate([packaged_labels, labels], axis=0)                
 
+        if save_filename:
+            plt.close()
+
        # valid indices for data sampling
         packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
         packaged_valid_t0_indices = packaged_valid_t0_indices[packaged_valid_t0 == 1]
@@ -160,9 +166,9 @@ class UnprocessedData(BaseData):
         n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
         n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
         self.logger.info(" Dataset summary")
-        self.logger.info(f"  Count of non-ELM labels: {n_inactive_elm}")
-        self.logger.info(f"  Count of ELM labels: {n_active_elm}")
-        self.logger.info(f"  Ratio: {n_active_elm/n_inactive_elm:.3f}")
+        self.logger.info(f"  Count of inactive ELM labels: {n_inactive_elm}")
+        self.logger.info(f"  Count of active ELM labels: {n_active_elm}")
+        self.logger.info(f"  % active: {n_active_elm/(n_active_elm+n_inactive_elm)*1e2:.1f} %")
 
         if shuffle_sample_indices:
             np.random.shuffle(packaged_valid_t0_indices)

@@ -106,6 +106,7 @@ class BaseData:
                 training_elms,
                 shuffle_sample_indices=True,
                 verbose=verbose,
+                save_filename='train',
             )
             self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
@@ -178,39 +179,53 @@ class BaseData:
                 time data point.
         """
         # indices for active elm times in each elm event
-        active_elm_indices = np.nonzero(labels >= 0.5)[0]
+        active_elm_indices = np.nonzero(labels == 1)[0]
+        active_elm_start_index = active_elm_indices[0]
+        active_elm_stop_index = active_elm_indices[-1]
 
-        valid_indices_method = 1
+        # method for establishing valid t0 indices
+        method = self.args.valid_indices_method
 
-        if valid_indices_method == 1:
+        if method in [0, 1]:
             # `t0` is first index (or earliest time, or trailing time point) for signal window
-            # `_valid_t0` denotes valid `t0` time points for signal window
+            # `valid_t0` denotes valid `t0` time points for signal window
             # initialize to zeros
             valid_t0 = np.zeros(labels.shape, dtype=np.int32)
             # largest `t0` index with signal window in pre-ELM period
-            largest_t0_index = active_elm_indices[0] - self.args.signal_window_size
-            if largest_t0_index < 0:
+            largest_t0_index_for_pre_elm_period = active_elm_start_index - self.args.signal_window_size
+            if largest_t0_index_for_pre_elm_period < 0:
+                # insufficient pre-elm period for signal window size
                 return None
             # `t0` time points up to `largest_t0` are valid
-            valid_t0[ : largest_t0_index+1 ] = 1
+            valid_t0[0:largest_t0_index_for_pre_elm_period+1] = 1
+            # labels after ELM onset should be active ELM, even if in post-ELM period
+            last_label_for_active_elm_in_pre_elm_signal = (
+                largest_t0_index_for_pre_elm_period
+                + (self.args.signal_window_size - 1)
+                + self.args.label_look_ahead
+            )
+            labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
             # confirm expected behavior
-            assert valid_t0[largest_t0_index] == 1
-            assert valid_t0[largest_t0_index+1] == 0
-            assert (labels[largest_t0_index:largest_t0_index+self.args.signal_window_size]).size == self.args.signal_window_size
-            assert labels[largest_t0_index+self.args.signal_window_size-1] == 0
-            assert labels[largest_t0_index+self.args.signal_window_size] == 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1)    ] == 0
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1) + 1] == 1
+            assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
+            # assert labels[largest_t0_index_for_pre_elm_period+self.args.signal_window_size] == 1
 
-            if (active_elm_indices[-1]+500 <= valid_t0.size-1) and False:
+            if method == 1 and (active_elm_stop_index+1000 <= valid_t0.size-1):
                 # add post-ELM valid t0's
-                post_elm_start = active_elm_indices[-1]+500
-                post_elm_end = valid_t0.size - (self.args.signal_window_size + self.args.label_look_ahead) - 1
+                post_elm_start = active_elm_stop_index+1000
+                post_elm_end = valid_t0.size - self.args.label_look_ahead - (self.args.signal_window_size + 1)
                 valid_t0[ post_elm_start : post_elm_end] = 1
-                assert labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
-                assert labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+                # assert labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
+                # assert labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
 
-        elif valid_indices_method == 2:
-            # adjust labels so active ELM is true for all post-onset time points
-            # _labels[active_elm_indices[0]+1:] = 1
+        elif method in [2, 3]:
+            if method == 3:
+                # adjust labels so active ELM is true for all post-onset time points
+                labels[active_elm_indices[0]+1:] = 1
+                assert labels[-1] == 1
 
             # # `t0` within sws+la of end are invalid
             valid_t0 = np.ones(labels.shape, dtype=np.int32)

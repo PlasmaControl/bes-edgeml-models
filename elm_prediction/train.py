@@ -345,6 +345,7 @@ if __name__ == "__main__":
             'fraction_test':0.4,
             'signal_window_size':128,
             'label_look_ahead':300,
+            'valid_indices_method':0,
         }
     else:
         # use command line arguments in `sys.argv`

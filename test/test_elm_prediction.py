@@ -49,6 +49,13 @@ def test_train_loop_with_dct():
     input_args['dct_num_filters'] = 8
     train_loop(input_args)
 
+def test_train_loop_valid_indices():
+    for valid_indices_method in range(4):
+        input_args = DEFAULT_INPUT_ARGS.copy()
+        input_args['output_dir'] = RUN_DIR + f'/valid_indices_method_{valid_indices_method:02d}'
+        input_args['valid_indices_method'] = valid_indices_method
+        train_loop(input_args)
+
 def test_analyze():
     args_file = RUN_DIR + '/raw_only/args.pkl'
     do_analysis(args_file, interactive=False, click_through_pages=False, save=True)
