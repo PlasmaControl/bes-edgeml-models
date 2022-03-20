@@ -2,10 +2,12 @@
 Data class to package BES data for training using PyTorch without any 
 modifications and transformations.
 """
-from typing import Tuple
+from typing import Union, Tuple
+from pathlib import Path
 
 import numpy as np
 import h5py
+import matplotlib.pyplot as plt
 
 try:
     from .base_data import BaseData
@@ -22,8 +24,9 @@ class UnprocessedData(BaseData):
         self,
         elm_indices: np.ndarray = None,
         shuffle_sample_indices: bool = False,
-        verbose = False,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        save_filename: str = '',
+        verbose: bool = False,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to preprocess the data: reshape the input signal, use
         allowed indices to upsample the class minority labels [active ELM events].
 
@@ -40,110 +43,150 @@ class UnprocessedData(BaseData):
                 original signals, correponding labels, sample indices obtained
                 after upsampling and start index for each ELM event.
         """
-        signals = None
-        window_start = None
-        elm_start = None
-        elm_stop = None
-        valid_t0 = []
-        labels = []
+        packaged_signals = None
+        packaged_window_start = None
+        packaged_valid_t0 = []
+        packaged_labels = []
 
         # get ELM indices from the data file if not provided
         if elm_indices is None:
             elm_indices = self.elm_indices
 
+        if save_filename:
+            plt.ioff()
+            _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
+            i_page = 1
+
         # iterate through all the ELM indices
         with h5py.File(self.datafile, 'r') as hf:
-            for elm_index in elm_indices:
+            for i_elm, elm_index in enumerate(elm_indices):
                 elm_key = f"{elm_index:05d}"
                 if verbose:
                     self.logger.info(f' ELM index {elm_index}')
                 elm_event = hf[elm_key]
-                _signals = np.array(elm_event["signals"], dtype=np.float32)
+                signals = np.array(elm_event["signals"], dtype=np.float32)
+                # _time = np.array(elm_event["time"], dtype=np.float32)
                 # transposing so that the time dimension comes forward
-                _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
+                signals = np.transpose(signals, (1, 0)).reshape(-1, 8, 8)
                 if self.args.automatic_labels:
-                    _labels = np.array(elm_event["automatic_labels"], dtype=np.float32)
+                    labels = np.array(elm_event["automatic_labels"], dtype=np.float32)
                 else:
                     try:
-                        _labels = np.array(elm_event["labels"], dtype=np.float32)
+                        labels = np.array(elm_event["labels"], dtype=np.float32)
                     except KeyError:
-                        _labels = np.array(elm_event["manual_labels"], dtype=np.float32)
+                        labels = np.array(elm_event["manual_labels"], dtype=np.float32)
 
                 if self.args.normalize_data:
-                    _signals = _signals.reshape(-1, 64)
-                    _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
-                    _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
-                    _signals = _signals.reshape(-1, 8, 8)
+                    signals = signals.reshape(-1, 64)
+                    signals[:, :32] = signals[:, :32] / np.max(signals[:, :32])
+                    signals[:, 32:] = signals[:, 32:] / np.max(signals[:, 32:])
+                    signals = signals.reshape(-1, 8, 8)
 
                 if self.args.truncate_inputs:
-                    active_elm_indices = np.where(_labels > 0)[0]
+                    active_elm_indices = np.where(labels > 0)[0]
                     elm_end_index = active_elm_indices[-1] + self.args.truncate_buffer
-                    _signals = _signals[:elm_end_index, ...]
-                    _labels = _labels[:elm_end_index]
-
-                # if len(_labels) < 2000:
-                #     continue
-                # get all the allowed indices till current time step
+                    signals = signals[:elm_end_index, ...]
+                    labels = labels[:elm_end_index]
+                
                 result = self._get_valid_indices(
-                    _signals=_signals,
-                    _labels=_labels,
-                    window_start_indices=window_start,
-                    elm_start_indices=elm_start,
-                    elm_stop_indices=elm_stop,
-                    valid_t0=valid_t0,
-                    labels=labels,
                     signals=signals,
+                    labels=labels,
                     verbose=verbose,
                 )
-                if result is None:
-                    # insufficient pre-ELM period, continue
+                if result:
+                    (signals, labels, valid_t0) = result
+                else:
                     continue
-                (
-                    signals,
-                    labels,
-                    valid_t0,
-                    window_start,
-                    elm_start,
-                    elm_stop,
-                ) = result
 
-        # valid indices for data sampling
-        sample_indices = np.arange(valid_t0.size, dtype="int")
-        sample_indices = sample_indices[valid_t0 == 1]
+                if save_filename:
+                    plt.sca(axes.flat[i_elm%12])
+                    plt.cla()
+                    plt.plot(signals[:,2,3]/10, label='BES 20')
+                    plt.plot(signals[:,2,5]/10, label='BES 22')
+                    plt.plot(labels, label='Label')
+                    _valid_t0 = np.array(valid_t0, copy=True, dtype=float)
+                    _valid_tstop = np.zeros(labels.size)
+                    _valid_label = np.zeros(labels.size)
+                    valid_t0_indices = np.nonzero(valid_t0)[0]
+                    valid_tstop_indices = valid_t0_indices + self.args.signal_window_size - 1
+                    valid_label_indices = valid_tstop_indices + self.args.label_look_ahead
+                    assert _valid_t0[0] == 1
+                    assert valid_tstop_indices[-1] <= labels.size-1
+                    assert valid_label_indices[-1] <= labels.size-1
+                    _valid_t0[valid_t0_indices] = 0.1
+                    _valid_tstop[valid_tstop_indices] = 0.2
+                    _valid_label[valid_label_indices] = 0.3
+                    _valid_t0[_valid_t0 == 0] = np.nan
+                    _valid_tstop[_valid_tstop == 0] = np.nan
+                    _valid_label[_valid_label == 0] = np.nan
+                    # assert _valid_tstop[active_elm_indices[0]-1] > 0
+                    # assert _valid_tstop[active_elm_indices[0]] == 0
+                    # print(valid_label_indices[-1] , _labels.size-1)
+                    # assert _valid_label[-1] > 0
+                    plt.plot(_valid_t0, label='Valid t0')
+                    plt.plot(_valid_tstop, label='Valid tstop')
+                    plt.plot(_valid_label, label='Valid label')
+                    plt.title(f"ELM index {elm_key}")
+                    plt.legend(fontsize='small')
+                    plt.xlabel('Time (mu-s)')
+                    if i_elm%12==11 or i_elm==elm_indices.size-1:
+                        plt.tight_layout()
+                        filename = Path(self.args.output_dir) / f"{save_filename}_data_{i_page:02d}.pdf"
+                        plt.savefig(filename.as_posix(), format="pdf", transparent=True)
+                        i_page += 1
 
-        if verbose:
-            shifted_sample_indices = (
-                sample_indices 
-                + self.args.signal_window_size
-                + self.args.label_look_ahead
-                -1
-                )
-            sampled_labels = labels[ shifted_sample_indices ]
-            n_active_elm = np.count_nonzero(sampled_labels)
-            n_inactive_elm = np.count_nonzero(sampled_labels-1)
-            self.logger.info(" Dataset summary")
-            self.logger.info(f"  Count of non-ELM labels: {n_inactive_elm}")
-            self.logger.info(f"  Count of ELM labels: {n_active_elm}")
-            self.logger.info(f"  Ratio: {n_active_elm/n_inactive_elm:.3f}")
+                if packaged_signals is None:
+                    packaged_window_start = np.array([0])
+                    packaged_valid_t0 = valid_t0
+                    packaged_signals = signals
+                    packaged_labels = labels
+                else:
+                    last_index = packaged_labels.size - 1
+                    packaged_window_start = np.append(
+                        packaged_window_start, 
+                        last_index + 1
+                    )
+                    packaged_valid_t0 = np.concatenate([packaged_valid_t0, valid_t0])
+                    packaged_signals = np.concatenate([packaged_signals, signals], axis=0)
+                    packaged_labels = np.concatenate([packaged_labels, labels], axis=0)                
+
+        if save_filename:
+            plt.close()
+
+       # valid indices for data sampling
+        packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
+        packaged_valid_t0_indices = packaged_valid_t0_indices[packaged_valid_t0 == 1]
+
+        packaged_label_indices_for_valid_t0 = (
+            packaged_valid_t0_indices 
+            + (self.args.signal_window_size-1)
+            + self.args.label_look_ahead
+            )
+        packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
+        n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
+        n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
+        self.logger.info(" Dataset summary")
+        self.logger.info(f"  Count of inactive ELM labels: {n_inactive_elm}")
+        self.logger.info(f"  Count of active ELM labels: {n_active_elm}")
+        self.logger.info(f"  % active: {n_active_elm/(n_active_elm+n_inactive_elm)*1e2:.1f} %")
 
         if shuffle_sample_indices:
-            np.random.shuffle(sample_indices)
+            np.random.shuffle(packaged_valid_t0_indices)
 
-        self.logger.info(
-            "Data tensors -> signals, labels, sample_indices, window_start_indices:"
-        )
+        self.logger.info( "Data tensors -> signals, labels, sample_indices, window_start_indices:")
         for tensor in [
-            signals,
-            labels,
-            sample_indices,
-            window_start,
+            packaged_signals,
+            packaged_labels,
+            packaged_valid_t0_indices,
+            packaged_window_start,
         ]:
             tmp = f" shape {tensor.shape}, dtype {tensor.dtype},"
             tmp += f" min {np.min(tensor):.3f}, max {np.max(tensor):.3f}"
             if hasattr(tensor, "device"):
                 tmp += f" device {tensor.device[-5:]}"
             self.logger.info(tmp)
-        return signals, labels, sample_indices, window_start, elm_indices
+
+        return (packaged_signals, packaged_labels, packaged_valid_t0_indices, packaged_window_start, elm_indices)
 
 
 if __name__=="__main__":

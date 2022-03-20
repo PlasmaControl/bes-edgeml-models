@@ -127,6 +127,12 @@ class BaseArguments:
             "balance | rnn | gaussian_noise].",
         )
         parser.add_argument(
+            "--valid_indices_method",
+            type=int,
+            default=0,
+            help="method for `BaseData._get_valid_indices()`: int, 0 (default) | 1 | 2 | 3",
+        )
+        parser.add_argument(
             "--automatic_labels",
             action="store_true",
             default=False,

@@ -99,7 +99,7 @@ def train_loop(
     # create train, valid and test data
     data_cls = utils.create_data_class(args.data_preproc)
     data_obj = data_cls(args, LOGGER)
-    train_data, valid_data, test_data = data_obj.get_data(verbose=True)
+    train_data, valid_data, test_data = data_obj.get_data(verbose=False)
 
     # dump test data into a file
     if not args.dry_run:
@@ -341,8 +341,11 @@ if __name__ == "__main__":
         input_args = {
             'max_elms':10,
             'n_epochs':2,
-            'fraction_valid':0.2,
-            'fraction_test':0.2,
+            'fraction_valid':0.4,
+            'fraction_test':0.4,
+            'signal_window_size':128,
+            'label_look_ahead':300,
+            'valid_indices_method':0,
         }
     else:
         # use command line arguments in `sys.argv`
