@@ -106,7 +106,7 @@ class BaseData:
                 training_elms,
                 shuffle_sample_indices=True,
                 verbose=verbose,
-                save_filename='train',
+                # save_filename='train',
             )
             self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
@@ -196,8 +196,12 @@ class BaseData:
             if largest_t0_index_for_pre_elm_period < 0:
                 # insufficient pre-elm period for signal window size
                 return None
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1)    ] == 0
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1) + 1] == 1
             # `t0` time points up to `largest_t0` are valid
             valid_t0[0:largest_t0_index_for_pre_elm_period+1] = 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
             # labels after ELM onset should be active ELM, even if in post-ELM period
             last_label_for_active_elm_in_pre_elm_signal = (
                 largest_t0_index_for_pre_elm_period
@@ -205,21 +209,18 @@ class BaseData:
                 + self.args.label_look_ahead
             )
             labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
-            # confirm expected behavior
-            assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
-            assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
-            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1)    ] == 0
-            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1) + 1] == 1
             assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
-            # assert labels[largest_t0_index_for_pre_elm_period+self.args.signal_window_size] == 1
 
-            if method == 1 and (active_elm_stop_index+1000 <= valid_t0.size-1):
+            sufficient_post_elm_period = (active_elm_stop_index+1000 
+                                            + (self.args.signal_window_size-1) 
+                                            + self.args.label_look_ahead) <= valid_t0.size-1
+            if method == 1 and sufficient_post_elm_period:
                 # add post-ELM valid t0's
                 post_elm_start = active_elm_stop_index+1000
+                assert labels[post_elm_start + (self.args.signal_window_size-1) + self.args.label_look_ahead] == 0
                 post_elm_end = valid_t0.size - self.args.label_look_ahead - (self.args.signal_window_size + 1)
+                assert labels[post_elm_end + (self.args.signal_window_size-1) + self.args.label_look_ahead] == 0
                 valid_t0[ post_elm_start : post_elm_end] = 1
-                # assert labels[post_elm_start + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
-                # assert labels[post_elm_end + self.args.signal_window_size + self.args.label_look_ahead - 1] == 0
 
         elif method in [2, 3]:
             if method == 3:
