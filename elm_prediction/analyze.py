@@ -131,11 +131,18 @@ def inference_on_elm_events(
         elm_time = np.arange(elm_labels.size)
         # convert logits to probability
         # calculate micro predictions for each time step
-        micro_predictions = (
-            torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
-            .cpu()
-            .numpy()
-        )
+        if not args.regression:
+            micro_predictions = (
+                torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
+                .cpu()
+                .numpy()
+            )
+        else:
+            micro_predictions = (
+                    torch.as_tensor(predictions, dtype=torch.float32)
+                    .cpu()
+                    .numpy()
+            )
         micro_predictions = np.pad(
             micro_predictions,
             pad_width=(
@@ -451,6 +458,10 @@ def get_micro_macro_values(pred_dict: dict, mode: str):
         targets.append(vals[label_key])
     return np.concatenate(targets), np.concatenate(predictions)
 
+def plot_regression_elms(args: argparse.Namespace,
+                         elm_list: list = None):
+    return
+
 
 def main(
     args: argparse.Namespace,
@@ -519,6 +530,9 @@ def main(
     pred_dict = inference_on_elm_events(args, model, device, test_data)
 
     print(f'Interactive?: {plt.isinteractive()}')
+
+    if args.regression:
+
 
     plot_inference_on_elm_events(args, pred_dict,
         plot_dir=plot_dir,

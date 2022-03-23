@@ -168,6 +168,7 @@ cython_debug/
 /elm_prediction/visualizations/notes/
 /src/outputs
 /outputs
+/elm_prediction/figures/
 
 *.pth
 *.pkl

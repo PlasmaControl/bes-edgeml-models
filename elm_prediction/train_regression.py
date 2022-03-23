@@ -13,7 +13,8 @@ from typing import Union
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import roc_auc_score, f1_score
+from matplotlib import pyplot as plt
+from sklearn.metrics import r2_score
 
 import torch
 import torch.nn as nn
@@ -55,11 +56,21 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
     output_dir.mkdir(parents=True, exist_ok=True)
     args.output_dir = output_dir.as_posix()
     args.data_preproc = 'regression'
+    args.label_look_ahead = 0
+    args.regress_log = True
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
+
+    suffix = f'_regression{"_log" if args.regress_log else ""}'
+    checkpoint_file = '.'.join(
+            [
+                    checkpoint_file.split('.')[0] + '_regression',
+                    checkpoint_file.split('.')[1]
+            ]
+    )
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
@@ -154,10 +165,10 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
             verbose=True, )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    criterion = nn.MSELoss(reduction="none")
 
     # define variables for ROC and loss
-    best_score = 0
+    best_score = -np.inf
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -171,8 +182,7 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
     # containers to hold train and validation losses
     train_loss = np.empty(0)
     valid_loss = np.empty(0)
-    roc_scores = np.empty(0)
-    f1_scores = np.empty(0)
+    r2_scores = np.empty(0)
 
     outputs = {}
 
@@ -192,42 +202,44 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         scheduler.step(avg_val_loss)
 
         # ROC scoring
-        roc_score = roc_auc_score(valid_labels, preds)
-        roc_scores = np.append(roc_scores, roc_score)
+        r2 = r2_score(valid_labels, preds)
+        r2_scores = np.append(r2_scores, r2)
 
         # F1 scoring
         # hard coding the threshold value for F1 score, smaller value will reduce
         # the number of false negatives while larger value reduces the number of
-        # false positives
-        thresh = 0.35
-        f1 = f1_score(valid_labels, (preds > thresh).astype(int))
-        f1_scores = np.append(f1_scores, f1)
+        # # false positives
+        # thresh = 0.35
+        # f1 = f1_score(valid_labels, (preds > thresh).astype(int))
+        # f1_scores = np.append(f1_scores, f1)
         elapsed = time.time() - start_time
 
         LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
-        LOGGER.info(f"Epoch: {epoch + 1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tR2: {r2:.3f}\ttime elapsed: {elapsed:.1f} s")
 
         # update and save outputs
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
-        outputs['roc_scores'] = roc_scores
-        outputs['f1_scores'] = f1_scores
+        outputs['r2_scores'] = r2_scores
+        # outputs['f1_scores'] = f1_scores
 
         with open(output_file.as_posix(), "wb") as f:
             pickle.dump(outputs, f)
 
         # track best f1 score and save model
-        if f1 > best_score:
-            best_score = f1
+        if r2 > best_score:
+            best_score = r2
             LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_score:.3f}")
             if not args.dry_run:
                 LOGGER.info(f"Epoch: {epoch + 1:03d} \tSaving model to: {checkpoint_file}")
                 model_data = {"model": model.state_dict(), "preds": preds, }
                 torch.save(model_data, checkpoint_file)
+                model_data['valid_labels'] = valid_labels
+
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
-            trial.report(f1, epoch)
+            trial.report(r2, epoch)
             # save outputs as lists in trial user attributes
             for key, item in outputs.items():
                 trial.set_user_attr(key, item.tolist())
@@ -243,7 +255,7 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         handler.close()
         LOGGER.removeHandler(handler)
 
-    return outputs
+    return outputs, model_data
 
 
 if __name__ == "__main__":
@@ -255,4 +267,19 @@ if __name__ == "__main__":
         # use command line arguments in `sys.argv`
         arg_list = None
     args = TrainArguments().parse(verbose=True, arg_list=arg_list)
-    train_loop(args)
+    outputs, model_data = train_loop(args)
+    preds = model_data['preds']
+    real = model_data['valid_labels']
+    fig, ax = plt.subplots(1, 1)
+    ax.plot(range(len(preds)), preds, label='Prediction')
+    ax.plot(range(len(real)), real, label='Real')
+    fig.suptitle(f'Performance of {args.model_name} Model')
+    ax.set_title(f'Epochs: {args.n_epochs}, SWS: {args.signal_window_size}')
+    ax.text(0.05, 0.9, f'Best r2: {outputs["r2_scores"].max():0.2f}\n'
+                      f'Best validation Loss: {outputs["valid_loss"].min():0.2f}',
+            transform=ax.transAxes)
+    ax.set_xlabel('Time ($\mu$s)')
+    ax.set_ylabel('Time to ELM ($\mu$s)')
+
+    plt.savefig(f'./figures/{args.model_name}-regression_epochs-{args.n_epochs}_SWS-{args.signal_window_size}.png')
+    plt.show()
