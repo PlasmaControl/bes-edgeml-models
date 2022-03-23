@@ -1,6 +1,7 @@
 """
 Data class to package BES data for training using PyTorch
 """
+from multiprocessing.sharedctypes import Value
 import os
 import logging
 import argparse
@@ -35,7 +36,7 @@ class BaseData:
         assert(os.path.exists(self.datafile))
 
         self.logger = logger
-        self.df = pd.DataFrame()
+        # self.df = pd.DataFrame()
 
         self.logger.info(f"-------->  Data file: {self.datafile}")
 
@@ -50,24 +51,25 @@ class BaseData:
         self.logger.info(f"  Number of ELM events: {len(self.elm_indices)}")
         self.logger.info(f"  Total time frames: {count}")
 
-        if self.args.data_preproc == "automatic_labels":
-            try:
-                csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
-                self.labels_df = pd.read_csv(
-                    os.path.join(
-                        csv_path,
-                        f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
-                    )
-                )
-                self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
-                    lambda x: f"{x:05d}"
-                )
-                print(self.labels_df.info())
-            except FileNotFoundError:
-                print("CSV file containing the automatic labels not found.")
+        # if self.args.data_preproc == "automatic_labels":
+        #     try:
+        #         csv_path = f"outputs/signal_window_{args.signal_window_size}/label_look_ahead_{args.label_look_ahead}/roc"
+        #         self.labels_df = pd.read_csv(
+        #             os.path.join(
+        #                 csv_path,
+        #                 f"automatic_labels_df_sws_{args.signal_window_size}_{args.label_look_ahead}.csv",
+        #             )
+        #         )
+        #         self.labels_df["elm_event"] = self.labels_df["elm_event"].apply(
+        #             lambda x: f"{x:05d}"
+        #         )
+        #         print(self.labels_df.info())
+        #     except FileNotFoundError:
+        #         print("CSV file containing the automatic labels not found.")
 
     def get_data(
         self,
+        verbose=False,
     ) -> Union[
         Tuple[ndarray, Tuple[ndarray, ndarray, ndarray, ndarray, ndarray]],
         Tuple[
@@ -89,15 +91,12 @@ class BaseData:
         --------
             Tuple: Tuple containing data for training, validation and test sets.
         """
-        train_data = None
-        validation_data = None
-        test_data = None
-        all_data = None
         self.logger.info("  Reading ELM events and creating datasets")
         if self.args.use_all_data:
             all_data = self._preprocess_data(
                 self.elm_indices,
-                shuffle_sample_indices=True,
+                shuffle_sample_indices=False,
+                verbose=verbose,
             )
             output = (self.elm_indices, all_data)
         else:
@@ -106,16 +105,22 @@ class BaseData:
             train_data = self._preprocess_data(
                 training_elms,
                 shuffle_sample_indices=True,
+                verbose=verbose,
+                # save_filename='train',
             )
             self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
                 validation_elms,
                 shuffle_sample_indices=False,
+                verbose=verbose,
+                save_filename='validation',
             )
             self.logger.info("--------> Creating test data")
             test_data = self._preprocess_data(
                 test_elms,
                 shuffle_sample_indices=False,
+                verbose=verbose,
+                save_filename='test',
             )
 
             if self.args.balance_data and (self.args.data_preproc != 'regression'):
@@ -127,66 +132,20 @@ class BaseData:
 
         return output
 
-    def _partition_elms(
-        self, 
-        # max_elms: int = None,
-    ) -> Tuple[ndarray, ndarray, ndarray]:
-        """Partition all the ELM events into training, validation and test indices.
-        Training and validation sets are created based on simple splitting with
-        validation set being `fraction_validate` of the training set or by K-fold
-        cross-validation.
-
-        Args:
-        -----
-            max_elms (int, optional): Maximum number of ELM events to be used.
-                Defaults to None (Take the entire data).
-            fold (int, optional): Fold index for K-fold cross-validation. Defaults
-                to None.
-
-        Returns:
-        --------
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing training,
-                validation and test ELM indices.
-        """
-        # limit the data according to the max number of events passed
-        if self.args.max_elms is not None and self.args.max_elms != -1:
-            self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
-            n_elms = self.args.max_elms
-        else:
-            n_elms = len(self.elm_indices)
-
-        # split the data into train, validation and test sets
-        training_elms, test_validate_elms = model_selection.train_test_split(
-            self.elm_indices[:n_elms],
-            test_size=self.args.fraction_test + self.args.fraction_valid,
-            shuffle=True,
-            random_state=self.args.seed,
-        )
-        test_elms, validation_elms = model_selection.train_test_split(
-            test_validate_elms,
-            test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
-            shuffle=True,
-            random_state=self.args.seed,
-        )
-        self.logger.info(f"  Training ELM events: {training_elms.size}")
-        self.logger.info(f"  Validation ELM events: {validation_elms.size}")
-        self.logger.info(f"  Test ELM events: {test_elms.size}")
-
-        return training_elms, validation_elms, test_elms
+    def _preprocess_data(
+        self,
+        elm_indices: np.ndarray = None,
+        shuffle_sample_indices: bool = False,
+        **kwargs,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        raise NotImplementedError
 
     def _get_valid_indices(
         self,
-        _signals: np.ndarray,
-        _labels: np.ndarray,
-        window_start_indices: np.ndarray = None,
-        elm_start_indices: np.ndarray = None,
-        elm_stop_indices: np.ndarray = None,
-        valid_t0: np.ndarray = None,
-        labels: np.ndarray = None,
-        signals: np.ndarray = None,
-    ) -> Tuple[
-        np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray
-    ]:
+        signals: np.ndarray,
+        labels: np.ndarray,
+        verbose=False,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Helper function to concatenate the signals and labels for the ELM events
         for a given mode. It also creates allowed indices to sample from with respect
         to signal window size and label look ahead. See the README to know more
@@ -220,61 +179,117 @@ class BaseData:
                 time data point.
         """
         # indices for active elm times in each elm event
-        active_elm_indices = np.nonzero(_labels >= 0.5)[0]
+        active_elm_indices = np.nonzero(labels == 1)[0]
+        active_elm_start_index = active_elm_indices[0]
+        active_elm_stop_index = active_elm_indices[-1]
 
-        # `t0` is first index (or earliest time, or trailing time point) for signal window
-        # `_valid_t0` denotes valid `t0` time points for signal window
-        # initialize to zeros
-        _valid_t0 = np.zeros(_labels.shape, dtype=np.int32)
-        # largest `t0` index with signal window in pre-ELM period
-        largest_t0 = active_elm_indices[0] - self.args.signal_window_size
-        if largest_t0 < 0:
-            return None
-        # `t0` time points up to `largest_t0` are valid
-        _valid_t0[:largest_t0+1] = 1
+        # method for establishing valid t0 indices
+        method = self.args.valid_indices_method
 
-        # # `t0` within sws+la of end are invalid
-        # _valid_t0 = np.ones(_labels.shape, dtype=np.int32)
-        # sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
-        # _valid_t0[ -sws_plus_la + 1 : ] = 0
+        if method in [0, 1]:
+            # `t0` is first index (or earliest time, or trailing time point) for signal window
+            # `valid_t0` denotes valid `t0` time points for signal window
+            # initialize to zeros
+            valid_t0 = np.zeros(labels.shape, dtype=np.int32)
+            # largest `t0` index with signal window in pre-ELM period
+            largest_t0_index_for_pre_elm_period = active_elm_start_index - self.args.signal_window_size
+            if largest_t0_index_for_pre_elm_period < 0:
+                # insufficient pre-elm period for signal window size
+                return None
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1)    ] == 0
+            assert labels[largest_t0_index_for_pre_elm_period + (self.args.signal_window_size-1) + 1] == 1
+            # `t0` time points up to `largest_t0` are valid
+            valid_t0[0:largest_t0_index_for_pre_elm_period+1] = 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
+            assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
+            # labels after ELM onset should be active ELM, even if in post-ELM period
+            last_label_for_active_elm_in_pre_elm_signal = (
+                largest_t0_index_for_pre_elm_period
+                + (self.args.signal_window_size - 1)
+                + self.args.label_look_ahead
+            )
+            labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
+            assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
 
-        if signals is None:
-            # lists for elm event start, active elm start, active elm stop
-            window_start_indices = np.array([0])
-            elm_start_indices = active_elm_indices[0]
-            elm_stop_indices = active_elm_indices[-1]
-            # concat valid_t0, signals, and labels
-            valid_t0 = _valid_t0
-            signals = _signals
-            labels = _labels
+            sufficient_post_elm_period = (active_elm_stop_index+1000 
+                                            + (self.args.signal_window_size-1) 
+                                            + self.args.label_look_ahead) <= valid_t0.size-1
+            if method == 1 and sufficient_post_elm_period:
+                # add post-ELM valid t0's
+                post_elm_start = active_elm_stop_index+1000
+                assert labels[post_elm_start + (self.args.signal_window_size-1) + self.args.label_look_ahead] == 0
+                post_elm_end = valid_t0.size - self.args.label_look_ahead - (self.args.signal_window_size + 1)
+                assert labels[post_elm_end + (self.args.signal_window_size-1) + self.args.label_look_ahead] == 0
+                valid_t0[ post_elm_start : post_elm_end] = 1
+
+        elif method in [2, 3]:
+            if method == 3:
+                # adjust labels so active ELM is true for all post-onset time points
+                labels[active_elm_indices[0]+1:] = 1
+                assert labels[-1] == 1
+
+            # # `t0` within sws+la of end are invalid
+            valid_t0 = np.ones(labels.shape, dtype=np.int32)
+            sws_plus_la = self.args.signal_window_size + self.args.label_look_ahead
+            valid_t0[ -sws_plus_la + 1 : ] = 0
         else:
-            # append lists for elm event start, active elm start, active elm stop
-            last_index = len(labels) - 1
-            window_start_indices = np.append(
-                window_start_indices, 
-                last_index + 1
-            )
-            elm_start_indices = np.append(
-                elm_start_indices, 
-                active_elm_indices[0] + last_index + 1
-            )
-            elm_stop_indices = np.append(
-                elm_stop_indices, 
-                active_elm_indices[-1] + last_index + 1
-            )
-            # concat on axis 0 (time dimension)
-            valid_t0 = np.concatenate([valid_t0, _valid_t0])
-            signals = np.concatenate([signals, _signals], axis=0)
-            labels = np.concatenate([labels, _labels], axis=0)
+            raise ValueError
 
-        return (
-            signals,
-            labels,
-            valid_t0,
-            window_start_indices,
-            elm_start_indices,
-            elm_stop_indices,
+        if verbose:
+            self.logger.info(f'  Total time points {labels.size}')
+            self.logger.info(f'  Pre-ELM time points {active_elm_indices[0]}')
+            self.logger.info(f'  Active ELM time points {active_elm_indices.size}')
+            self.logger.info(f'  Post-ELM time points {labels.size - active_elm_indices[-1]-1}')
+            self.logger.info(f'  Cound valid t0: {np.count_nonzero(valid_t0)}')
+            self.logger.info(f'  Cound invalid t0: {np.count_nonzero(valid_t0-1)}')
+
+        return (signals, labels, valid_t0)
+
+    def _partition_elms(
+        self, 
+    ) -> Tuple[ndarray, ndarray, ndarray]:
+        """Partition all the ELM events into training, validation and test indices.
+        Training and validation sets are created based on simple splitting with
+        validation set being `fraction_validate` of the training set or by K-fold
+        cross-validation.
+
+        Args:
+        -----
+            max_elms (int, optional): Maximum number of ELM events to be used.
+                Defaults to None (Take the entire data).
+            fold (int, optional): Fold index for K-fold cross-validation. Defaults
+                to None.
+
+        Returns:
+        --------
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing training,
+                validation and test ELM indices.
+        """
+        # limit the data according to the max number of events passed
+        if self.args.max_elms is not None and self.args.max_elms != -1:
+            self.logger.info(f"  Limiting data read to {self.args.max_elms} ELM events.")
+            n_elms = self.args.max_elms
+        else:
+            n_elms = self.elm_indices.size
+
+        # split the data into train, validation and test sets
+        training_elms, test_validate_elms = model_selection.train_test_split(
+            self.elm_indices[:n_elms],
+            test_size=self.args.fraction_test + self.args.fraction_valid,
+            shuffle=True,
+            random_state=self.args.seed,
         )
+        test_elms, validation_elms = model_selection.train_test_split(
+            test_validate_elms,
+            test_size=self.args.fraction_valid / (self.args.fraction_test + self.args.fraction_valid),
+            shuffle=True,
+            random_state=self.args.seed,
+        )
+        self.logger.info(f"  Training ELM events: {training_elms.size}")
+        self.logger.info(f"  Validation ELM events: {validation_elms.size}")
+        self.logger.info(f"  Test ELM events: {test_elms.size}")
+
+        return training_elms, validation_elms, test_elms
 
     def _balance_data(self, train, valid, test):
 
@@ -323,11 +338,3 @@ class BaseData:
             new[x] = (np.array(clipped[0]), np.array(clipped[1]), np.array(clipped[2]), new_start_idxs)
 
         return new
-
-    def _preprocess_data(
-        self,
-        elm_indices: np.ndarray = None,
-        shuffle_sample_indices: bool = False,
-        **kwargs,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        raise NotImplementedError
