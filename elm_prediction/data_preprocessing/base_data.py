@@ -9,7 +9,6 @@ from typing import Tuple, Union
 
 import h5py
 import numpy as np
-import pandas as pd
 from numpy import ndarray
 from sklearn import model_selection
 
@@ -36,7 +35,6 @@ class BaseData:
         assert(os.path.exists(self.datafile))
 
         self.logger = logger
-        # self.df = pd.DataFrame()
 
         self.logger.info(f"-------->  Data file: {self.datafile}")
 
@@ -225,7 +223,7 @@ class BaseData:
         elif method in [2, 3]:
             if method == 3:
                 # adjust labels so active ELM is true for all post-onset time points
-                labels[active_elm_indices[0]+1:] = 1
+                labels[active_elm_start_index+1:] = 1
                 assert labels[-1] == 1
 
             # # `t0` within sws+la of end are invalid
@@ -237,9 +235,9 @@ class BaseData:
 
         if verbose:
             self.logger.info(f'  Total time points {labels.size}')
-            self.logger.info(f'  Pre-ELM time points {active_elm_indices[0]}')
+            self.logger.info(f'  Pre-ELM time points {active_elm_start_index}')
             self.logger.info(f'  Active ELM time points {active_elm_indices.size}')
-            self.logger.info(f'  Post-ELM time points {labels.size - active_elm_indices[-1]-1}')
+            self.logger.info(f'  Post-ELM time points {labels.size - active_elm_stop_index-1}')
             self.logger.info(f'  Cound valid t0: {np.count_nonzero(valid_t0)}')
             self.logger.info(f'  Cound invalid t0: {np.count_nonzero(valid_t0-1)}')
 

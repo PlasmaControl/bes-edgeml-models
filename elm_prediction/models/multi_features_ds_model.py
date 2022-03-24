@@ -151,11 +151,11 @@ class FFTFeatureModel(_FeatureBase):
         else:
             # calc binned FFTs, then average
             fft_bins_size = [
-                self.args.batch_size,
+                x.shape[0],
                 self.nbins,
                 self.nfreqs,
-                8 // self.maxpool_size,
-                8 // self.maxpool_size,
+                x.shape[3],
+                x.shape[4],
             ]
             ffts = torch.empty(size=fft_bins_size, dtype=x.dtype, device=x.device)
             for i in torch.arange(self.nbins):
@@ -219,11 +219,11 @@ class DCTFeatureModel(_FeatureBase):
         else:
             # calc binned DCTs, then average
             dct_bins_size = [
-                self.args.batch_size,
+                x.shape[0],
                 self.nbins,
                 self.nfreqs,
-                8 // self.maxpool_size,
-                8 // self.maxpool_size,
+                x.shape[3],
+                x.shape[4],
             ]
             dcts = torch.empty(size=dct_bins_size, dtype=x.dtype, device=x.device)
             for i in torch.arange(self.nbins):
@@ -375,6 +375,10 @@ class MultiFeaturesDsModel(nn.Module):
         dct_features = (
                 self.dct_features_model(x) if self.dct_features_model else None
         )
+
+        # for features in [raw_features, fft_features, dwt_features, dct_features]:
+        #     if features is not None:
+        #         print(features.shape)
 
         active_features_list = [
             features

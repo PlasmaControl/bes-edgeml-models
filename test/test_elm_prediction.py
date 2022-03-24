@@ -63,9 +63,4 @@ def test_analyze():
 
 if __name__=="__main__":
     shutil.rmtree(RUN_DIR, ignore_errors=True)
-    pytest_args = [
-        '--verbose',
-    ]
-    sys.exit(
-        pytest.main(pytest_args)
-    )
+    sys.exit( pytest.main( ['--verbose'] ) )

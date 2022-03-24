@@ -197,7 +197,7 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 
-def create_model_class(model_name: str) -> object:
+def create_model_class(model_name: str) -> torch.nn.Module:
     """
     Helper function to import the module for the model being used as per the
     command line argument `--model_name`.
