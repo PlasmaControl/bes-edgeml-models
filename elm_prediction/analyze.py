@@ -1015,6 +1015,20 @@ class Analysis(object):
             print(f'Saving full-data analysis: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
+    def merge_all_pdfs(self):
+        pdf_files = sorted(
+            self.analysis_dir.glob('*.pdf'),
+            key=lambda path: path.stat().st_mtime_ns,
+        )
+        output = self.analysis_dir/'all_figures.pdf'
+        print(f"Merging all PDFs into file: {output.as_posix()}")
+        cmd = self._base_pdf_merge_cmd.copy()
+        cmd.append(f"-sOutputFile={output.as_posix()}")
+        for pdf_file in pdf_files:
+            cmd.append(f"{pdf_file.as_posix()}")
+        result = subprocess.run(cmd, check=True)
+        assert result.returncode == 0 and output.exists()
+
     def show(self, **kwargs):
         plt.show(**kwargs)
 
