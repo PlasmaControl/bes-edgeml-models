@@ -9,6 +9,7 @@ matrices for both macro and micro predictions. Using the  command line argument
 """
 import argparse
 import shutil
+import subprocess
 import logging
 import os
 import pickle
@@ -617,6 +618,16 @@ def do_analysis(
 
 class Analysis(object):
 
+    _base_pdf_merge_cmd = [
+        shutil.which('gs'),
+        '-q', 
+        '-dBATCH',
+        '-dNOPAUSE', 
+        '-sDEVICE=pdfwrite', 
+        '-dPDFSETTINGS=/prepress', 
+        '-dCompatibilityLevel=1.4',
+    ]
+
     def __init__(
         self,
         args_file: Union[Path, str, None] = None,
@@ -819,7 +830,7 @@ class Analysis(object):
 
     def plot_valid_indices_analysis(
         self, 
-        threshold=None
+        threshold: Union[float, None] = None,
     ):
         if self.valid_indices_data_loader is None:
             self._make_valid_indices_data_loader()
@@ -850,12 +861,13 @@ class Analysis(object):
         # calc TPR, FPR for ROC
         fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
         # plot ROC
-        _, axes = plt.subplots(nrows=1, ncols=2, figsize=(8,3))
+        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        plt.suptitle('Test data analysis (valid indices only)')
         plt.sca(axes.flat[0])
         plt.plot(fpr, tpr)
         plt.xlabel('False positive rate')
         plt.ylabel('True positive rate')
-        plt.title('ROC for valid indices')
+        plt.title('ROC')
         plt.annotate(
             f'ROC-AUC = {roc_auc:.2f}',
             xy=(0.5, 0.03),
@@ -864,49 +876,33 @@ class Analysis(object):
         plt.sca(axes.flat[1])
         plt.plot(thresh, tpr, label='True pos. rate')
         plt.plot(thresh, fpr, label='False pos. rate')
-        plt.title('TPR/FPR for valid indices')
+        plt.title('TPR/FPR')
         plt.xlabel('Threshold')
         plt.ylabel('Rate')
         plt.xlim(0,1)
         plt.legend()
-        plt.tight_layout()
-        if self.save:
-            filepath = self.analysis_dir / f"roc_valid_indices.pdf"
-            print(f'Saving roc plot: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
         # calc confusion matrix
         bool_predictions = (predictions > threshold).astype(int)
         cm = metrics.confusion_matrix(targets, bool_predictions)
         # plot confusion matrix
-        plt.figure(figsize=(4.5, 3.5))
-        ax = plt.subplot(111)
+        plt.sca(axes.flat[2])
         sns.heatmap(
             cm, 
-            ax=ax, 
             annot=True, 
             norm=LogNorm(),
             xticklabels=['No ELM', 'ELM'],
             yticklabels=['No ELM', 'ELM'],
-            fmt='d',
         )
-        plt.title('Confusion matrix for valid indices')
-        plt.annotate(
-            f'Threshold={threshold:.2f}',
-            xy=(0.65, 0.03),
-            xycoords='figure fraction',
-        )
+        plt.title(f'Confusion matrix (thr={threshold:.2f})')
         plt.xlabel("Predicted label")
         plt.ylabel("True label")
         plt.tight_layout()
         if self.save:
-            filepath = self.analysis_dir / f"cm_valid_indices.pdf"
+            filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
             print(f'Saving matrix figure: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
     
-    def plot_full_inference(
-            self,
-            max_pages = None,
-        ):
+    def plot_full_inference(self):
         if self.elm_predictions is None:
             self._calc_inference_full()
         elm_indices = self.test_data['elm_indices']
@@ -933,22 +929,36 @@ class Analysis(object):
             if i_elm % 6 == 5 or i_elm == n_elms-1:
                 plt.tight_layout()
                 if self.save:
-                    filepath = self.analysis_dir / f'inference_pg{i_page:02d}.pdf'
+                    filepath = self.analysis_dir / f'inference_{i_page:02d}.pdf'
                     print(f'Saving inference file: {filepath.as_posix()}')
                     plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
                     i_page += 1
-                if max_pages and i_page > max_pages:
-                    break
+        # merge PDFs
+        if self.save:
+            pdf_files = sorted(self.analysis_dir.glob('inference_*.pdf'))
+            output = self.analysis_dir/'inference.pdf'
+            print(f"Merging inference PDFs into file: {output.as_posix()}")
+            cmd = self._base_pdf_merge_cmd.copy()
+            cmd.append(f"-sOutputFile={output.as_posix()}")
+            for pdf_file in pdf_files:
+                cmd.append(f"{pdf_file.as_posix()}")
+            result = subprocess.run(cmd, check=True)
+            assert result.returncode == 0 and output.exists()
+            for pdf_file in pdf_files:
+                pdf_file.unlink()
 
     def plot_full_analysis(
             self,
-            threshold = None,
+            threshold: Union[float, None] = None,
         ):
         if threshold is None:
             threshold = self.args.threshold
         if self.elm_predictions is None:
             self._calc_inference_full(threshold=threshold)
+        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        plt.suptitle('Test data analysis (full data)')
         for mode in ['micro', 'macro']:
+            # gather micro/macro results
             targets = []
             predictions = []
             for vals in self.elm_predictions.values():
@@ -957,45 +967,14 @@ class Analysis(object):
                 targets.append(vals[label_key])
             predictions = np.concatenate(predictions)
             targets = np.concatenate(targets)
-            # plot confusion matrices
-            if mode == 'micro':
-                bool_predictions = (predictions > threshold).astype(int)
-                cm = metrics.confusion_matrix(targets, bool_predictions)
-            else:
-                cm = metrics.confusion_matrix(targets, predictions)
-            plt.figure(figsize=(4.5, 3.5))
-            ax = plt.subplot(111)
-            sns.heatmap(
-                cm, 
-                ax=ax, 
-                annot=True, 
-                norm=LogNorm() if mode=='micro' else None,
-                xticklabels=['No ELM', 'ELM'],
-                yticklabels=['No ELM', 'ELM'],
-                fmt='d',
-            )
-            plt.title('Confusion matrix for full test data')
-            plt.annotate(
-                f'Threshold={threshold:.2f}',
-                xy=(0.65, 0.03),
-                xycoords='figure fraction',
-            )
-            plt.xlabel("Predicted label")
-            plt.ylabel("True label")
-            plt.tight_layout()
-            if self.save:
-                filepath = self.analysis_dir / f"cm_full_{mode}.pdf"
-                print(f'Saving matrix figure: {filepath.as_posix()}')
-                plt.savefig(filepath.as_posix(), format='pdf', transparent=True)        
             # plot ROC (micro only)
             if mode == 'micro':
                 fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
-                _, axes = plt.subplots(nrows=1, ncols=2, figsize=(8,3))
                 plt.sca(axes.flat[0])
                 plt.plot(fpr, tpr)
                 plt.xlabel('False positive rate')
                 plt.ylabel('True positive rate')
-                plt.title('ROC for full test data')
+                plt.title('ROC')
                 roc_auc = metrics.roc_auc_score(targets, predictions)
                 plt.annotate(
                     f'ROC-AUC = {roc_auc:.2f}',
@@ -1005,16 +984,36 @@ class Analysis(object):
                 plt.sca(axes.flat[1])
                 plt.plot(thresh, tpr, label='True pos. rate')
                 plt.plot(thresh, fpr, label='False pos. rate')
-                plt.title('TPR/FPR for full test')
+                plt.title('TPR/FPR')
                 plt.xlabel('Threshold')
                 plt.ylabel('Rate')
                 plt.xlim(0,1)
                 plt.legend()
-                plt.tight_layout()
-                if self.save:
-                    filepath = self.analysis_dir / f"roc_valid_indices.pdf"
-                    print(f'Saving roc plot: {filepath.as_posix()}')
-                    plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+            # confusion matrix heatmaps
+            if mode == 'micro':
+                bool_predictions = (predictions > threshold).astype(int)
+                cm = metrics.confusion_matrix(targets, bool_predictions)
+            else:
+                cm = metrics.confusion_matrix(targets, predictions)
+            # plt.figure(figsize=(4.5, 3.5))
+            # ax = plt.subplot(111)
+            axis = axes.flat[2] if mode == 'micro' else axes.flat[3]
+            plt.sca(axis)
+            sns.heatmap(
+                cm, 
+                annot=True, 
+                norm=LogNorm() if mode=='micro' else None,
+                xticklabels=['No ELM', 'ELM'],
+                yticklabels=['No ELM', 'ELM'],
+            )
+            plt.title(f'Conf. matrix ({mode}, thr={threshold:.2f})')
+            plt.xlabel("Predicted label")
+            plt.ylabel("True label")
+        plt.tight_layout()
+        if self.save:
+            filepath = self.analysis_dir / f"full_analysis.pdf"
+            print(f'Saving full-data analysis: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
     def show(self, **kwargs):
         plt.show(**kwargs)
