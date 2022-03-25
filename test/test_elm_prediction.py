@@ -3,7 +3,7 @@ import pytest
 import shutil
 
 from elm_prediction.train import train_loop
-from elm_prediction.analyze import do_analysis
+from elm_prediction.analyze import do_analysis, Analysis
 
 
 RUN_DIR = 'run_dir'
@@ -58,7 +58,12 @@ def test_train_loop_valid_indices():
 
 def test_analyze():
     args_file = RUN_DIR + '/raw_only/args.pkl'
-    do_analysis(args_file, interactive=False, click_through_pages=False, save=True)
+    # do_analysis(args_file, interactive=False, click_through_pages=False, save=True)
+    run = Analysis(args_file)
+    run.plot_training_epochs()
+    run.plot_valid_indices_analysis()
+    run.plot_full_analysis()
+    run.plot_full_inference()
 
 
 if __name__=="__main__":
