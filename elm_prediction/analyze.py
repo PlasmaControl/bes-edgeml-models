@@ -641,6 +641,7 @@ class Analysis(object):
             self.device = 'cuda'
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.args.device = self.device
         self.device = torch.device(self.device)
 
         self.output_dir = Path(self.args.output_dir)
