@@ -1,5 +1,6 @@
 import argparse
 import logging
+from typing import Union
 
 import torch
 import numpy as np
@@ -19,8 +20,7 @@ class ELMDataset(torch.utils.data.Dataset):
         labels: np.ndarray,
         sample_indices: np.ndarray,
         window_start: np.ndarray,
-        logger: logging.getLogger,
-        phase: str = "training",
+        logger: Union[logging.getLogger, None] = None,
     ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
@@ -43,11 +43,12 @@ class ELMDataset(torch.utils.data.Dataset):
         self.labels = labels
         self.sample_indices = sample_indices
         self.window_start = window_start
-        self.logger = logger
-        self.logger.info(f"------>  Creating pytorch dataset for {phase} ")
-        self.logger.info(f"  Signals shape: {signals.shape}")
-        self.logger.info(f"  Labels shape: {labels.shape}")
-        self.logger.info(f"  Sample indices shape: {sample_indices.shape}")
+        if logger is not None:
+            self.logger = logger
+            self.logger.info(f"------>  Creating pytorch dataset")
+            self.logger.info(f"  Signals shape: {signals.shape}")
+            self.logger.info(f"  Labels shape: {labels.shape}")
+            self.logger.info(f"  Sample indices shape: {sample_indices.shape}")
 
     def __len__(self):
         return len(self.sample_indices)

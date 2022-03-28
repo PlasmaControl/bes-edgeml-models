@@ -7,20 +7,24 @@ the ELM events with the ground truth and model predictions as well as the confus
 matrices for both macro and micro predictions. Using the  command line argument 
 `--dry_run` will just show the plots, it will not save them.
 """
+import argparse
+import shutil
+import subprocess
+import logging
 import os
 import pickle
-from typing import Tuple, List, Union
-import argparse
-import logging
 from pathlib import Path
+from typing import Tuple, Union
 from xmlrpc.client import Boolean
 
-import torch
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 import seaborn as sns
+import torch
+import torch.nn
+import torch.utils.data
+from matplotlib.colors import LogNorm
 from sklearn import metrics
 from tqdm import tqdm
 
@@ -35,16 +39,16 @@ except ImportError:
     from elm_prediction.options.test_arguments import TestArguments
     from elm_prediction import package_dir
 
-
-sns.set_theme(style="whitegrid", palette="muted", font_scale=1.25)
+# sns.set_theme(style="whitegrid", palette="muted")
 LABELS = ["no ELM", "ELM"]
 
 
-def inference_on_elm_events(
-    args: argparse.Namespace,
-    model: object,
-    device: torch.device,
-    test_data: tuple,
+def calc_inference(
+        args: argparse.Namespace,
+        logger,
+        model: torch.nn.Module,
+        device: torch.device,
+        test_data: tuple,
 ) -> dict:
     """Function to create micro and macro predictions for each ELM event in the
     test data. Micro predictions are basically the model predictions calculated
@@ -73,7 +77,7 @@ def inference_on_elm_events(
         and macro predictions.
     """
     signals = test_data[0]
-    print(f"Signals shape: {signals.shape}")
+    logger.info(f"Signals shape: {signals.shape}")
     labels = test_data[1]
     _ = test_data[2]  # sample_indices
     window_start = test_data[3]
@@ -81,8 +85,9 @@ def inference_on_elm_events(
     num_elms = len(window_start)
     elm_predictions = dict()
     # iterate through each ELM event
+
+    logger.info("Calculating inference on ELM events")
     for i_elm in range(num_elms):
-        print(f"Processing elm event with start index: {window_start[i_elm]}")
         i_start = window_start[i_elm]
         if i_elm < num_elms - 1:
             i_stop = window_start[i_elm + 1] - 1
@@ -95,19 +100,20 @@ def inference_on_elm_events(
         active_elm_start = active_elm[0]
         active_elm_lower_buffer = active_elm_start - args.truncate_buffer
         active_elm_upper_buffer = active_elm_start + args.truncate_buffer
+        logger.info(f"  ELM {elm_indices[i_elm]:05d} ({i_elm + 1} of {num_elms})  Data size: {elm_signals.shape}")
         predictions = []
         effective_len = (
-            elm_labels.size
-            - args.signal_window_size
-            - args.label_look_ahead
-            + 1
+                elm_labels.size
+                - args.signal_window_size
+                - args.label_look_ahead
+                + 1
         )
         # iterate through the each allowed time step
         for j in range(effective_len):
             # reshape the data accroding to the data preprocessing technique
             if args.data_preproc == "gradient":
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    elm_signals[j:j + args.signal_window_size, :, :].reshape(
                         [1, args.signal_window_size, 8, 8, 6]
                     ),
                     dtype=np.float32,
@@ -117,7 +123,7 @@ def inference_on_elm_events(
                 )
             else:
                 input_signals = np.array(
-                    elm_signals[j : j + args.signal_window_size, :, :].reshape(
+                    elm_signals[j: j + args.signal_window_size, :, :].reshape(
                         [1, 1, args.signal_window_size, 8, 8]
                     ),
                     dtype=np.float32,
@@ -127,40 +133,40 @@ def inference_on_elm_events(
             outputs = model(input_signals)
             predictions.append(outputs.item())
         predictions = np.array(predictions)
-        elm_time = np.arange(elm_labels.size)
+        # elm_time = np.arange(elm_labels.size)
         # convert logits to probability
         # calculate micro predictions for each time step
         micro_predictions = (
             torch.sigmoid(torch.as_tensor(predictions, dtype=torch.float32))
-            .cpu()
-            .numpy()
+                .cpu()
+                .numpy()
         )
         micro_predictions = np.pad(
             micro_predictions,
             pad_width=(
-                args.signal_window_size + args.label_look_ahead - 1,
+                (args.signal_window_size - 1) + args.label_look_ahead,
                 0,
             ),
             mode="constant",
             constant_values=0,
         )
         # filter labels and micro-predictions for active elm regions
-        elm_labels_active_elms = elm_labels[
-            active_elm_lower_buffer:active_elm_upper_buffer
-        ]
-        micro_predictions_active_elms = micro_predictions[
-            active_elm_lower_buffer:active_elm_upper_buffer
-        ]
+        # elm_labels_active_elms = elm_labels[
+        #     active_elm_lower_buffer:active_elm_upper_buffer
+        # ]
         # filter labels and micro-predictions for non-active elm regions
-        micro_predictions_pre_active_elms = micro_predictions[
-            :active_elm_lower_buffer
-        ]
+        micro_predictions_pre_active_elms = \
+            micro_predictions[:active_elm_lower_buffer]
+        micro_predictions_active_elms = \
+            micro_predictions[
+                active_elm_lower_buffer:active_elm_upper_buffer
+            ]
         # calculate macro predictions for each region
-        macro_predictions_active_elms = np.array(
-            [np.any(micro_predictions_active_elms > 0.5).astype(int)]
-        )
         macro_predictions_pre_active_elms = np.array(
             [np.any(micro_predictions_pre_active_elms > 0.5).astype(int)]
+        )
+        macro_predictions_active_elms = np.array(
+            [np.any(micro_predictions_active_elms > 0.5).astype(int)]
         )
 
         macro_labels = np.array([0, 1], dtype="int")
@@ -171,9 +177,9 @@ def inference_on_elm_events(
             ]
         )
         elm_time = np.arange(elm_labels.size)
-        print(f"Signals shape: {elm_signals.shape}")
-        print(f"Labels shape: {elm_labels.shape}")
-        print(f"Time shape: {elm_time.shape}")
+        # print(f"Signals shape: {elm_signals.shape}")
+        # print(f"Labels shape: {elm_labels.shape}")
+        # print(f"Time shape: {elm_time.shape}")
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals,
             "labels": elm_labels,
@@ -187,90 +193,83 @@ def inference_on_elm_events(
 
 
 def plot_inference_on_elm_events(
-    args: argparse.Namespace,
-    elm_predictions: dict,
-    plot_dir: Union[str, Path] = '',
-    click_through_pages: Boolean = True,  # True to click through multiple pages
-    save: Boolean = False,  # save PDFs
+        args: argparse.Namespace,
+        logger,
+        elm_predictions: dict,
+        plot_dir: Union[str, Path] = '',
+        click_through_pages: Boolean = True,  # True to click through multiple pages
+        save: Boolean = True,  # save PDFs
 ) -> None:
     """Helper function to plot the time series plots for all the ELM events in
     the test set on multiple pages.
     Default behavior is interactive mode, and click through pages to view.
     """
     elm_ids = list(elm_predictions.keys())
-    print('elm_ids:', elm_ids)
-    n_elms = len(elm_ids)
-    num_pages = n_elms // 12 + 1 if n_elms%12 > 0 else n_elms // 12
+    # print('elm_ids:', elm_ids)
+    # n_elms = len(elm_ids)
+    # num_pages = n_elms // 12 + 1 if n_elms % 12 > 0 else n_elms // 12
 
-    if save:
-        plot_dir = Path(plot_dir)
-        assert plot_dir.exists()
+    plot_dir = Path(plot_dir)
+    plot_dir.mkdir(exist_ok=True, parents=True)
+    i_page = 1
 
-    nrows = 3
-    ncols = 4
-    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols*4, nrows*3))
-
-    for i_page in range(num_pages):
-        elms = elm_ids[i_page * 12 : (i_page + 1) * 12]
-        for i_elm, elm in enumerate(elms):
-            plt.sca(axes.flat[i_elm])
-            plt.cla()
-            signals = elm_predictions[elm]["signals"]
-            labels = elm_predictions[elm]["labels"]
-            predictions = elm_predictions[elm]["micro_predictions"]
-            elm_time = elm_predictions[elm]["elm_time"]
-            elm_index = elm_predictions[elm]["elm_index"]
-            if i_page==0 and i_elm==0:
-                print('First ELM event')
-                print(f'signals.shape: {signals.shape}')
-                print(f'labels.shape: {labels.shape}')
-                print(f'predictions.shape: {predictions.shape}')
-                print(f'elm_time.shape: {elm_time.shape}')
-            active_elm = np.where(labels > 0)[0]
-            active_elm_start = active_elm[0]
-            active_elm_end = active_elm[-1]
-            # plot signal, labels, and prediction
-            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-            plt.plot(elm_time, labels + 0.02, label="Ground truth")
-            plt.plot(elm_time, predictions, label="Prediction", lw=1.5)
-            plt.axvline(active_elm_start - args.truncate_buffer,
-                ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
-            plt.axvline(active_elm_end,
-                ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
-            plt.xlabel("Time (micro-s)", fontsize=11)
-            plt.ylabel("Signal | label", fontsize=11)
-            plt.tick_params(axis="x", labelsize=11)
-            plt.tick_params(axis="y", labelsize=11)
-            plt.ylim([None, 1.1])
-            plt.legend(fontsize=9)
-            plt.title(f'ELM index {elm_index}', fontsize=12)
-        plt.tight_layout()
-        if save:
-            filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
-            print(f'Saving file: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-        if plt.isinteractive():
-            if click_through_pages:
-                # interactive; halt/block after each page
-                print('Close plot window to continue')
-                plt.show(block=True)
+    for i_elm, elm in enumerate(elm_ids):
+        if i_elm % 12 == 0:
+            fig, axes = plt.subplots(ncols=4, nrows=3, figsize=(16, 9))
+        # get ELM data
+        elm_data = elm_predictions[elm]
+        signals = elm_data["signals"]
+        labels = elm_data["labels"]
+        predictions = elm_data["micro_predictions"]
+        elm_time = elm_data["elm_time"]
+        elm_index = elm_data["elm_index"]
+        # active_elm = np.where(labels > 0)[0]
+        # active_elm_start = active_elm[0]
+        # active_elm_end = active_elm[-1]
+        # plot signal, labels, and prediction
+        plt.sca(axes.flat[i_elm % 12])
+        plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
+        plt.plot(elm_time, labels + 0.02, label="Ground truth")
+        plt.plot(elm_time, predictions, label="Prediction", lw=1.5)
+        # plt.axvline(active_elm_start - args.truncate_buffer,
+        #             ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
+        plt.xlabel("Time (micro-s)")
+        plt.ylabel("Signal | label")
+        # plt.tick_params(axis="x", fontsize='small')
+        # plt.tick_params(axis="y", fontsize='small')
+        plt.ylim([None, 1.1])
+        plt.legend(fontsize='small')
+        plt.title(f'ELM index {elm_index}', fontsize='medium')
+        if i_elm % 12 == 11 or i_elm == len(elm_ids)-1:
+            plt.tight_layout()
+            if save:
+                filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
+                logger.info(f'Saving file: {filepath.as_posix()}')
+                plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+                i_page += 1
+            if plt.isinteractive():
+                if click_through_pages:
+                    # interactive; halt/block after each page
+                    print('Close plot window to continue')
+                    plt.show(block=True)
+                else:
+                    # interactive; do not halt/block after each page
+                    plt.show(block=False)
             else:
-                # interactive; do not halt/block after each page
-                plt.show(block=False)
-        else:
-            # non-interactive for figure generation in scripts without viewing
-            pass
+                # non-interactive for figure generation in scripts without viewing
+                pass
+            plt.close(fig)
 
 
 def plot_confusion_matrix(
-    args: argparse.Namespace,
-    y_true: np.ndarray,
-    y_probas: np.ndarray,
-    report_dir: str,
-    roc_dir: str,
-    plot_dir: str,
-    pred_mode: str,
-    save: Boolean = False,
+        args: argparse.Namespace,
+        y_true: np.ndarray,
+        y_probas: np.ndarray,
+        report_dir: str,
+        roc_dir: str,
+        plot_dir: str,
+        pred_mode: str,
+        save: Boolean = False,
 ) -> None:
     """Show metrics like confusion matrix and classification report for both
     micro and macro predictions.
@@ -286,7 +285,7 @@ def plot_confusion_matrix(
         plot_dir (str): Output directory path to save confusion matrix plots.
         pred_mode (str): Whether to calculate metrics for micro or macro predictions.
     """
-    assert pred_mode in ['micro','macro']
+    assert pred_mode in ['micro', 'macro']
 
     if pred_mode == 'micro':
         assert y_probas.dtype not in [np.dtype('int'), np.dtype('bool')]
@@ -295,8 +294,8 @@ def plot_confusion_matrix(
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_preds)
         cr = metrics.classification_report(
-            y_true, 
-            y_preds, 
+            y_true,
+            y_preds,
             output_dict=True,
             zero_division=0,
         )
@@ -305,8 +304,8 @@ def plot_confusion_matrix(
         # creating a classification report
         cm = metrics.confusion_matrix(y_true, y_probas)
         cr = metrics.classification_report(
-            y_true, 
-            y_probas, 
+            y_true,
+            y_probas,
             output_dict=True,
             zero_division=0,
         )
@@ -356,7 +355,7 @@ def plot_confusion_matrix(
         annot_kws={"size": 14},
         # fmt=".3f",
         fmt="d",
-        norm=LogNorm() if pred_mode=='micro' else None,
+        norm=LogNorm() if pred_mode == 'micro' else None,
     )
     plt.setp(ax.get_yticklabels(), rotation=0)
     ax.set_xlabel("Predicted Label", fontsize=14)
@@ -388,7 +387,7 @@ def plot_confusion_matrix(
 
     # plot ROC curve if micro
     if pred_mode == 'micro':
-        plt.figure()
+        plt.figure(figsize=(5,4))
         plt.plot(fpr, tpr)
         plt.xlabel('False positive rate')
         plt.ylabel('True positive rate')
@@ -399,18 +398,19 @@ def plot_confusion_matrix(
             print(f'Saving roc plot: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
-
     if plt.isinteractive():
         plt.show(block=False)
 
 
 def calc_roc_and_f1(
-    args: argparse.Namespace,
-    logger: logging.Logger,
-    model: object,
-    device: torch.device,
-    data: tuple,
-) -> None:
+        args: argparse.Namespace,
+        logger: logging.Logger,
+        model: torch.nn.Module,
+        device: torch.device,
+        data: tuple,
+        threshold: float = None,
+        save=True,
+) -> Tuple[float, float]:
     """Make predictions on the validation set to assess the model's performance
     on the test/validation set using metrics like ROC or F1-scores.
     """
@@ -430,6 +430,7 @@ def calc_roc_and_f1(
     inputs, _ = next(iter(data_loader))
     logger.info(f"  Input size: {inputs.shape}")
     # iterate through the dataloader
+    logger.info(f"  Evaluating model")
     for images, labels in tqdm(data_loader):
         images = images.to(device)
         with torch.no_grad():
@@ -439,38 +440,51 @@ def calc_roc_and_f1(
         targets.append(labels.cpu().numpy())
     predictions = np.concatenate(predictions)
     targets = np.concatenate(targets)
+    # # plot confusion matrix
+    # plot_confusion_matrix(
+    #     args,
+    #     targets,
+    #     predictions,
+    #     clf_report_dir.as_posix(),
+    #     roc_dir.as_posix(),
+    #     plot_dir.as_posix(),
+    #     pred_mode='micro',
+    #     save=save,
+    # )
     # display ROC and F1-score
     roc_auc = metrics.roc_auc_score(targets, predictions)
     logger.info(f"  ROC score on test data: {roc_auc:.4f}")
-    logger.info(f'  Threshold for F1: {args.threshold:.2f}')
+    if threshold is None:
+        threshold = args.threshold
+    logger.info(f'  Threshold for F1: {threshold:.2f}')
     # f1_thresh = 0.35  # threshold for F1-score
     f1 = metrics.f1_score(
-        targets, 
-        (predictions > args.threshold).astype(int),
+        targets,
+        (predictions > threshold).astype(int),
         zero_division=0,
     )
     logger.info(f"  F1 score on test data: {f1:.4f}")
-    return roc_auc, f1, args.threshold
+    return roc_auc, f1
 
 
 def get_micro_macro_values(pred_dict: dict, mode: str):
     """Helper function to extract values from the prediction dictionary."""
-    assert mode in ['micro','macro']
+    assert mode in ['micro', 'macro']
     targets = []
     predictions = []
     for vals in pred_dict.values():
         predictions.append(vals[f"{mode}_predictions"])
-        label_key = 'labels' if mode=='micro' else 'macro_labels'
+        label_key = 'labels' if mode == 'micro' else 'macro_labels'
         targets.append(vals[label_key])
     return np.concatenate(targets), np.concatenate(predictions)
 
 
 def do_analysis(
-    # args: argparse.Namespace,
-    args_file: Union[Path, str, None] = None,
-    interactive: Boolean = True,  # True to view immediately; False to only generate PDFs in script without viewing
-    click_through_pages: Boolean = True,  # True to click through multiple pages of ELM inference
-    save: Boolean = False,
+        args_file: Union[Path, str, None] = None,
+        device=None,
+        interactive: Boolean = True,  # True to view immediately; False to only generate PDFs in script without viewing
+        click_through_pages: Boolean = True,  # True to click through multiple pages of ELM inference
+        save: Boolean = True,
 ) -> None:
     """Actual function encapsulating all analysis function and making inference."""
     args_file = Path(args_file)
@@ -487,7 +501,7 @@ def do_analysis(
         plt.ioff()
         click_through_pages = False
 
-    LOGGER = utils.get_logger(
+    logger = utils.get_logger(
         script_name=__name__,
         stream_handler=True,
         log_file=(output_dir / 'analysis.log').as_posix(),
@@ -496,10 +510,13 @@ def do_analysis(
     model_cls = utils.create_model_class(args.model_name)
     model = model_cls(args)
 
-    if args.device.startswith('cuda'):
-        args.device = 'cuda'
-    if args.device == 'auto':
-        args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device is None:
+        if args.device.startswith('cuda'):
+            args.device = 'cuda'
+        if args.device == 'auto':
+            args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    else:
+        args.device = device
     device = torch.device(args.device)
 
     model = model.to(device)
@@ -507,64 +524,513 @@ def do_analysis(
     # restore paths
     test_data_file, checkpoint_file, clf_report_dir, plot_dir, roc_dir = \
         utils.create_output_paths(args, infer_mode=True)
+    for analysis_dir in [clf_report_dir, plot_dir, roc_dir]:
+        shutil.rmtree(analysis_dir.as_posix())
+        analysis_dir.mkdir()
 
     # load the model checkpoint
-    LOGGER.info(f"  Model checkpoint: {checkpoint_file.as_posix()}")
+    logger.info(f"  Model checkpoint: {checkpoint_file.as_posix()}")
     load_obj = torch.load(checkpoint_file.as_posix(), map_location=device)
     model_dict = load_obj['model']
     model.load_state_dict(model_dict)
 
+    # restore training output
+    with (output_dir/'output.pkl').open('rb') as f:
+        training_output = pickle.load(f)
+    train_loss = training_output['train_loss']
+    valid_loss = training_output['valid_loss']
+    roc_scores = training_output['roc_scores']
+    f1_scores = training_output['f1_scores']
+    epochs = np.arange(f1_scores.size) + 1
+
+    fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(8,6))
+    plt.sca(axes.flat[0])
+    plt.plot(epochs, train_loss, label='Training loss')
+    plt.plot(epochs, valid_loss, label='Valid. loss')
+    plt.title('Loss')
+    plt.sca(axes.flat[1])
+    plt.plot(epochs, roc_scores, label='ROC-AUC')
+    plt.title('ROC-AUC')
+    plt.sca(axes.flat[2])
+    plt.plot(epochs, f1_scores, label='F1 score')
+    plt.title("F1 score")
+    for axis in axes.flat:
+        plt.sca(axis)
+        plt.xlabel('Epoch')
+        plt.xlim([0,None])
+        plt.legend()
+    plt.tight_layout()
+    if save:
+        filepath = plot_dir / f"training.pdf"
+        print(f'Saving training plot: {filepath.as_posix()}')
+        plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+
     # restore test data
-    LOGGER.info(f"  Test data file: {test_data_file.as_posix()}")
+    logger.info(f"  Test data file: {test_data_file.as_posix()}")
     with test_data_file.open("rb") as f:
-        test_data = pickle.load(f)
+        test_data_dict = pickle.load(f)
 
-    signals = test_data["signals"]
-    labels = test_data["labels"]
-    sample_indices = test_data["sample_indices"]
-    window_start = test_data["window_start"]
-    elm_indices = test_data["elm_indices"]
+    logger.info("-------->  Test data information")
+    for key, value in test_data_dict.items():
+        logger.info(f"  {key} shape: {value.shape}")
 
-    LOGGER.info("-------->  Test data information")
-    LOGGER.info(f"  Signals shape: {signals.shape}")
-    LOGGER.info(f"  Labels shape: {labels.shape}")
-    LOGGER.info(f"  Sample indices shape: {sample_indices.shape}")
-    LOGGER.info(f"  Window start indices: {window_start.shape}")
-    LOGGER.info(f"  ELM indices: {elm_indices.shape}")
+    # convert to tuple
+    test_data = (
+        test_data_dict["signals"],
+        test_data_dict["labels"],
+        test_data_dict["sample_indices"],
+        test_data_dict["window_start"],
+        test_data_dict["elm_indices"],
+    )
 
-    test_data = (signals, labels, sample_indices, window_start, elm_indices)
-    roc, f1, threshold = calc_roc_and_f1(args, LOGGER, model, device, test_data)
+    # ROC and F1 for valid indices
+    calc_roc_and_f1(args, logger, model, device, test_data)
 
     # get micro/macro predictions for truncated signals, labels,
-    pred_dict = inference_on_elm_events(args, model, device, test_data)
+    pred_dict = calc_inference(args, logger, model, device, test_data)
 
-    print(f'Interactive?: {plt.isinteractive()}')
+    # plot micro/macro confusion matrices
+    for mode in ['micro', 'macro']:
+        targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
+        plot_confusion_matrix(
+            args,
+            targets,
+            predictions,
+            clf_report_dir.as_posix(),
+            roc_dir.as_posix(),
+            plot_dir.as_posix(),
+            pred_mode=mode,
+            save=save,
+        )
 
     plot_inference_on_elm_events(
-        args, 
+        args,
+        logger,
         pred_dict,
         plot_dir=plot_dir.as_posix(),
         click_through_pages=click_through_pages,
         save=save,
     )
 
-    # plot micro/macro confusion matrices
-    for mode in ['micro', 'macro']:
-        targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
-        plot_confusion_matrix(
-            args, 
-            targets, 
-            predictions,
-            clf_report_dir.as_posix(), 
-            roc_dir.as_posix(), 
-            plot_dir.as_posix(), 
-            pred_mode=mode, 
-            save=save,
-        )
-
     if plt.isinteractive():
-        print('Close plots to exit')
         plt.show(block=True)
+
+
+class Analysis(object):
+
+    _base_pdf_merge_cmd = [
+        shutil.which('gs'),
+        '-q', 
+        '-dBATCH',
+        '-dNOPAUSE', 
+        '-sDEVICE=pdfwrite', 
+        '-dPDFSETTINGS=/prepress', 
+        '-dCompatibilityLevel=1.4',
+    ]
+
+    def __init__(
+        self,
+        args_file: Union[Path, str, None] = None,
+        device: Union[str, None] = None,
+        # interactive: Boolean = True,  # True to view immediately; False to only generate PDFs in script without viewing
+        # click_through_pages: Boolean = True,  # True to click through multiple pages of ELM inference
+        save: Boolean = True,
+    ):
+        self.args_file = Path(args_file)
+        self.device = device
+        # self.interactive = interactive
+        # self.click_through_pages = click_through_pages
+        self.save = save
+
+        with self.args_file.open('rb') as f:
+            args = pickle.load(f)
+        self.args = TestArguments().parse(existing_namespace=args)
+
+        if self.device is None:
+            self.device = self.args.device
+        if self.device.startswith('cuda'):
+            self.device = 'cuda'
+        if self.device == 'auto':
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.args.device = self.device
+        self.device = torch.device(self.device)
+
+        self.output_dir = Path(self.args.output_dir)
+        self.analysis_dir = self.output_dir / 'analysis'
+        shutil.rmtree(self.analysis_dir, ignore_errors=True)
+        self.analysis_dir.mkdir()
+
+        # load paths
+        self.test_data_file, checkpoint_file = utils.create_output_paths(self.args)
+
+        # instantiate model
+        model_cls = utils.create_model_class(self.args.model_name)
+        self.model = model_cls(self.args)
+        self.model = self.model.to(self.device)
+        self.model.eval()
+
+        # load the model checkpoint
+        print(f"Model checkpoint: {checkpoint_file.as_posix()}")
+        load_obj = torch.load(checkpoint_file.as_posix(), map_location=device)
+        model_dict = load_obj['model']
+        self.model.load_state_dict(model_dict)
+
+        self.training_output = None
+        self.test_data = None
+        self.valid_indices_data_loader = None
+        self.elm_predictions = None
+
+    def _load_training_output(self):
+        outputs_file = self.output_dir / 'output.pkl'
+        print(f'Loading training outputs: {outputs_file.as_posix()}')
+        with outputs_file.open('rb') as f:
+            self.training_output = pickle.load(f)
+
+    def _load_test_data(self):
+        # restore test data
+        print(f"Loading test data file: {self.test_data_file.as_posix()}")
+        with self.test_data_file.open("rb") as f:
+            self.test_data = pickle.load(f)
+
+        print("Test data:")
+        for key, value in self.test_data.items():
+            print(f"  {key} shape: {value.shape}")
+
+    def _make_valid_indices_data_loader(self):
+        if self.test_data is None:
+            self._load_test_data()
+        print('Creating data loader for valid indices')
+        test_dataset = dataset.ELMDataset(
+            self.args, 
+            self.test_data['signals'],
+            self.test_data['labels'],
+            self.test_data['sample_indices'],
+            self.test_data['window_start'],
+        )
+        # dataloader
+        self.valid_indices_data_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            drop_last=True,
+        )
+        inputs, _ = next(iter(self.valid_indices_data_loader))
+        print(f"Input size: {inputs.shape}")
+
+    def _calc_inference_full(
+        self,
+        threshold=None,
+    ):
+        if self.test_data is None:
+            self._load_test_data()
+        signals = self.test_data['signals']
+        labels = self.test_data['labels']
+        window_start = self.test_data['window_start']
+        elm_indices = self.test_data['elm_indices']
+
+        if threshold is None:
+            threshold = self.args.threshold
+
+        n_elms = elm_indices.size
+        sws_plus_la = (self.args.signal_window_size - 1) + self.args.label_look_ahead
+
+        print('Running inference on full test data')
+        elm_predictions = {}
+        for i_elm, elm_index in enumerate(elm_indices):
+            i_start = window_start[i_elm]
+            if i_elm < n_elms - 1:
+                i_stop = window_start[i_elm + 1] - 1
+            else:
+                i_stop = labels.size
+            elm_signals = signals[i_start:i_stop, ...]
+            elm_labels = labels[i_start:i_stop]
+            active_elm = np.where(elm_labels > 0.0)[0]
+            active_elm_start = active_elm[0]
+            active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
+            active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
+            print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
+                  f"Signal size: {elm_signals.shape}")
+            predictions = []
+            effective_len = elm_labels.size - sws_plus_la
+            for j in range(effective_len):
+                input_signals = elm_signals[j: j + self.args.signal_window_size, ...]
+                input_signals = input_signals.reshape([1, 1, self.args.signal_window_size, 8, 8])
+                input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
+                input_signals = input_signals.to(self.device)
+                outputs = self.model(input_signals)
+                predictions.append(outputs.item())
+            predictions = np.array(predictions)
+            # micro predictions
+            micro_predictions = torch.sigmoid(
+                torch.as_tensor(predictions, dtype=torch.float32)
+            ).cpu().numpy()
+            micro_predictions = np.pad(
+                micro_predictions,
+                pad_width=(sws_plus_la, 0),
+                mode="constant",
+                constant_values=0,
+            )
+            # macro predictions
+            micro_predictions_pre_active_elms = \
+                micro_predictions[:active_elm_lower_buffer]
+            macro_predictions_pre_active_elms = np.array(
+                [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
+            )
+            micro_predictions_active_elms = \
+                micro_predictions[active_elm_lower_buffer:active_elm_upper_buffer]
+            macro_predictions_active_elms = np.array(
+                [np.any(micro_predictions_active_elms > threshold).astype(int)]
+            )
+            macro_labels = np.array([0, 1], dtype="int")
+            macro_predictions = np.concatenate(
+                [
+                    macro_predictions_pre_active_elms,
+                    macro_predictions_active_elms,
+                ]
+            )
+            elm_predictions[elm_index] = {
+                "signals": elm_signals,
+                "labels": elm_labels,
+                "micro_predictions": micro_predictions,
+                "macro_labels": macro_labels,
+                "macro_predictions": macro_predictions,
+            }
+
+        self.elm_predictions = elm_predictions
+
+    def plot_training_epochs(self):
+        if self.training_output is None:
+            self._load_training_output()
+        train_loss = self.training_output['train_loss']
+        valid_loss = self.training_output['valid_loss']
+        roc_scores = self.training_output['roc_scores']
+        f1_scores = self.training_output['f1_scores']
+        epochs = np.arange(f1_scores.size) + 1
+        _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
+        plt.sca(axes.flat[0])
+        plt.plot(epochs, train_loss, label='Training loss')
+        plt.plot(epochs, valid_loss, label='Valid. loss')
+        plt.title('Training/validation loss')
+        plt.ylabel('Loss')
+        plt.sca(axes.flat[1])
+        plt.plot(epochs, roc_scores, label='ROC-AUC')
+        plt.plot(epochs, f1_scores, label=f'F1 (thr={self.args.threshold:.2f})')
+        plt.title('Validation scores')
+        plt.ylabel('Score')
+        for axis in axes.flat:
+            plt.sca(axis)
+            plt.xlabel('Epoch')
+            plt.xlim([0,None])
+            plt.legend()
+        plt.tight_layout()
+        if self.save:
+            filepath = self.analysis_dir / "training.pdf"
+            print(f'Saving training plot: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+
+    def plot_valid_indices_analysis(
+        self, 
+        threshold: Union[float, None] = None,
+    ):
+        if self.valid_indices_data_loader is None:
+            self._make_valid_indices_data_loader()
+        predictions = []
+        targets = []
+        print('Running inference on valid indices')
+        for images, labels in tqdm(self.valid_indices_data_loader):
+            images = images.to(self.device)
+            with torch.no_grad():
+                preds = self.model(images)
+            preds = preds.view(-1)
+            predictions.append(torch.sigmoid(preds).cpu().numpy())
+            targets.append(labels.cpu().numpy())
+        predictions = np.concatenate(predictions)
+        targets = np.concatenate(targets)
+        # display ROC and F1-score
+        roc_auc = metrics.roc_auc_score(targets, predictions)
+        print(f"ROC-AUC on valid indices: {roc_auc:.4f}")
+        if threshold is None:
+            threshold = self.args.threshold
+        print(f'F1 threshold: {threshold:.2f}')
+        f1 = metrics.f1_score(
+            targets,
+            (predictions > threshold).astype(int),
+            zero_division=0,
+        )
+        print(f"F1 score on valid indices: {f1:.4f}")
+        # calc TPR, FPR for ROC
+        fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
+        # plot ROC
+        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        plt.suptitle('Test data analysis (valid indices only)')
+        plt.sca(axes.flat[0])
+        plt.plot(fpr, tpr)
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.title('ROC')
+        plt.annotate(
+            f'ROC-AUC = {roc_auc:.2f}',
+            xy=(0.5, 0.03),
+            xycoords='axes fraction',
+        )
+        plt.sca(axes.flat[1])
+        plt.plot(thresh, tpr, label='True pos. rate')
+        plt.plot(thresh, fpr, label='False pos. rate')
+        plt.title('TPR/FPR')
+        plt.xlabel('Threshold')
+        plt.ylabel('Rate')
+        plt.xlim(0,1)
+        plt.legend()
+        # calc confusion matrix
+        bool_predictions = (predictions > threshold).astype(int)
+        cm = metrics.confusion_matrix(targets, bool_predictions)
+        # plot confusion matrix
+        plt.sca(axes.flat[2])
+        sns.heatmap(
+            cm, 
+            annot=True, 
+            norm=LogNorm(),
+            xticklabels=['No ELM', 'ELM'],
+            yticklabels=['No ELM', 'ELM'],
+        )
+        plt.title(f'Confusion matrix (thr={threshold:.2f})')
+        plt.xlabel("Predicted label")
+        plt.ylabel("True label")
+        plt.tight_layout()
+        if self.save:
+            filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
+            print(f'Saving matrix figure: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+    
+    def plot_full_inference(self):
+        if self.elm_predictions is None:
+            self._calc_inference_full()
+        elm_indices = self.test_data['elm_indices']
+        n_elms = elm_indices.size
+        i_page = 1
+        for i_elm, elm_index in enumerate(elm_indices):
+            if i_elm % 6 == 0:
+                _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
+            elm_data = self.elm_predictions[elm_index]
+            signals = elm_data["signals"]
+            labels = elm_data["labels"]
+            predictions = elm_data["micro_predictions"]
+            elm_time = np.arange(labels.size)
+            # plot signal, labels, and prediction
+            plt.sca(axes.flat[i_elm % 6])
+            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
+            plt.plot(elm_time, labels + 0.02, label="Ground truth")
+            plt.plot(elm_time, predictions, label="Prediction")
+            plt.xlabel("Time (micro-s)")
+            plt.ylabel("Signal | label")
+            plt.ylim([None, 1.1])
+            plt.legend(fontsize='small')
+            plt.title(f'ELM index {elm_index}')
+            if i_elm % 6 == 5 or i_elm == n_elms-1:
+                plt.tight_layout()
+                if self.save:
+                    filepath = self.analysis_dir / f'inference_{i_page:02d}.pdf'
+                    print(f'Saving inference file: {filepath.as_posix()}')
+                    plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+                    i_page += 1
+        # merge PDFs
+        if self.save:
+            pdf_files = sorted(self.analysis_dir.glob('inference_*.pdf'))
+            output = self.analysis_dir/'inference.pdf'
+            print(f"Merging inference PDFs into file: {output.as_posix()}")
+            cmd = self._base_pdf_merge_cmd.copy()
+            cmd.append(f"-sOutputFile={output.as_posix()}")
+            for pdf_file in pdf_files:
+                cmd.append(f"{pdf_file.as_posix()}")
+            result = subprocess.run(cmd, check=True)
+            assert result.returncode == 0 and output.exists()
+            for pdf_file in pdf_files:
+                pdf_file.unlink()
+
+    def plot_full_analysis(
+            self,
+            threshold: Union[float, None] = None,
+        ):
+        if threshold is None:
+            threshold = self.args.threshold
+        if self.elm_predictions is None:
+            self._calc_inference_full(threshold=threshold)
+        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        plt.suptitle('Test data analysis (full data)')
+        for mode in ['micro', 'macro']:
+            # gather micro/macro results
+            targets = []
+            predictions = []
+            for vals in self.elm_predictions.values():
+                predictions.append(vals[f"{mode}_predictions"])
+                label_key = 'labels' if mode == 'micro' else 'macro_labels'
+                targets.append(vals[label_key])
+            predictions = np.concatenate(predictions)
+            targets = np.concatenate(targets)
+            # plot ROC (micro only)
+            if mode == 'micro':
+                fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
+                plt.sca(axes.flat[0])
+                plt.plot(fpr, tpr)
+                plt.xlabel('False positive rate')
+                plt.ylabel('True positive rate')
+                plt.title('ROC')
+                roc_auc = metrics.roc_auc_score(targets, predictions)
+                plt.annotate(
+                    f'ROC-AUC = {roc_auc:.2f}',
+                    xy=(0.5, 0.03),
+                    xycoords='axes fraction',
+                )
+                plt.sca(axes.flat[1])
+                plt.plot(thresh, tpr, label='True pos. rate')
+                plt.plot(thresh, fpr, label='False pos. rate')
+                plt.title('TPR/FPR')
+                plt.xlabel('Threshold')
+                plt.ylabel('Rate')
+                plt.xlim(0,1)
+                plt.legend()
+            # confusion matrix heatmaps
+            if mode == 'micro':
+                bool_predictions = (predictions > threshold).astype(int)
+                cm = metrics.confusion_matrix(targets, bool_predictions)
+            else:
+                cm = metrics.confusion_matrix(targets, predictions)
+            # plt.figure(figsize=(4.5, 3.5))
+            # ax = plt.subplot(111)
+            axis = axes.flat[2] if mode == 'micro' else axes.flat[3]
+            plt.sca(axis)
+            sns.heatmap(
+                cm, 
+                annot=True, 
+                norm=LogNorm() if mode=='micro' else None,
+                xticklabels=['No ELM', 'ELM'],
+                yticklabels=['No ELM', 'ELM'],
+            )
+            plt.title(f'Conf. matrix ({mode}, thr={threshold:.2f})')
+            plt.xlabel("Predicted label")
+            plt.ylabel("True label")
+        plt.tight_layout()
+        if self.save:
+            filepath = self.analysis_dir / f"full_analysis.pdf"
+            print(f'Saving full-data analysis: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+
+    def merge_all_pdfs(self):
+        pdf_files = sorted(
+            self.analysis_dir.glob('*.pdf'),
+            key=lambda path: path.stat().st_mtime_ns,
+        )
+        output = self.analysis_dir/'all_figures.pdf'
+        print(f"Merging all PDFs into file: {output.as_posix()}")
+        cmd = self._base_pdf_merge_cmd.copy()
+        cmd.append(f"-sOutputFile={output.as_posix()}")
+        for pdf_file in pdf_files:
+            cmd.append(f"{pdf_file.as_posix()}")
+        result = subprocess.run(cmd, check=True)
+        assert result.returncode == 0 and output.exists()
+
+    def show(self, **kwargs):
+        plt.show(**kwargs)
 
 
 if __name__ == "__main__":

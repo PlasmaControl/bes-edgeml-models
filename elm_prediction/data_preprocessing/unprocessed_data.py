@@ -52,20 +52,25 @@ class UnprocessedData(BaseData):
         if elm_indices is None:
             elm_indices = self.elm_indices
 
-        if save_filename:
-            plt.ioff()
-            _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
-            i_page = 1
-
         # iterate through all the ELM indices
         with h5py.File(self.datafile, 'r') as hf:
+            if save_filename:
+                plt.ioff()
+                _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
+                figure_dir = Path(self.args.output_dir) / 'valid_indices'
+                figure_dir.mkdir(exist_ok=True)
+                self.logger.info(f"  Saving valid indices: {figure_dir.as_posix()}")
+                i_page = 1
             for i_elm, elm_index in enumerate(elm_indices):
+                if save_filename and i_elm%12==0:
+                    for axis in axes.flat:
+                        plt.sca(axis)
+                        plt.cla()
                 elm_key = f"{elm_index:05d}"
                 if verbose:
                     self.logger.info(f' ELM index {elm_index}')
                 elm_event = hf[elm_key]
                 signals = np.array(elm_event["signals"], dtype=np.float32)
-                # _time = np.array(elm_event["time"], dtype=np.float32)
                 # transposing so that the time dimension comes forward
                 signals = np.transpose(signals, (1, 0)).reshape(-1, 8, 8)
                 if self.args.automatic_labels:
@@ -100,7 +105,6 @@ class UnprocessedData(BaseData):
 
                 if save_filename:
                     plt.sca(axes.flat[i_elm%12])
-                    plt.cla()
                     plt.plot(signals[:,2,3]/10, label='BES 20')
                     plt.plot(signals[:,2,5]/10, label='BES 22')
                     plt.plot(labels, label='Label')
@@ -119,19 +123,15 @@ class UnprocessedData(BaseData):
                     _valid_t0[_valid_t0 == 0] = np.nan
                     _valid_tstop[_valid_tstop == 0] = np.nan
                     _valid_label[_valid_label == 0] = np.nan
-                    # assert _valid_tstop[active_elm_indices[0]-1] > 0
-                    # assert _valid_tstop[active_elm_indices[0]] == 0
-                    # print(valid_label_indices[-1] , _labels.size-1)
-                    # assert _valid_label[-1] > 0
                     plt.plot(_valid_t0, label='Valid t0')
                     plt.plot(_valid_tstop, label='Valid tstop')
                     plt.plot(_valid_label, label='Valid label')
                     plt.title(f"ELM index {elm_key}")
-                    plt.legend(fontsize='small')
+                    plt.legend(fontsize='x-small')
                     plt.xlabel('Time (mu-s)')
                     if i_elm%12==11 or i_elm==elm_indices.size-1:
                         plt.tight_layout()
-                        filename = Path(self.args.output_dir) / f"{save_filename}_data_{i_page:02d}.pdf"
+                        filename = figure_dir / f"{save_filename}_{i_page:02d}.pdf"
                         plt.savefig(filename.as_posix(), format="pdf", transparent=True)
                         i_page += 1
 
