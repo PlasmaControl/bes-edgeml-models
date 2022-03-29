@@ -150,7 +150,10 @@ class Run:
             losses.update(loss.item(), batch_size)
 
             # record accuracy
-            preds.append(torch.sigmoid(y_preds).cpu().numpy())
+            if type(self.criterion).__name__ == 'MSELoss':
+                preds.append(y_preds.cpu().numpy())
+            else:
+                preds.append(y_preds.sigmoid().cpu().numpy())
             valid_labels.append(labels.cpu().numpy())
 
             # measure elapsed time

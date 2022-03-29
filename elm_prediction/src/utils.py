@@ -235,6 +235,10 @@ def create_output_paths(
     test_data_file = output_dir / args.test_data_file
     checkpoint_file = output_dir / args.checkpoint_file
 
+    if args.regression:
+        checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + '_regression' + checkpoint_file.suffix)
+        test_data_file = test_data_file.parent / (test_data_file.stem + '_regression' + test_data_file.suffix)
+
     if infer_mode:
         clf_report_dir = output_dir / "classification_reports"
         plot_dir = output_dir / "plots"
@@ -250,6 +254,7 @@ def create_output_paths(
         )
     else:
         output = (test_data_file, checkpoint_file)
+
     return output
 
 

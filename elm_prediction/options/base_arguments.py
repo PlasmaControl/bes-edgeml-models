@@ -339,6 +339,10 @@ class BaseArguments:
                 default=False,
                 help="Export model to ONNX format."
         )
+        parser.add_argument("--regression",
+                            action="store_true",
+                            default=False,
+                            help="Flag if testing regression model.", )
 
         self.initialized = True
 

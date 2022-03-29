@@ -53,6 +53,7 @@ class UnprocessedData(BaseData):
             elm_indices = self.elm_indices
 
         if save_filename:
+            save_filename = save_filename + '_regression'
             plt.ioff()
             _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
             i_page = 1
@@ -162,7 +163,7 @@ class UnprocessedData(BaseData):
             + (self.args.signal_window_size-1)
             + self.args.label_look_ahead
             )
-        packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
+        packaged_labels_for_valid_t0 = packaged_labels[packaged_label_indices_for_valid_t0]
         n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
         n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
         self.logger.info(" Dataset summary")

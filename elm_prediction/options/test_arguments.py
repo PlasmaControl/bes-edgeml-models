@@ -22,10 +22,6 @@ class TestArguments(BaseArguments):
             default=False,
             help="if true, show the information about the test data.",
         )
-        parser.add_argument("--regression",
-                action="store_true",
-                default=False,
-                help="Flag if testing regression model.", )
         parser.add_argument(
             "--plot_num",
             type=int,

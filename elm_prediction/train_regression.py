@@ -57,20 +57,17 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
     args.output_dir = output_dir.as_posix()
     args.data_preproc = 'regression'
     args.label_look_ahead = 0
-    args.regress_log = True
+    args.regression = True
+    args.regress_log = False
+    args.truncate_buffer = 0
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
-    suffix = f'_regression{"_log" if args.regress_log else ""}'
-    checkpoint_file = '.'.join(
-            [
-                    checkpoint_file.split('.')[0] + '_regression',
-                    checkpoint_file.split('.')[1]
-            ]
-    )
+    suffix = "_log" if args.regress_log else ""
+    checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + suffix + checkpoint_file.suffix)
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
@@ -173,11 +170,11 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
     engine = trainer.Run(model,
-            device=device,
-            criterion=criterion,
-            optimizer=optimizer,
-            use_focal_loss=args.focal_loss,
-            use_rnn=use_rnn, )
+                         device=device,
+                         criterion=criterion,
+                         optimizer=optimizer,
+                         use_focal_loss=args.focal_loss,
+                         use_rnn=use_rnn,)
 
     # containers to hold train and validation losses
     train_loss = np.empty(0)
@@ -186,16 +183,19 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
 
     outputs = {}
 
+    training_start_time = time.time()
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
         start_time = time.time()
 
         # train over an epoch
         avg_loss = engine.train(train_loader, epoch, print_every=args.train_print_every, )
+        avg_loss = np.sqrt(avg_loss)
         train_loss = np.append(train_loss, avg_loss)
 
         # evaluate validation data
         avg_val_loss, preds, valid_labels = engine.evaluate(valid_loader, print_every=args.valid_print_every)
+        avg_val_loss = np.sqrt(avg_val_loss)
         valid_loss = np.append(valid_loss, avg_val_loss)
 
         # step the learning rate scheduler
@@ -214,7 +214,7 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         # f1_scores = np.append(f1_scores, f1)
         elapsed = time.time() - start_time
 
-        LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train RMSE: {avg_loss:.3f} \tavg val. RMSE: {avg_val_loss:.3f}")
         LOGGER.info(f"Epoch: {epoch + 1:03d} \tR2: {r2:.3f}\ttime elapsed: {elapsed:.1f} s")
 
         # update and save outputs
@@ -229,7 +229,7 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         # track best f1 score and save model
         if r2 > best_score:
             best_score = r2
-            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_score:.3f}")
+            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest R2 Score: {best_score:.3f}")
             if not args.dry_run:
                 LOGGER.info(f"Epoch: {epoch + 1:03d} \tSaving model to: {checkpoint_file}")
                 model_data = {"model": model.state_dict(), "preds": preds, }
@@ -255,6 +255,9 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         handler.close()
         LOGGER.removeHandler(handler)
 
+    total_elapsed = time.time() - training_start_time
+    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
+
     return outputs, model_data
 
 
@@ -266,7 +269,7 @@ if __name__ == "__main__":
     else:
         # use command line arguments in `sys.argv`
         arg_list = None
-    args = TrainArguments().parse(verbose=True, arg_list=arg_list)
+    args = TrainArguments().parse(arg_list=arg_list)
     outputs, model_data = train_loop(args)
     preds = model_data['preds']
     real = model_data['valid_labels']
@@ -276,7 +279,7 @@ if __name__ == "__main__":
     fig.suptitle(f'Performance of {args.model_name} Model')
     ax.set_title(f'Epochs: {args.n_epochs}, SWS: {args.signal_window_size}')
     ax.text(0.05, 0.9, f'Best r2: {outputs["r2_scores"].max():0.2f}\n'
-                      f'Best validation Loss: {outputs["valid_loss"].min():0.2f}',
+                       f'Best validation RMSE: {outputs["valid_loss"].min():0.2f}',
             transform=ax.transAxes)
     ax.set_xlabel('Time ($\mu$s)')
     ax.set_ylabel('Time to ELM ($\mu$s)')
