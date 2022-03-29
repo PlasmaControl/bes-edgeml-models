@@ -32,9 +32,11 @@ except ImportError:
 try:
     from .options.train_arguments import TrainArguments
     from .src import utils, trainer, dataset
+    from .analyze import Analysis
 except ImportError:
     from elm_prediction.options.train_arguments import TrainArguments
     from elm_prediction.src import utils, trainer, dataset
+    from elm_prediction.analyze import Analysis
 
 
 def train_loop(
@@ -329,6 +331,10 @@ def train_loop(
         handler.close()
         LOGGER.removeHandler(handler)
 
+    if args.do_analysis:
+        run = Analysis(args_file)
+        run.plot_all()
+
     return outputs
 
 
@@ -343,6 +349,7 @@ if __name__ == "__main__":
             'signal_window_size':128,
             'label_look_ahead':300,
             'valid_indices_method':0,
+            'do_analysis':True,
         }
     else:
         # use command line arguments in `sys.argv`

@@ -117,6 +117,12 @@ class BaseArguments:
             help="model checkpoint file, rel. to `run_dir`",
         )
         parser.add_argument(
+            "--do_analysis",
+            action="store_true",
+            default=False,
+            help="if true, run analysis after training.",
+        )
+        parser.add_argument(
             "--dry_run",
             action="store_true",
             default=False,

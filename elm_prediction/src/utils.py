@@ -2,6 +2,8 @@
 """
 from genericpath import exists
 import os
+import shutil
+import subprocess
 import logging
 import time
 import math
@@ -195,6 +197,33 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print(f'Batched input size: {x.shape}')
     print(f"Batched output size: {model(x).shape}")
     print(f"Model contains {get_params(model)} trainable parameters!")
+
+
+def merge_pdfs(
+    inputs: Union[str,Path],
+    output: Union[str,Path],
+    delete_inputs: bool = False,
+):
+    inputs = [Path(input) for input in inputs]
+    output = Path(output)
+    print(f"Merging inference PDFs into file: {output.as_posix()}")
+    cmd = [
+        shutil.which('gs'),
+        '-q', 
+        '-dBATCH',
+        '-dNOPAUSE', 
+        '-sDEVICE=pdfwrite', 
+        '-dPDFSETTINGS=/prepress', 
+        '-dCompatibilityLevel=1.4',
+    ]
+    cmd.append(f"-sOutputFile={output.as_posix()}")
+    for pdf_file in inputs:
+        cmd.append(f"{pdf_file.as_posix()}")
+    result = subprocess.run(cmd, check=True)
+    assert result.returncode == 0 and output.exists()
+    if delete_inputs is True:
+        for pdf_file in inputs:
+            pdf_file.unlink()
 
 
 def create_model_class(

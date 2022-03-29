@@ -57,9 +57,9 @@ class UnprocessedData(BaseData):
             if save_filename:
                 plt.ioff()
                 _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
-                figure_dir = Path(self.args.output_dir) / 'valid_indices'
-                figure_dir.mkdir(exist_ok=True)
-                self.logger.info(f"  Saving valid indices: {figure_dir.as_posix()}")
+                output_dir = Path(self.args.output_dir)
+                save_filename_extended = f"{save_filename}_valid_indices"
+                self.logger.info(f"  Saving valid indices as `{save_filename_extended}.pdf`")
                 i_page = 1
             for i_elm, elm_index in enumerate(elm_indices):
                 if save_filename and i_elm%12==0:
@@ -131,7 +131,7 @@ class UnprocessedData(BaseData):
                     plt.xlabel('Time (mu-s)')
                     if i_elm%12==11 or i_elm==elm_indices.size-1:
                         plt.tight_layout()
-                        filename = figure_dir / f"{save_filename}_{i_page:02d}.pdf"
+                        filename = output_dir / f"{save_filename_extended}_{i_page:02d}.pdf"
                         plt.savefig(filename.as_posix(), format="pdf", transparent=True)
                         i_page += 1
 
@@ -152,6 +152,9 @@ class UnprocessedData(BaseData):
 
         if save_filename:
             plt.close()
+            pdf_files = sorted(output_dir.glob(f'{save_filename_extended}_*.pdf'))
+            output = output_dir / f'{save_filename_extended}.pdf'
+            utils.merge_pdfs(pdf_files, output, delete_inputs=True)
 
        # valid indices for data sampling
         packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
