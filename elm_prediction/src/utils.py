@@ -144,7 +144,7 @@ def create_output_paths(
         Tuple containing output paths.
     """
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
 
     test_data_file = output_dir / args.test_data_file
     checkpoint_file = output_dir / args.checkpoint_file
@@ -206,14 +206,17 @@ def merge_pdfs(
 ):
     inputs = [Path(input) for input in inputs]
     output = Path(output)
+    gs_cmd = shutil.which('gs')
+    if gs_cmd is None:
+        return
     print(f"Merging inference PDFs into file: {output.as_posix()}")
     cmd = [
-        shutil.which('gs'),
-        '-q', 
+        gs_cmd,
+        '-q',
         '-dBATCH',
-        '-dNOPAUSE', 
-        '-sDEVICE=pdfwrite', 
-        '-dPDFSETTINGS=/prepress', 
+        '-dNOPAUSE',
+        '-sDEVICE=pdfwrite',
+        '-dPDFSETTINGS=/prepress',
         '-dCompatibilityLevel=1.4',
     ]
     cmd.append(f"-sOutputFile={output.as_posix()}")

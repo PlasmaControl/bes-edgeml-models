@@ -44,8 +44,6 @@ class Analysis(object):
     ):
         self.args_file = Path(args_file)
         self.device = device
-        # self.interactive = interactive
-        # self.click_through_pages = click_through_pages
         self.save = save
 
         with self.args_file.open('rb') as f:
@@ -62,6 +60,9 @@ class Analysis(object):
         self.device = torch.device(self.device)
 
         self.output_dir = Path(self.args.output_dir)
+        if not self.output_dir.is_absolute():
+            self.output_dir = self.args_file.parent
+        assert self.output_dir.exists()
         self.analysis_dir = self.output_dir / 'analysis'
         shutil.rmtree(self.analysis_dir, ignore_errors=True)
         self.analysis_dir.mkdir()
@@ -77,7 +78,7 @@ class Analysis(object):
 
         # load the model checkpoint
         print(f"Model checkpoint: {checkpoint_file.as_posix()}")
-        load_obj = torch.load(checkpoint_file.as_posix(), map_location=device)
+        load_obj = torch.load(checkpoint_file.as_posix(), map_location=self.device)
         model_dict = load_obj['model']
         self.model.load_state_dict(model_dict)
 

@@ -5,7 +5,6 @@ To train an ELM prediction model, call `train_loop()` using
 a recipe similar to `if __name__=="main"` block.
 """
 
-from codecs import ignore_errors
 import sys
 import time
 import pickle
@@ -13,7 +12,6 @@ import shutil
 import io
 from typing import Union
 from pathlib import Path
-from joblib import Logger
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
@@ -68,7 +66,8 @@ def train_loop(
     args = args_obj.parse(arg_list=input_args)
 
     # output directory and files
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
+    args.output_dir = output_dir.as_posix()
     shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
     output_dir.mkdir(parents=True)
 
@@ -239,6 +238,7 @@ def train_loop(
     outputs = {}
 
     # iterate through all the epochs
+    LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
     for epoch in range(args.n_epochs):
         start_time = time.time()
 
@@ -343,13 +343,13 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'max_elms':10,
-            'n_epochs':2,
-            'fraction_valid':0.4,
-            'fraction_test':0.4,
+            'n_epochs':1,
+            'fraction_valid':0.2,
+            'fraction_test':0.2,
             'signal_window_size':128,
-            'label_look_ahead':300,
+            'label_look_ahead':200,
             'valid_indices_method':0,
-            'do_analysis':True,
+            'do_analysis':False,
         }
     else:
         # use command line arguments in `sys.argv`

@@ -4,6 +4,7 @@ modifications and transformations.
 """
 from typing import Union, Tuple
 from pathlib import Path
+import shutil
 
 import numpy as np
 import h5py
@@ -24,6 +25,7 @@ class UnprocessedData(BaseData):
         self,
         elm_indices: np.ndarray = None,
         shuffle_sample_indices: bool = False,
+        oversample_active_elm: bool = False,
         save_filename: str = '',
         verbose: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -156,7 +158,7 @@ class UnprocessedData(BaseData):
             output = output_dir / f'{save_filename_extended}.pdf'
             utils.merge_pdfs(pdf_files, output, delete_inputs=True)
 
-       # valid indices for data sampling
+        # valid indices for data sampling
         packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
         packaged_valid_t0_indices = packaged_valid_t0_indices[packaged_valid_t0 == 1]
 
@@ -168,10 +170,42 @@ class UnprocessedData(BaseData):
         packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
         n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
         n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
+        active_elm_fraction = n_active_elm/(n_active_elm+n_inactive_elm)
         self.logger.info(" Dataset summary")
         self.logger.info(f"  Count of inactive ELM labels: {n_inactive_elm}")
         self.logger.info(f"  Count of active ELM labels: {n_active_elm}")
-        self.logger.info(f"  % active: {n_active_elm/(n_active_elm+n_inactive_elm)*1e2:.1f} %")
+        self.logger.info(f"  % active: {active_elm_fraction*1e2:.1f} %")
+
+        min_active_elm_fraction = 0.2
+        if oversample_active_elm and active_elm_fraction < min_active_elm_fraction:
+            oversample_factor = int(min_active_elm_fraction * n_inactive_elm / (n_active_elm*(1-min_active_elm_fraction)))+1
+            self.logger.info(f"  Oversample active ELM factor: {oversample_factor}")
+            assert oversample_factor >= 1
+            packaged_active_elm_label_indices_for_valid_t0 = packaged_label_indices_for_valid_t0[
+                packaged_labels[packaged_label_indices_for_valid_t0] == 1
+            ]
+            packaged_active_elm_valid_t0_indices = (
+                packaged_active_elm_label_indices_for_valid_t0
+                - (self.args.signal_window_size-1)
+                - self.args.label_look_ahead
+            )
+            for i in np.arange(oversample_factor-1):
+                packaged_valid_t0_indices = np.append(
+                    packaged_valid_t0_indices,
+                    packaged_active_elm_valid_t0_indices,
+                )
+            packaged_label_indices_for_valid_t0 = (
+                packaged_valid_t0_indices
+                + (self.args.signal_window_size-1)
+                + self.args.label_look_ahead
+                )
+            packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
+            n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
+            n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
+            active_elm_fraction = n_active_elm/(n_active_elm+n_inactive_elm)
+            self.logger.info(f"  New count of inactive ELM labels: {n_inactive_elm}")
+            self.logger.info(f"  New count of active ELM labels: {n_active_elm}")
+            self.logger.info(f"  New % active: {active_elm_fraction*1e2:.1f} %")
 
         if shuffle_sample_indices:
             np.random.shuffle(packaged_valid_t0_indices)

@@ -123,6 +123,12 @@ class BaseArguments:
             help="if true, run analysis after training.",
         )
         parser.add_argument(
+            "--oversample_active_elm",
+            action="store_true",
+            default=False,
+            help="if true, oversample active ELM to ensure >= 20% active.",
+        )
+        parser.add_argument(
             "--dry_run",
             action="store_true",
             default=False,

@@ -1,7 +1,7 @@
 """
 Data class to package BES data for training using PyTorch
 """
-from multiprocessing.sharedctypes import Value
+# from multiprocessing.sharedctypes import Value
 import os
 import logging
 import argparse
@@ -103,8 +103,8 @@ class BaseData:
             train_data = self._preprocess_data(
                 training_elms,
                 shuffle_sample_indices=True,
+                oversample_active_elm=self.args.oversample_active_elm,
                 verbose=verbose,
-                # save_filename='train',
             )
             self.logger.info("-------> Creating validation data")
             validation_data = self._preprocess_data(
