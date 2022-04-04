@@ -1,26 +1,18 @@
 """Various utility functions used for data preprocessing, training and validation.
 """
 
-from genericpath import exists
-import argparse
-import importlib
-import logging
-import math
+import re
 import os
-import sys
 import pickle
 import sys
 import logging
 import time
-from collections import OrderedDict
-from pathlib import Path
-from traceback import print_tb
 import math
 import argparse
 import importlib
-from collections import OrderedDict
 from typing import Union, Tuple
 from pathlib import Path
+from collections import OrderedDict
 from traceback import print_tb
 
 import numpy as np
@@ -28,6 +20,8 @@ import torch
 from torchinfo import summary
 
 from elm_prediction import package_dir
+from elm_prediction.src import utils
+from elm_prediction.models import multi_features_ds_model
 
 
 class MetricMonitor:
@@ -128,6 +122,34 @@ class logParse:
             raise AttributeError('No logger exists. Logger must be declared.')
         return logger
 
+
+def get_test_dataset(args: argparse.Namespace, file_name: str, logger: logging.getLogger = None, ) -> Tuple[
+    tuple, dataset.ELMDataset]:
+    """Read the pickle file containing the test data and return PyTorch dataset
+    and data attributes such as signals, labels, sample_indices, and
+    window_start_indices.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the
+            base and test arguments.
+        file_name (str): Name of the test data file.
+        logger (logging.getLogger): Logger object that adds inference logs to
+            a file. Defaults to None.
+        transforms: Image transforms to perform data augmentation on the given
+            input. Defaults to None.
+    """
+    with open(file_name, "rb") as f:
+        test_data = pickle.load(f)
+
+    signals = np.array(test_data["signals"])
+    labels = np.array(test_data["labels"])
+    sample_indices = np.array(test_data["sample_indices"])
+    window_start = np.array(test_data["window_start"])
+    data_attrs = (signals, labels, sample_indices, window_start)
+    test_dataset = dataset.ELMDataset(args, *data_attrs, logger=logger, phase="testing")
+
+    return data_attrs, test_dataset
 
 # log the model and data preprocessing outputs
 def get_logger(
@@ -293,7 +315,9 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print(f"Model contains {get_params(model)} trainable parameters!")
 
 
-def create_model_class(model_name: str) -> object:
+def create_model_class(
+        model_name: str
+    ) -> torch.nn.Module:
     """
     Helper function to import the module for the model being used as per the
     command line argument `--model_name`.
@@ -320,7 +344,7 @@ def create_model_class(model_name: str) -> object:
 
 def get_model(args: argparse.Namespace,
               logger: logging.Logger):
-    _, model_cpt_path = src.utils.create_output_paths(args)
+    _, model_cpt_path = utils.create_output_paths(args)
     gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
     model_name = args.model_name + gen_type_suffix
     accepted_preproc = ['wavelet', 'unprocessed']
@@ -330,13 +354,13 @@ def get_model(args: argparse.Namespace,
                                                   f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
                                                   f'{"_" + args.balance_data if args.balance_data else ""}.pth')
 
-    raw_model = (multi_features_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    raw_model = (multi_features_ds_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_ds_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_ds_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
-    model_cls = src.utils.create_model(args.model_name)
+    model_cls = utils.create_model(args.model_name)
     if 'MULTI' in args.model_name.upper():
         model = model_cls(args, raw_model, fft_model, cwt_model)
     else:

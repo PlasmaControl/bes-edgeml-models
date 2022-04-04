@@ -3,7 +3,7 @@ import pytest
 import shutil
 
 from elm_prediction.train import train_loop
-from elm_prediction.analyze import do_analysis
+from elm_prediction.analyze import do_analysis, Analysis
 
 
 RUN_DIR = 'run_dir'
@@ -58,14 +58,55 @@ def test_train_loop_valid_indices():
 
 def test_analyze():
     args_file = RUN_DIR + '/raw_only/args.pkl'
-    do_analysis(args_file, interactive=False, click_through_pages=False, save=True)
+    # do_analysis(args_file, interactive=False, click_through_pages=False, save=True)
+    run = Analysis(args_file)
+    run.plot_training_epochs()
+    run.plot_valid_indices_analysis()
+    run.plot_full_analysis()
+    run.plot_full_inference()
+
+def test_multifeatures_v2():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2'
+    input_args['signal_window_size'] = 128
+    input_args['mf_time_slice_interval'] = 2
+    input_args['subwindow_size'] = 32
+    train_loop(input_args)
+
+def test_multifeatures_v2_with_fft():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_with_fft'
+    input_args['signal_window_size'] = 128
+    input_args['mf_time_slice_interval'] = 2
+    input_args['subwindow_size'] = 32
+    input_args['fft_num_filters'] = 8
+    input_args['fft_nbins'] = 2
+    train_loop(input_args)
+
+def test_multifeatures_v2_with_dct():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_with_dct'
+    input_args['signal_window_size'] = 128
+    input_args['mf_time_slice_interval'] = 2
+    input_args['subwindow_size'] = 32
+    input_args['dct_num_filters'] = 8
+    input_args['dct_nbins'] = 2
+    train_loop(input_args)
+
+def test_multifeatures_v2_with_dwt():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_with_dwt'
+    input_args['signal_window_size'] = 128
+    input_args['mf_time_slice_interval'] = 2
+    input_args['subwindow_size'] = 32
+    input_args['dwt_num_filters'] = 8
+    train_loop(input_args)
 
 
 if __name__=="__main__":
     shutil.rmtree(RUN_DIR, ignore_errors=True)
-    pytest_args = [
-        '--verbose',
-    ]
-    sys.exit(
-        pytest.main(pytest_args)
-    )
+    sys.exit( pytest.main( ['--verbose'] ) )

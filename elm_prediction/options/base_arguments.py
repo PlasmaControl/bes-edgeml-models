@@ -61,18 +61,24 @@ class BaseArguments:
         parser.add_argument(
             "--signal_window_size",
             type=int,
-            default=64,
+            default=128,
             help="number of time data points to use for the input. "
-            "The size of each input will then become `signal_window_size x spatial_dims x spatial_dims`, "
-            "power of 2 like 32, 128, etc. (default 64)",
+            "power of 2 like 32, 128, etc. (default 128)",
+        )
+        parser.add_argument(
+            "--subwindow_size",
+            type=int,
+            default=-1,
+            help="number of time data points in filters. "
+            "power of 2 like 32, 128, etc.; -1 for full signal window (default -1)",
         )
         parser.add_argument(
             "--label_look_ahead",
             type=int,
-            default=50,
+            default=200,
             help="`look ahead`, meaning the label for the entire signal window is taken to "
             "be label corresponding to the last element (0 ahead) of the signal window, "
-            "[ int >= 0 (50 default) ].",
+            "[ int >= 0 (200 default) ].",
         )
         parser.add_argument(
             "--output_dir",

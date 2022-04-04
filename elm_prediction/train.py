@@ -13,6 +13,7 @@ import shutil
 import io
 from typing import Union
 from pathlib import Path
+from joblib import Logger
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
@@ -118,12 +119,8 @@ def train_loop(
         LOGGER.info(f"  File size: {test_data_file.stat().st_size/1e6:.1f} MB")
 
     # create datasets
-    train_dataset = dataset.ELMDataset(
-        args, *train_data[0:4], logger=LOGGER, phase="training"
-    )
-    valid_dataset = dataset.ELMDataset(
-        args, *valid_data[0:4], logger=LOGGER, phase="validation"
-    )
+    train_dataset = dataset.ELMDataset(args, *train_data[0:4], logger=LOGGER)
+    valid_dataset = dataset.ELMDataset(args, *valid_data[0:4], logger=LOGGER)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(
