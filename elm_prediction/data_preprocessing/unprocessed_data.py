@@ -132,7 +132,7 @@ class UnprocessedData(BaseData):
                     plt.xlabel('Time (mu-s)')
                     if i_elm%12==11 or i_elm==elm_indices.size-1:
                         plt.tight_layout()
-                        filename = Path(self.args.output_dir) / f"{save_filename}_data_{i_page:02d}.pdf"
+                        filename = Path(self.args.output_dir) / f"pdfs/{save_filename}_data_{i_page:02d}.pdf"
                         plt.savefig(filename.as_posix(), format="pdf", transparent=True)
                         i_page += 1
 

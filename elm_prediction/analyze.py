@@ -9,7 +9,7 @@ matrices for both macro and micro predictions. Using the  command line argument
 """
 import os
 import pickle
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Any
 import argparse
 import logging
 from pathlib import Path
@@ -182,6 +182,11 @@ def inference_on_elm_events(
         print(f"Signals shape: {elm_signals.shape}")
         print(f"Labels shape: {elm_labels.shape}")
         print(f"Time shape: {elm_time.shape}")
+
+        # if args.regression == 'log':
+        #     labels = np.exp(labels)
+        #     micro_predictions = np.exp(micro_predictions)
+
         elm_predictions[window_start[i_elm]] = {
             "signals": elm_signals,
             "labels": elm_labels,
@@ -235,26 +240,51 @@ def plot_inference_on_elm_events(
                 print(f'predictions.shape: {predictions.shape}')
                 print(f'elm_time.shape: {elm_time.shape}')
             active_elm = np.where(labels > 0)[0]
-            active_elm_start = active_elm[0]
-            active_elm_end = active_elm[-1]
+            active_elm_end = len(labels) if args.regression else active_elm[-1]
+            active_elm_start = len(labels) if args.regression else active_elm[0]
+            if args.regression:
+                # signal and labels are different scales
+                ax1 = plt.gca()
+                ax2 = plt.gca().twinx()
+                ax2.set_ylabel('BES Signal', color='tab:blue')
+                ax2.tick_params(labelcolor='tab:blue')
+                ax2.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]),
+                         alpha=0.5,
+                         label='BES ch 22',
+                         color='tab:blue',
+                         zorder=1)
+                ax2.grid(False)
+                plt.sca(ax1)
+
+                active_elm_start = np.argmax(np.diff(predictions) > 1) + args.truncate_buffer # actually the signal window
+                y_label = 'Prediction'
+                p_color = 'tab:red'
+                y_color = 'tab:red'
+            else:
+                plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
+                y_label = "Signal | label"
+                y_color = 'tab:red'
+                p_color = 'k'
             # plot signal, labels, and prediction
-            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-            plt.plot(elm_time, labels + 0.02, label="Ground truth")
-            plt.plot(elm_time, predictions, label="Prediction", lw=1.5)
-            plt.axvline(active_elm_start - args.truncate_buffer,
-                ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
+            plt.plot(elm_time, labels + 0.02, label="Ground truth", zorder=2)
+            plt.plot(elm_time, predictions, label="Prediction", lw=1.5, color=p_color, zorder=3)
+
             plt.axvline(active_elm_end,
                 ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
+            plt.axvline(active_elm_start - args.truncate_buffer,
+                        ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65,
+                        label="Buffer limits" if not args.regression else "Signal Window")
             plt.xlabel("Time (micro-s)", fontsize=11)
-            plt.ylabel("Signal | label", fontsize=11)
+            plt.ylabel(y_label, fontsize=11, color=y_color)
             plt.tick_params(axis="x", labelsize=11)
-            plt.tick_params(axis="y", labelsize=11)
-            plt.ylim([None, 1.1])
+            plt.tick_params(axis="y", labelsize=11, labelcolor=y_color)
+
             plt.legend(fontsize=9)
             plt.title(f'ELM index {elm_index}', fontsize=12)
+
         plt.tight_layout()
         if save:
-            filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
+            filepath = plot_dir / f'elm_event_inference_plot{"_regression" if args.regression else ""}_pg{i_page:02d}.pdf'
             print(f'Saving file: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
         if plt.isinteractive():
@@ -460,6 +490,48 @@ def calc_roc_and_f1(
     logger.info(f"  F1 score on test data: {f1:.4f}")
     return roc_auc, f1, args.threshold
 
+def calc_r2_and_rmse(
+    args: argparse.Namespace,
+    logger: logging.Logger,
+    model: object,
+    device: torch.device,
+    data: tuple,
+) -> tuple[float | Any, float | Any]:
+    """Make predictions on the validation set to assess the regression model's performance
+    on the test/validation set using metrics like R2 or RMSE.
+    """
+    # put the model to eval mode
+    model.eval()
+    predictions = []
+    targets = []
+    # create pytorch dataset for test set
+    test_dataset = dataset.ELMDataset(args, *data[0:4], logger=logger, phase="testing")
+    # dataloader
+    data_loader = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        drop_last=True,
+    )
+    inputs, _ = next(iter(data_loader))
+    logger.info(f"  Input size: {inputs.shape}")
+    # iterate through the dataloader
+    for images, labels in tqdm(data_loader):
+        images = images.to(device)
+        with torch.no_grad():
+            preds = model(images)
+        preds = preds.view(-1)
+        predictions.append(preds.cpu().numpy())
+        targets.append(labels.cpu().numpy())
+    predictions = np.concatenate(predictions)
+    targets = np.concatenate(targets)
+    # display ROC and F1-score
+    r2 = metrics.r2_score(targets, predictions)
+    logger.info(f"  R2 score on test data: {r2:.4f}")
+    rmse = metrics.mean_squared_error(targets, predictions, squared=False)
+    logger.info(f"  RMSE score on test data: {rmse:.4f}")
+    return r2, rmse
+
 
 def get_micro_macro_values(pred_dict: dict, mode: str):
     """Helper function to extract values from the prediction dictionary."""
@@ -473,8 +545,92 @@ def get_micro_macro_values(pred_dict: dict, mode: str):
     return np.concatenate(targets), np.concatenate(predictions)
 
 
-def plot_regression_elms(args: argparse.Namespace,
-                         elm_list: list = None):
+def plot_regression_error(
+        args: argparse.Namespace,
+        elm_predictions: dict,
+        plot_dir: Union[str, Path] = '',
+        click_through_pages: Boolean = True,  # True to click through multiple pages
+        save: Boolean = False,  # save PDFs
+        ):
+    """
+    Plot the regression error for each ELM. The error is calculated as the difference between
+    the predicted value and the actual value. Also shown is the RSE for each time point.
+    """
+
+    elm_ids = list(elm_predictions.keys())
+    print('elm_ids:', elm_ids)
+    n_elms = len(elm_ids)
+    num_pages = n_elms // 12 + 1 if n_elms % 12 > 0 else n_elms // 12
+
+    if save:
+        plot_dir = Path(plot_dir)
+        assert plot_dir.exists()
+
+    nrows = 3
+    ncols = 4
+    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols * 4, nrows * 3))
+
+    for i_page in range(num_pages):
+        elms = elm_ids[i_page * 12: (i_page + 1) * 12]
+        for i_elm, elm in enumerate(elms):
+            plt.sca(axes.flat[i_elm])
+            plt.cla()
+            signals = elm_predictions[elm]["signals"]
+            labels = elm_predictions[elm]["labels"]
+            predictions = elm_predictions[elm]["micro_predictions"]
+            elm_time = elm_predictions[elm]["elm_time"]
+            elm_index = elm_predictions[elm]["elm_index"]
+            error = predictions - labels
+            if i_page == 0 and i_elm == 0:
+                print('First ELM event')
+                print(f'signals.shape: {signals.shape}')
+                print(f'labels.shape: {labels.shape}')
+                print(f'predictions.shape: {error.shape}')
+                print(f'elm_time.shape: {elm_time.shape}')
+            active_prediction = np.where(predictions > 0)[0]
+            sws = np.argmax(np.diff(predictions) > 1)
+            active_elm_end = len(labels)
+
+            error[:sws] = 0 # correct for 0s in signal window
+
+            # plot signal, labels, and prediction
+            color = 'tab:blue'
+            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22", color=color, alpha=0.5)
+            plt.gca().tick_params(labelcolor=color)
+            plt.gca().set_ylabel('Normalized signal', color=color)
+            plt.gca().grid(False)
+            ax2 = plt.gca().twinx()
+            color = 'tab:red'
+            ax2.plot(elm_time, error, label=r"Prediction Error", color=color)
+            ax2.tick_params(labelcolor=color)
+            ax2.set_ylabel(r'Prediction error ($\mu$s)', color=color)
+            plt.axvline(active_elm_end,
+                        ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
+            plt.axvline(sws,
+                        ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Signal Window")
+            plt.xlabel("Time (micro-s)", fontsize=11)
+            plt.tick_params(axis="x", labelsize=11)
+            plt.tick_params(axis="y", labelsize=11)
+
+            plt.legend(fontsize=9)
+            plt.title(f'ELM index {elm_index}', fontsize=12)
+        plt.tight_layout()
+        if save:
+            filepath = plot_dir / f'regression_error_plot{"_regression" if args.regression else ""}_pg{i_page:02d}.pdf'
+            print(f'Saving file: {filepath.as_posix()}')
+            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+        if plt.isinteractive():
+            if click_through_pages:
+                # interactive; halt/block after each page
+                print('Close plot window to continue')
+                plt.show(block=True)
+            else:
+                # interactive; do not halt/block after each page
+                plt.show(block=False)
+        else:
+            # non-interactive for figure generation in scripts without viewing
+            pass
+
     return
 
 
@@ -546,7 +702,10 @@ def do_analysis(
     LOGGER.info(f"  ELM indices: {elm_indices.shape}")
 
     test_data = (signals, labels, sample_indices, window_start, elm_indices)
-    roc, f1, threshold = calc_roc_and_f1(args, LOGGER, model, device, test_data)
+    if args.regression:
+        r2, rmse = calc_r2_and_rmse(args, LOGGER, model, device, test_data)
+    else:
+        roc, f1, threshold = calc_roc_and_f1(args, LOGGER, model, device, test_data)
 
     # get micro/macro predictions for truncated signals, labels,
     pred_dict = inference_on_elm_events(args, model, device, test_data)
@@ -562,18 +721,26 @@ def do_analysis(
     )
 
     # plot micro/macro confusion matrices
-    for mode in ['micro', 'macro']:
-        targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
-        plot_confusion_matrix(
-            args,
-            targets,
-            predictions,
-            clf_report_dir.as_posix(),
-            roc_dir.as_posix(),
-            plot_dir.as_posix(),
-            pred_mode=mode,
-            save=save,
-        )
+    if args.regression:
+        plot_regression_error(args,
+                              pred_dict,
+                              plot_dir=plot_dir.as_posix(),
+                              click_through_pages=click_through_pages,
+                              save=save,
+                              )
+    else:
+        for mode in ['micro', 'macro']:
+            targets, predictions = get_micro_macro_values(pred_dict, mode=mode)
+            plot_confusion_matrix(
+                args,
+                targets,
+                predictions,
+                clf_report_dir.as_posix(),
+                roc_dir.as_posix(),
+                plot_dir.as_posix(),
+                pred_mode=mode,
+                save=save,
+            )
 
     if plt.isinteractive():
         print('Close plots to exit')

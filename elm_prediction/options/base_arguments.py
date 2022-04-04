@@ -340,9 +340,12 @@ class BaseArguments:
                 help="Export model to ONNX format."
         )
         parser.add_argument("--regression",
-                            action="store_true",
+                            nargs='?',
+                            const=True,
                             default=False,
-                            help="Flag if testing regression model.", )
+                            help="Flag if testing regression model. Use arg 'log' if training args with log of time to "
+                                 "ELM as target.",
+                            choices=['log'])
 
         self.initialized = True
 

@@ -57,17 +57,13 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
     args.output_dir = output_dir.as_posix()
     args.data_preproc = 'regression'
     args.label_look_ahead = 0
-    args.regression = True
-    args.regress_log = False
+    args.regression = 'log'
     args.truncate_buffer = 0
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
     args_file = output_dir / args.args_file
     test_data_file, checkpoint_file = utils.create_output_paths(args)
-
-    suffix = "_log" if args.regress_log else ""
-    checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + suffix + checkpoint_file.suffix)
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)
 
