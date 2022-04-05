@@ -326,6 +326,9 @@ def train_loop(
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
+            LOGGER.info(f1_scores)
+            LOGGER.info(trial.user_attrs['f1_scores'])
+
     # shut down logger handlers
     for handler in LOGGER.handlers[:]:
         handler.close()

@@ -9,7 +9,7 @@ import time
 import math
 import argparse
 import importlib
-from typing import Union, Tuple
+from typing import Union, Tuple, Sequence
 from pathlib import Path
 
 import torch
@@ -200,7 +200,7 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
 
 
 def merge_pdfs(
-    inputs: Union[str,Path],
+    inputs: Sequence,
     output: Union[str,Path],
     delete_inputs: bool = False,
 ):
@@ -209,7 +209,7 @@ def merge_pdfs(
     gs_cmd = shutil.which('gs')
     if gs_cmd is None:
         return
-    print(f"Merging inference PDFs into file: {output.as_posix()}")
+    print(f"Merging PDFs into file: {output.as_posix()}")
     cmd = [
         gs_cmd,
         '-q',

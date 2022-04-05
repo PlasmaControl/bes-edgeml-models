@@ -16,7 +16,6 @@ from xmlrpc.client import Boolean
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import seaborn as sns
 import torch
 import torch.nn
@@ -38,22 +37,26 @@ class Analysis(object):
 
     def __init__(
         self,
-        args_file: Union[Path, str, None] = None,
+        trial_dir: Union[Path, str, None] = None,
         device: Union[str, None] = None,
         save: Boolean = True,
     ):
-        self.args_file = Path(args_file)
+        self.trial_dir = Path(trial_dir).resolve()
+        self.trial_dir_short = self.trial_dir.relative_to('/scratch/gpfs/dsmith/edgeml/work')
+        self.args_file = self.trial_dir / 'args.pkl'
+        assert self.args_file.exists()
         self.device = device
         self.save = save
 
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
+            # self.args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
 
         if self.device is None:
             self.device = self.args.device
-        if self.device.startswith('cuda'):
-            self.device = 'cuda'
+        # if self.device.startswith('cuda'):
+        #     self.device = 'cuda'
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.args.device = self.device
@@ -214,6 +217,7 @@ class Analysis(object):
         f1_scores = self.training_output['f1_scores']
         epochs = np.arange(f1_scores.size) + 1
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
+        plt.suptitle(f"{self.trial_dir_short}")
         plt.sca(axes.flat[0])
         plt.plot(epochs, train_loss, label='Training loss')
         plt.plot(epochs, valid_loss, label='Valid. loss')
@@ -269,7 +273,7 @@ class Analysis(object):
         fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
         # plot ROC
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle('Test data analysis (valid indices only)')
+        plt.suptitle(f"{self.trial_dir_short} | Test data (valid indices)")
         plt.sca(axes.flat[0])
         plt.plot(fpr, tpr)
         plt.xlabel('False positive rate')
@@ -318,6 +322,7 @@ class Analysis(object):
         for i_elm, elm_index in enumerate(elm_indices):
             if i_elm % 6 == 0:
                 _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
+                plt.suptitle(f"{self.trial_dir_short} | Test data (full)")
             elm_data = self.elm_predictions[elm_index]
             signals = elm_data["signals"]
             labels = elm_data["labels"]
@@ -355,7 +360,7 @@ class Analysis(object):
         if self.elm_predictions is None:
             self._calc_inference_full(threshold=threshold)
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle('Test data analysis (full data)')
+        plt.suptitle(f"{self.trial_dir_short} | Test data (full)")
         for mode in ['micro', 'macro']:
             # gather micro/macro results
             targets = []
@@ -437,6 +442,6 @@ class Analysis(object):
 if __name__ == "__main__":
     plt.close('all')
 
-    run = Analysis('run_dir/args.pkl')
+    run = Analysis('run_dir')
     run.plot_all()
     run.show()

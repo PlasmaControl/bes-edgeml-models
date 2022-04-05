@@ -17,6 +17,7 @@ class BaseArguments:
     def __init__(self):
         """Reset the class; used to further initialize the class."""
         self.initialized = False
+        self.parser = None
 
     def create_parser(self, parser: argparse.ArgumentParser):
         """Define the options common for training and testing."""
@@ -354,6 +355,8 @@ class BaseArguments:
 
         self.initialized = True
 
+        self.parser = parser
+
         return parser
 
     def _gather_args(
@@ -364,16 +367,17 @@ class BaseArguments:
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter
+                formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                allow_abbrev=False,
             )
-            parser = self.create_parser(parser)
+            self.create_parser(parser)
 
-        # get the base options
-        self.parser = parser
-        args = parser.parse_args(
+        args, unknown_args = self.parser.parse_known_args(
             args=arg_list,
             namespace=existing_namespace,
             )
+        if unknown_args:
+            print(f"  Warning, unknown args: {unknown_args}")
 
         # return args, parser
         return args
