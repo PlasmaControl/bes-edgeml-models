@@ -63,7 +63,7 @@ class RegressionData(UnprocessedData):
         labels = np.arange(active_elm_start_index, 0, -1)
         signals = signals[:active_elm_start_index]
 
-        if self.args.regress_log:
+        if self.args.regression == 'log':
             labels = np.log(labels)
 
         if verbose:

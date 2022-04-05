@@ -35,8 +35,9 @@ except ImportError:
     from elm_prediction.src import utils, trainer, dataset
 
 
-def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
-        _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
+def train_loop(input_args: Union[list, dict, None] = None,
+               trial=None,  # optuna `trial` object
+               _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
@@ -51,13 +52,31 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
         validation. Defaults to None.
         desc (bool): If true, prints the model architecture and details.
     """
+
+    # parse input args
+    args_obj = TrainArguments()
+    if input_args and isinstance(input_args, dict):
+        # format dict into list
+        arg_list = []
+        for key, value in input_args.items():
+            if isinstance(value, bool):
+                if value is True:
+                    arg_list.append(f'--{key}')
+            else:
+                arg_list.append(f'--{key}={value}')
+        input_args = arg_list
+        args = args_obj.parse(arg_list=input_args)
+    elif input_args and not isinstance(input_args, argparse.Namespace):
+        raise TypeError(f'input_args must be a dict or Namespace, not {type(input_args)}')
+    else:
+        args = input_args
+
     # output directory and files
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     args.output_dir = output_dir.as_posix()
     args.data_preproc = 'regression'
     args.label_look_ahead = 0
-    args.regression = 'log'
     args.truncate_buffer = 0
 
     output_file = output_dir / args.output_file
@@ -91,8 +110,8 @@ def train_loop(args: argparse.Namespace, trial=None,  # optuna `trial` object
                     "window_start": test_data[3], "elm_indices": test_data[4], }, f, )
 
     # create datasets
-    train_dataset = dataset.ELMDataset(args, *train_data[0:4], logger=LOGGER, phase="training")
-    valid_dataset = dataset.ELMDataset(args, *valid_data[0:4], logger=LOGGER, phase="validation")
+    train_dataset = dataset.ELMDataset(args, *train_data[0:4], logger=LOGGER)
+    valid_dataset = dataset.ELMDataset(args, *valid_data[0:4], logger=LOGGER)
 
     # training and validation dataloaders
     train_loader = torch.utils.data.DataLoader(train_dataset,

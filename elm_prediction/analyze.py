@@ -232,6 +232,7 @@ def plot_inference_on_elm_events(
     for i_elm, elm in enumerate(elm_ids):
         if i_elm % 12 == 0:
             fig, axes = plt.subplots(ncols=4, nrows=3, figsize=(16, 9))
+        plt.sca(axes.flat[i_elm])
         # get ELM data
         elm_data = elm_predictions[elm]
         signals = elm_data["signals"]
@@ -239,23 +240,58 @@ def plot_inference_on_elm_events(
         predictions = elm_data["micro_predictions"]
         elm_time = elm_data["elm_time"]
         elm_index = elm_data["elm_index"]
-        # active_elm = np.where(labels > 0)[0]
-        # active_elm_start = active_elm[0]
-        # active_elm_end = active_elm[-1]
+
+        active_elm = np.where(labels > 0)[0]
+        active_elm_end = len(labels) if args.regression else active_elm[-1]
+        active_elm_start = len(labels) if args.regression else active_elm[0]
+        if args.regression:
+
+            # reverse time axis for regression
+            signals = signals[::-1]
+            labels = labels[::-1]
+            predictions = predictions[::-1]
+
+            # signal and labels are different scales
+            ax1 = plt.gca()
+            ax1.invert_xaxis()
+            ax2 = plt.gca().twinx()
+            ax2.set_ylabel('BES Signal', color='tab:blue')
+            ax2.tick_params(axis='y', color='tab:blue')
+            ax2.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]),
+                     alpha=0.5,
+                     label='BES ch 22',
+                     color='tab:blue',
+                     zorder=1)
+            ax2.grid(False)
+            plt.sca(ax1)
+
+            active_elm_start = len(elm_time) - np.count_nonzero(predictions == 0) + args.truncate_buffer  # actually the signal window
+            active_elm_end = len(elm_time) - active_elm_end
+            y_label = 'Prediction'
+            p_color = 'tab:red'
+            y_color = 'tab:red'
+        else:
+            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
+            y_label = "Signal | label"
+            y_color = 'tab:red'
+            p_color = 'k'
+
         # plot signal, labels, and prediction
-        plt.sca(axes.flat[i_elm % 12])
-        plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-        plt.plot(elm_time, labels + 0.02, label="Ground truth")
-        plt.plot(elm_time, predictions, label="Prediction", lw=1.5)
-        # plt.axvline(active_elm_start - args.truncate_buffer,
-        #             ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
-        plt.xlabel("Time (micro-s)")
-        plt.ylabel("Signal | label")
-        # plt.tick_params(axis="x", fontsize='small')
-        # plt.tick_params(axis="y", fontsize='small')
-        plt.ylim([None, 1.1])
-        plt.legend(fontsize='small')
-        plt.title(f'ELM index {elm_index}', fontsize='medium')
+        plt.plot(elm_time, labels + 0.02, label="Ground truth", zorder=2)
+        plt.plot(elm_time, predictions, label="Prediction", lw=1.5, color=p_color, zorder=3)
+
+        plt.axvline(active_elm_end,
+                    ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
+        plt.axvline(active_elm_start - args.truncate_buffer,
+                    ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65,
+                    label="Buffer limits" if not args.regression else "Signal Window")
+        plt.xlabel(f"Time{' to ELM' if args.regression else ''} (micro-s)", fontsize=11)
+        plt.ylabel(y_label, fontsize=11, color=y_color)
+        plt.tick_params(axis="x", labelsize=11)
+        plt.tick_params(axis="y", labelsize=11, labelcolor=y_color)
+
+        plt.legend(fontsize=9)
+        plt.title(f'ELM index {elm_index}', fontsize=12)
         if i_elm % 12 == 11 or i_elm == len(elm_ids)-1:
             plt.tight_layout()
             if save:
@@ -275,89 +311,6 @@ def plot_inference_on_elm_events(
                 # non-interactive for figure generation in scripts without viewing
                 pass
             plt.close(fig)
-
-            ### FROM REGRESSION ###
-
-
-    nrows = 3
-    ncols = 4
-    fig, axes = plt.subplots(ncols=ncols, nrows=nrows, figsize=(ncols*4, nrows*3))
-
-    for i_page in range(num_pages):
-        elms = elm_ids[i_page * 12 : (i_page + 1) * 12]
-        for i_elm, elm in enumerate(elms):
-            plt.sca(axes.flat[i_elm])
-            plt.cla()
-            signals = elm_predictions[elm]["signals"]
-            labels = elm_predictions[elm]["labels"]
-            predictions = elm_predictions[elm]["micro_predictions"]
-            elm_time = elm_predictions[elm]["elm_time"]
-            elm_index = elm_predictions[elm]["elm_index"]
-            if i_page==0 and i_elm==0:
-                print('First ELM event')
-                print(f'signals.shape: {signals.shape}')
-                print(f'labels.shape: {labels.shape}')
-                print(f'predictions.shape: {predictions.shape}')
-                print(f'elm_time.shape: {elm_time.shape}')
-            active_elm = np.where(labels > 0)[0]
-            active_elm_end = len(labels) if args.regression else active_elm[-1]
-            active_elm_start = len(labels) if args.regression else active_elm[0]
-            if args.regression:
-                # signal and labels are different scales
-                ax1 = plt.gca()
-                ax2 = plt.gca().twinx()
-                ax2.set_ylabel('BES Signal', color='tab:blue')
-                ax2.tick_params(labelcolor='tab:blue')
-                ax2.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]),
-                         alpha=0.5,
-                         label='BES ch 22',
-                         color='tab:blue',
-                         zorder=1)
-                ax2.grid(False)
-                plt.sca(ax1)
-
-                active_elm_start = np.argmax(np.diff(predictions) > 1) + args.truncate_buffer # actually the signal window
-                y_label = 'Prediction'
-                p_color = 'tab:red'
-                y_color = 'tab:red'
-            else:
-                plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-                y_label = "Signal | label"
-                y_color = 'tab:red'
-                p_color = 'k'
-            # plot signal, labels, and prediction
-            plt.plot(elm_time, labels + 0.02, label="Ground truth", zorder=2)
-            plt.plot(elm_time, predictions, label="Prediction", lw=1.5, color=p_color, zorder=3)
-
-            plt.axvline(active_elm_end,
-                ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
-            plt.axvline(active_elm_start - args.truncate_buffer,
-                        ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65,
-                        label="Buffer limits" if not args.regression else "Signal Window")
-            plt.xlabel("Time (micro-s)", fontsize=11)
-            plt.ylabel(y_label, fontsize=11, color=y_color)
-            plt.tick_params(axis="x", labelsize=11)
-            plt.tick_params(axis="y", labelsize=11, labelcolor=y_color)
-
-            plt.legend(fontsize=9)
-            plt.title(f'ELM index {elm_index}', fontsize=12)
-
-        plt.tight_layout()
-        if save:
-            filepath = plot_dir / f'elm_event_inference_plot{"_regression" if args.regression else ""}_pg{i_page:02d}.pdf'
-            print(f'Saving file: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-        if plt.isinteractive():
-            if click_through_pages:
-                # interactive; halt/block after each page
-                print('Close plot window to continue')
-                plt.show(block=True)
-            else:
-                # interactive; do not halt/block after each page
-                plt.show(block=False)
-        else:
-            # non-interactive for figure generation in scripts without viewing
-            pass
 
 
 def plot_confusion_matrix(
@@ -581,7 +534,7 @@ def calc_r2_and_rmse(
     predictions = []
     targets = []
     # create pytorch dataset for test set
-    test_dataset = dataset.ELMDataset(args, *data[0:4], logger=logger, phase="testing")
+    test_dataset = dataset.ELMDataset(args, *data[0:4], logger=logger)
     # dataloader
     data_loader = torch.utils.data.DataLoader(
         test_dataset,
@@ -656,43 +609,49 @@ def plot_regression_error(
             predictions = elm_predictions[elm]["micro_predictions"]
             elm_time = elm_predictions[elm]["elm_time"]
             elm_index = elm_predictions[elm]["elm_index"]
+
             error = predictions - labels
+            sws = np.argmax(np.diff(predictions) > 1)
+            active_elm_end = len(elm_time)
+
+            error[:sws] = 0 # correct for 0s in signal window
+
+            # reverse time axis for regression
+            signals = signals[::-1]
+            labels = labels[::-1]
+            error = error[::-1]
             if i_page == 0 and i_elm == 0:
                 print('First ELM event')
                 print(f'signals.shape: {signals.shape}')
                 print(f'labels.shape: {labels.shape}')
                 print(f'predictions.shape: {error.shape}')
                 print(f'elm_time.shape: {elm_time.shape}')
-            active_prediction = np.where(predictions > 0)[0]
-            sws = np.argmax(np.diff(predictions) > 1)
-            active_elm_end = len(labels)
-
-            error[:sws] = 0 # correct for 0s in signal window
 
             # plot signal, labels, and prediction
             color = 'tab:blue'
             plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22", color=color, alpha=0.5)
-            plt.gca().tick_params(labelcolor=color)
+            plt.gca().tick_params(axis='y', labelcolor=color, labelsize=11)
             plt.gca().set_ylabel('Normalized signal', color=color)
             plt.gca().grid(False)
+            plt.gca().invert_xaxis()
             ax2 = plt.gca().twinx()
             color = 'tab:red'
             ax2.plot(elm_time, error, label=r"Prediction Error", color=color)
-            ax2.tick_params(labelcolor=color)
-            ax2.set_ylabel(r'Prediction error ($\mu$s)', color=color)
-            plt.axvline(active_elm_end,
+            ax2.tick_params(axis='y', labelcolor=color, labelsize=11)
+            y_label = r'Prediction error (ln($\mu$s))' if args.regression == 'log' else r'Prediction error ($\mu$s)'
+            ax2.set_ylabel(y_label, color=color)
+            plt.axvline(len(elm_time)-active_elm_end,
                         ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
-            plt.axvline(sws,
+            plt.axvline(len(elm_time)-sws,
                         ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Signal Window")
             plt.xlabel("Time (micro-s)", fontsize=11)
             plt.tick_params(axis="x", labelsize=11)
-            plt.tick_params(axis="y", labelsize=11)
 
             plt.legend(fontsize=9)
             plt.title(f'ELM index {elm_index}', fontsize=12)
         plt.tight_layout()
         if save:
-            filepath = plot_dir / f'regression_error_plot{"_regression" if args.regression else ""}_pg{i_page:02d}.pdf'
+            filepath = plot_dir / f'regression_error_plot{"_log" if args.regression == "log" else ""}_pg{i_page:02d}.pdf'
             print(f'Saving file: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
         if plt.isinteractive():
@@ -770,9 +729,12 @@ def do_analysis(
         training_output = pickle.load(f)
     train_loss = training_output['train_loss']
     valid_loss = training_output['valid_loss']
-    roc_scores = training_output['roc_scores']
-    f1_scores = training_output['f1_scores']
-    epochs = np.arange(f1_scores.size) + 1
+    if args.regression:
+        r2_scores = training_output['r2_scores']
+    else:
+        roc_scores = training_output['roc_scores']
+        f1_scores = training_output['f1_scores']
+    epochs = np.arange(valid_loss.size) + 1
 
     fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(8,6))
     plt.sca(axes.flat[0])
@@ -780,11 +742,15 @@ def do_analysis(
     plt.plot(epochs, valid_loss, label='Valid. loss')
     plt.title('Loss')
     plt.sca(axes.flat[1])
-    plt.plot(epochs, roc_scores, label='ROC-AUC')
-    plt.title('ROC-AUC')
-    plt.sca(axes.flat[2])
-    plt.plot(epochs, f1_scores, label='F1 score')
-    plt.title("F1 score")
+    if args.regression:
+        plt.plot(epochs, r2_scores, label='R2')
+        plt.title('R2')
+    else:
+        plt.plot(epochs, roc_scores, label='ROC-AUC')
+        plt.title('ROC-AUC')
+        plt.sca(axes.flat[2])
+        plt.plot(epochs, f1_scores, label='F1 score')
+        plt.title("F1 score")
     for axis in axes.flat:
         plt.sca(axis)
         plt.xlabel('Epoch')

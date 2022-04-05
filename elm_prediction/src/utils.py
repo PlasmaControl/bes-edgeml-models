@@ -20,7 +20,7 @@ import torch
 from torchinfo import summary
 
 from elm_prediction import package_dir
-from elm_prediction.src import utils
+from elm_prediction.src import utils, dataset
 from elm_prediction.models import multi_features_ds_model
 
 
