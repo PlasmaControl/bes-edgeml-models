@@ -79,9 +79,13 @@ def train_loop(input_args: Union[list, dict, None] = None,
     args.label_look_ahead = 0
     args.truncate_buffer = 0
 
+    file_suffix = ''
+    file_suffix += '_regression' if args.regression else ''
+    file_suffix += '_log' if args.regression == 'log' else ''
+
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
-    args_file = output_dir / args.args_file
+    args_file = output_dir / (Path(args.args_file).stem + file_suffix + Path(args.args_file).suffix)
     test_data_file, checkpoint_file = utils.create_output_paths(args)
 
     LOGGER = utils.get_logger(script_name=__name__, log_file=log_file)

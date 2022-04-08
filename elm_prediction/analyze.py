@@ -188,9 +188,9 @@ def calc_inference(
         )
         elm_time = np.arange(elm_labels.size)
 
-        # if args.regression == 'log':
-        #     labels = np.exp(labels)
-        #     micro_predictions = np.exp(micro_predictions)
+        if args.regression == 'log':
+            elm_labels = np.exp(elm_labels)
+            micro_predictions = np.exp(micro_predictions)
 
         # print(f"Signals shape: {elm_signals.shape}")
         # print(f"Labels shape: {elm_labels.shape}")
@@ -295,7 +295,9 @@ def plot_inference_on_elm_events(
         if i_elm % 12 == 11 or i_elm == len(elm_ids)-1:
             plt.tight_layout()
             if save:
-                filepath = plot_dir / f'elm_event_inference_plot_pg{i_page:02d}.pdf'
+                suffix = '_regression' if args.regression else ''
+                suffix += '_log' if args.regression == 'log' else ''
+                filepath = plot_dir / f'elm_event_inference_plot_pg{suffix}{i_page:02d}.pdf'
                 logger.info(f'Saving file: {filepath.as_posix()}')
                 plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
                 i_page += 1
@@ -638,8 +640,7 @@ def plot_regression_error(
             color = 'tab:red'
             ax2.plot(elm_time, error, label=r"Prediction Error", color=color)
             ax2.tick_params(axis='y', labelcolor=color, labelsize=11)
-            y_label = r'Prediction error (ln($\mu$s))' if args.regression == 'log' else r'Prediction error ($\mu$s)'
-            ax2.set_ylabel(y_label, color=color)
+            ax2.set_ylabel(r'Prediction error ($\mu$s)', color=color)
             plt.axvline(len(elm_time)-active_elm_end,
                         ymin=0, ymax=0.9, c="k", ls="--", alpha=0.65, label="Buffer limits")
             plt.axvline(len(elm_time)-sws,
@@ -1242,5 +1243,5 @@ class Analysis(object):
 
 if __name__ == "__main__":
     plt.close('all')
-    args_file = package_dir / 'run_dir/args.pkl'
-    do_analysis(args_file, interactive=True, click_through_pages=True, save=True)
+    args_file = package_dir / 'run_dir/args_regression.pkl'
+    do_analysis(args_file=args_file, interactive=True, click_through_pages=True, save=True)
