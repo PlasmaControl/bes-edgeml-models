@@ -37,13 +37,13 @@ class Analysis(object):
 
     def __init__(
         self,
-        trial_dir: Union[Path, str, None] = None,
+        run_dir: Union[Path, str, None] = None,
         device: Union[str, None] = None,
         save: Boolean = True,
     ):
-        self.trial_dir = Path(trial_dir).resolve()
-        self.trial_dir_short = self.trial_dir.relative_to('/scratch/gpfs/dsmith/edgeml/work')
-        self.args_file = self.trial_dir / 'args.pkl'
+        self.run_dir = Path(run_dir).resolve()
+        self.run_dir_short = self.run_dir.relative_to(self.run_dir.parent.parent)
+        self.args_file = self.run_dir / 'args.pkl'
         assert self.args_file.exists()
         self.device = device
         self.save = save
@@ -146,65 +146,66 @@ class Analysis(object):
 
         print('Running inference on full test data')
         elm_predictions = {}
-        for i_elm, elm_index in enumerate(elm_indices):
-            i_start = window_start[i_elm]
-            if i_elm < n_elms - 1:
-                i_stop = window_start[i_elm + 1] - 1
-            else:
-                i_stop = labels.size
-            elm_signals = signals[i_start:i_stop, ...]
-            elm_labels = labels[i_start:i_stop]
-            active_elm = np.where(elm_labels > 0.0)[0]
-            active_elm_start = active_elm[0]
-            active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
-            active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
-            print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
-                  f"Signal size: {elm_signals.shape}")
-            predictions = []
-            effective_len = elm_labels.size - sws_plus_la
-            for j in range(effective_len):
-                input_signals = elm_signals[j: j + self.args.signal_window_size, ...]
-                input_signals = input_signals.reshape([1, 1, self.args.signal_window_size, 8, 8])
-                input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
-                input_signals = input_signals.to(self.device)
-                outputs = self.model(input_signals)
-                predictions.append(outputs.item())
-            predictions = np.array(predictions)
-            # micro predictions
-            micro_predictions = torch.sigmoid(
-                torch.as_tensor(predictions, dtype=torch.float32)
-            ).cpu().numpy()
-            micro_predictions = np.pad(
-                micro_predictions,
-                pad_width=(sws_plus_la, 0),
-                mode="constant",
-                constant_values=0,
-            )
-            # macro predictions
-            micro_predictions_pre_active_elms = \
-                micro_predictions[:active_elm_lower_buffer]
-            macro_predictions_pre_active_elms = np.array(
-                [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
-            )
-            micro_predictions_active_elms = \
-                micro_predictions[active_elm_lower_buffer:active_elm_upper_buffer]
-            macro_predictions_active_elms = np.array(
-                [np.any(micro_predictions_active_elms > threshold).astype(int)]
-            )
-            macro_labels = np.array([0, 1], dtype="int")
-            macro_predictions = np.concatenate(
-                [
-                    macro_predictions_pre_active_elms,
-                    macro_predictions_active_elms,
-                ]
-            )
-            elm_predictions[elm_index] = {
-                "signals": elm_signals,
-                "labels": elm_labels,
-                "micro_predictions": micro_predictions,
-                "macro_labels": macro_labels,
-                "macro_predictions": macro_predictions,
-            }
+        with torch.no_grad():
+            for i_elm, elm_index in enumerate(elm_indices):
+                i_start = window_start[i_elm]
+                if i_elm < n_elms - 1:
+                    i_stop = window_start[i_elm + 1] - 1
+                else:
+                    i_stop = labels.size
+                elm_signals = signals[i_start:i_stop, ...]
+                elm_labels = labels[i_start:i_stop]
+                active_elm = np.where(elm_labels > 0.0)[0]
+                active_elm_start = active_elm[0]
+                active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
+                active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
+                print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
+                    f"Signal size: {elm_signals.shape}")
+                predictions = []
+                effective_len = elm_labels.size - sws_plus_la
+                for j in range(effective_len):
+                    input_signals = elm_signals[j: j + self.args.signal_window_size, ...]
+                    input_signals = input_signals.reshape([1, 1, self.args.signal_window_size, 8, 8])
+                    input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
+                    input_signals = input_signals.to(self.device)
+                    outputs = self.model(input_signals)
+                    predictions.append(outputs.item())
+                predictions = np.array(predictions)
+                # micro predictions
+                micro_predictions = torch.sigmoid(
+                    torch.as_tensor(predictions, dtype=torch.float32)
+                ).cpu().numpy()
+                micro_predictions = np.pad(
+                    micro_predictions,
+                    pad_width=(sws_plus_la, 0),
+                    mode="constant",
+                    constant_values=0,
+                )
+                # macro predictions
+                micro_predictions_pre_active_elms = \
+                    micro_predictions[:active_elm_lower_buffer]
+                macro_predictions_pre_active_elms = np.array(
+                    [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
+                )
+                micro_predictions_active_elms = \
+                    micro_predictions[active_elm_lower_buffer:active_elm_upper_buffer]
+                macro_predictions_active_elms = np.array(
+                    [np.any(micro_predictions_active_elms > threshold).astype(int)]
+                )
+                macro_labels = np.array([0, 1], dtype="int")
+                macro_predictions = np.concatenate(
+                    [
+                        macro_predictions_pre_active_elms,
+                        macro_predictions_active_elms,
+                    ]
+                )
+                elm_predictions[elm_index] = {
+                    "signals": elm_signals,
+                    "labels": elm_labels,
+                    "micro_predictions": micro_predictions,
+                    "macro_labels": macro_labels,
+                    "macro_predictions": macro_predictions,
+                }
 
         self.elm_predictions = elm_predictions
 
@@ -217,7 +218,7 @@ class Analysis(object):
         f1_scores = self.training_output['f1_scores']
         epochs = np.arange(f1_scores.size) + 1
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
-        plt.suptitle(f"{self.trial_dir_short}")
+        plt.suptitle(f"{self.run_dir_short}")
         plt.sca(axes.flat[0])
         plt.plot(epochs, train_loss, label='Training loss')
         plt.plot(epochs, valid_loss, label='Valid. loss')
@@ -248,13 +249,13 @@ class Analysis(object):
         predictions = []
         targets = []
         print('Running inference on valid indices')
-        for images, labels in tqdm(self.valid_indices_data_loader):
-            images = images.to(self.device)
-            with torch.no_grad():
+        with torch.no_grad():
+            for images, labels in tqdm(self.valid_indices_data_loader):
+                images = images.to(self.device)
                 preds = self.model(images)
-            preds = preds.view(-1)
-            predictions.append(torch.sigmoid(preds).cpu().numpy())
-            targets.append(labels.cpu().numpy())
+                preds = preds.view(-1)
+                predictions.append(torch.sigmoid(preds).cpu().numpy())
+                targets.append(labels.cpu().numpy())
         predictions = np.concatenate(predictions)
         targets = np.concatenate(targets)
         # display ROC and F1-score
@@ -273,7 +274,7 @@ class Analysis(object):
         fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
         # plot ROC
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle(f"{self.trial_dir_short} | Test data (valid indices)")
+        plt.suptitle(f"{self.run_dir_short} | Test data (valid indices)")
         plt.sca(axes.flat[0])
         plt.plot(fpr, tpr)
         plt.xlabel('False positive rate')
@@ -322,7 +323,7 @@ class Analysis(object):
         for i_elm, elm_index in enumerate(elm_indices):
             if i_elm % 6 == 0:
                 _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
-                plt.suptitle(f"{self.trial_dir_short} | Test data (full)")
+                plt.suptitle(f"{self.run_dir_short} | Test data (full)")
             elm_data = self.elm_predictions[elm_index]
             signals = elm_data["signals"]
             labels = elm_data["labels"]
@@ -360,7 +361,7 @@ class Analysis(object):
         if self.elm_predictions is None:
             self._calc_inference_full(threshold=threshold)
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle(f"{self.trial_dir_short} | Test data (full)")
+        plt.suptitle(f"{self.run_dir_short} | Test data (full)")
         for mode in ['micro', 'macro']:
             # gather micro/macro results
             targets = []

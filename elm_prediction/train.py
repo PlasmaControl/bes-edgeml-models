@@ -17,9 +17,7 @@ import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 
 import torch
-import torch.nn as nn
-import torch.distributed
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DistributedDataParallel as DDP
 import torchinfo
 
 try:
@@ -149,40 +147,40 @@ def train_loop(
 
     # distribute model for data-parallel training
     if _rank is not None:
-        model = DistributedDataParallel(model, device_ids=[_rank])
+        model = DDP(model, device_ids=[_rank])
 
     LOGGER.info(f"------>  Model: {args.model_name}       ")
 
     # display model details
-    if args.model_name == "rnn":
-        input_size = (args.batch_size, args.signal_window_size, 64)
-    else:
-        if args.data_preproc == "interpolate":
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                args.interpolate_size,
-                args.interpolate_size,
-            )
-        elif args.data_preproc == "gradient":
-            input_size = (
-                args.batch_size,
-                6,
-                args.signal_window_size,
-                8,
-                8,
-            )
-        elif args.data_preproc == "rnn":
-            input_size = (args.batch_size, args.signal_window_size, 64)
-        else:
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                8,
-                8,
-            )
+    # if args.model_name == "rnn":
+    #     input_size = (args.batch_size, args.signal_window_size, 64)
+    # else:
+    #     if args.data_preproc == "interpolate":
+    #         input_size = (
+    #             args.batch_size,
+    #             1,
+    #             args.signal_window_size,
+    #             args.interpolate_size,
+    #             args.interpolate_size,
+    #         )
+    #     elif args.data_preproc == "gradient":
+    #         input_size = (
+    #             args.batch_size,
+    #             6,
+    #             args.signal_window_size,
+    #             8,
+    #             8,
+    #         )
+    #     elif args.data_preproc == "rnn":
+    #         input_size = (args.batch_size, args.signal_window_size, 64)
+    #     else:
+    input_size = (
+        args.batch_size,
+        1,
+        args.signal_window_size,
+        8,
+        8,
+    )
     x = torch.rand(*input_size)
     x = x.to(device)
     if _rank is None:
@@ -199,9 +197,22 @@ def train_loop(
     LOGGER.info(f"  Model contains {n_params} trainable parameters!")
 
     # optimizer
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-    )
+    if args.optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=args.lr, 
+            weight_decay=args.weight_decay,
+        )
+    elif args.optimizer.lower() == 'sgd':
+        optimizer = torch.optim.SGD(
+            model.parameters(), 
+            lr=args.lr, 
+            weight_decay=args.weight_decay,
+            momentum=args.momentum,
+            dampening=args.dampening,
+        )
+    else:
+        raise ValueError
 
     # get the lr scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -213,7 +224,7 @@ def train_loop(
     )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
@@ -335,8 +346,9 @@ def train_loop(
         LOGGER.removeHandler(handler)
 
     if args.do_analysis:
-        run = Analysis(args_file)
-        run.plot_all()
+        run = Analysis(output_dir)
+        run.plot_training_epochs()
+        run.plot_valid_indices_analysis()
 
     return outputs
 
@@ -346,13 +358,15 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'max_elms':10,
-            'n_epochs':1,
+            'n_epochs':3,
             'fraction_valid':0.2,
             'fraction_test':0.2,
             'signal_window_size':128,
             'label_look_ahead':200,
             'valid_indices_method':0,
-            'do_analysis':False,
+            'do_analysis':True,
+            'optimizer':'sgd',
+            'momentum':0.1,
         }
     else:
         # use command line arguments in `sys.argv`
