@@ -42,9 +42,12 @@ class Analysis(object):
         save: Boolean = True,
     ):
         self.run_dir = Path(run_dir).resolve()
-        self.run_dir_short = self.run_dir.relative_to(self.run_dir.parent.parent)
+        if self.run_dir.is_file():
+            self.run_dir = self.run_dir.parent
+        assert self.run_dir.exists() and self.run_dir.is_dir()
         self.args_file = self.run_dir / 'args.pkl'
         assert self.args_file.exists()
+        self.run_dir_short = self.run_dir.relative_to(self.run_dir.parent.parent)
         self.device = device
         self.save = save
 
