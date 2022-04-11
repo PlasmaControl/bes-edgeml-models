@@ -9,7 +9,7 @@ import time
 import math
 import argparse
 import importlib
-from typing import Union, Tuple, Sequence
+from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
 
 import torch
@@ -101,7 +101,7 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def create_data_class(data_name: str) -> object:
+def create_data_class(data_name: str) -> Callable:
     """
     Helper function to import the data preprocessing module as per the command
     line argument `--data_preproc`.
@@ -167,7 +167,7 @@ def create_output_paths(
     return output
 
 
-def get_params(model: object) -> int:
+def get_params(model: torch.nn.Module) -> int:
     """Helper function to find the total number of trainable parameters in the
     PyTorch model.
 
@@ -180,7 +180,7 @@ def get_params(model: object) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
+def model_details(model: torch.nn.Module, x: torch.Tensor, input_size: tuple) -> None:
     """
     Print Keras like model details on the screen before training.
 
