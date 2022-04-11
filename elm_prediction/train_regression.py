@@ -1,5 +1,5 @@
 """
-Main module for training ELM prediction models
+Main module for training regression based ELM prediction models
 
 To train an ELM prediction model, call `train_loop()` using
 a recipe similar to `if __name__=="main"` block.
