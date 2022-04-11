@@ -292,6 +292,7 @@ def plot_inference_on_elm_events(
 
         plt.legend(fontsize=9)
         plt.title(f'ELM index {elm_index}', fontsize=12)
+        fig.suptitle(f'Inference for model {args.model_name}', fontsize=14)
         if i_elm % 12 == 11 or i_elm == len(elm_ids)-1:
             plt.tight_layout()
             if save:
@@ -650,6 +651,7 @@ def plot_regression_error(
 
             plt.legend(fontsize=9)
             plt.title(f'ELM index {elm_index}', fontsize=12)
+        fig.suptitle(f'Regression Error for model {args.model_name}', fontsize=14)
         plt.tight_layout()
         if save:
             filepath = plot_dir / f'regression_error_plot{"_log" if args.regression == "log" else ""}_pg{i_page:02d}.pdf'

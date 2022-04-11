@@ -242,7 +242,7 @@ def train_loop(input_args: Union[list, dict, None] = None,
         outputs['r2_scores'] = r2_scores
         # outputs['f1_scores'] = f1_scores
 
-        with open(output_file.as_posix(), "wb") as f:
+        with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)
 
         # track best f1 score and save model
