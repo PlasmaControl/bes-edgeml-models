@@ -121,7 +121,7 @@ class BaseData:
                 save_filename='test',
             )
 
-            if self.args.balance_data:
+            if self.args.balance_data and (self.args.data_preproc != 'regression'):
                 train_data, validation_data, test_data = self._balance_data(train_data,
                                                                             validation_data,
                                                                             test_data)

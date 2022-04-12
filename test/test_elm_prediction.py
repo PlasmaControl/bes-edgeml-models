@@ -4,6 +4,7 @@ import shutil
 
 from elm_prediction.train import train_loop
 from elm_prediction.analyze import do_analysis, Analysis
+from elm_prediction.train_regression import train_loop as train_regression_loop
 
 
 RUN_DIR = 'run_dir'
@@ -105,6 +106,22 @@ def test_multifeatures_v2_with_dwt():
     input_args['subwindow_size'] = 32
     input_args['dwt_num_filters'] = 8
     train_loop(input_args)
+
+def test_multifeatures_v2_regression():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_regression'
+    input_args['signal_window_size'] = 128
+    input_args['regression'] = True
+    train_regression_loop(input_args)
+
+def test_multifeatures_v2_regression_with_log():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_regression'
+    input_args['signal_window_size'] = 128
+    input_args['regression'] = 'log'
+    train_regression_loop(input_args)
 
 
 if __name__=="__main__":

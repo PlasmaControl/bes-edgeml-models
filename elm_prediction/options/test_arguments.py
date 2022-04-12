@@ -9,6 +9,7 @@ class TestArguments(BaseArguments):
     def create_parser(self, parser):
         parser = BaseArguments.create_parser(self, parser)
         # test parameters
+
         parser.add_argument(
             "--threshold",
             type=float,

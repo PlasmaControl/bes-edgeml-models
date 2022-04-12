@@ -236,6 +236,7 @@ def train_loop(
 
     outputs = {}
 
+    training_start_time = time.time()
     # iterate through all the epochs
     for epoch in range(args.n_epochs):
         start_time = time.time()
@@ -328,6 +329,9 @@ def train_loop(
     for handler in LOGGER.handlers[:]:
         handler.close()
         LOGGER.removeHandler(handler)
+
+    total_elapsed = time.time() - training_start_time
+    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
 
     return outputs
 

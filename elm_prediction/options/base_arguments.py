@@ -4,8 +4,8 @@ from typing import Union
 
 try:
     from .. import sample_labeled_elm_data_file
-except ImportError:
-    from elm_prediction import sample_labeled_elm_data_file
+except (ImportError, ValueError):
+    from ...elm_prediction import sample_labeled_elm_data_file
 
 
 class BaseArguments:
@@ -339,6 +339,19 @@ class BaseArguments:
             default=-1,
             help="Wavelet decomposition level: int >=1 (-1 (default) = max dwt level)",
         )
+        parser.add_argument(
+                "--export_onnx",
+                action='store_true',
+                default=False,
+                help="Export model to ONNX format."
+        )
+        parser.add_argument("--regression",
+                            nargs='?',
+                            const=True,
+                            default=False,
+                            help="Flag if testing regression model. Use arg 'log' if training args with log of time to "
+                                 "ELM as target.",
+                            choices=['log'])
 
         self.initialized = True
 
