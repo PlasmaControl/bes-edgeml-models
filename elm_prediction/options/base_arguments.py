@@ -226,6 +226,12 @@ class BaseArguments:
             help="data parallel distributed training: -1 all GPUs|1 single GPU (default)|N gpus",
         )
         parser.add_argument(
+            "--threshold",
+            type=float,
+            default=0.5,
+            help="threshold to create binary predictions from probability.",
+        )
+        parser.add_argument(
             "--fraction_valid",
             type=float,
             default=0.1,

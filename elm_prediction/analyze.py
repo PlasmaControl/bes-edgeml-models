@@ -7,15 +7,10 @@ the ELM events with the ground truth and model predictions as well as the confus
 matrices for both macro and micro predictions. Using the  command line argument 
 `--dry_run` will just show the plots, it will not save them.
 """
-import os
 import pickle
-from typing import Tuple, List, Union, Any
-import argparse
+from typing import Union
 import shutil
-import subprocess
-import logging
 from pathlib import Path
-from xmlrpc.client import Boolean
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,11 +23,9 @@ from sklearn import metrics
 from tqdm import tqdm
 
 try:
-    from .data_preprocessing import *
     from .src import utils, dataset
     from .options.test_arguments import TestArguments
 except ImportError:
-    from elm_prediction.data_preprocessing import *
     from elm_prediction.src import utils, dataset
     from elm_prediction.options.test_arguments import TestArguments
 
@@ -42,7 +35,7 @@ class Analysis(object):
         self,
         run_dir: Union[Path, str, None] = None,
         device: Union[str, None] = None,
-        save: Boolean = True,
+        save: bool = True,
     ):
         self.run_dir = Path(run_dir).resolve()
         if self.run_dir.is_file():
@@ -56,13 +49,10 @@ class Analysis(object):
 
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
-            # self.args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
 
         if self.device is None:
             self.device = self.args.device
-        # if self.device.startswith('cuda'):
-        #     self.device = 'cuda'
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.args.device = self.device
@@ -220,9 +210,8 @@ class Analysis(object):
             self._load_training_output()
         train_loss = self.training_output['train_loss']
         valid_loss = self.training_output['valid_loss']
-        roc_scores = self.training_output['roc_scores']
-        f1_scores = self.training_output['f1_scores']
-        epochs = np.arange(f1_scores.size) + 1
+        scores = self.training_output['scores']
+        epochs = np.arange(scores.size) + 1
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
         plt.suptitle(f"{self.run_dir_short}")
         plt.sca(axes.flat[0])
@@ -231,8 +220,10 @@ class Analysis(object):
         plt.title('Training/validation loss')
         plt.ylabel('Loss')
         plt.sca(axes.flat[1])
-        plt.plot(epochs, roc_scores, label='ROC-AUC')
-        plt.plot(epochs, f1_scores, label=f'F1 (thr={self.args.threshold:.2f})')
+        if not self.args.regression:
+            roc_scores = self.training_output['roc_scores']
+            plt.plot(epochs, roc_scores, label='ROC-AUC')
+        plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
         plt.title('Validation scores')
         plt.ylabel('Score')
         for axis in axes.flat:

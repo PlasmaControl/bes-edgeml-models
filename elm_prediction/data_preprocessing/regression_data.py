@@ -5,12 +5,11 @@ changes target variable form class based to time based.
 from typing import Tuple
 
 import numpy as np
-import h5py
 
 try:
     from .unprocessed_data import UnprocessedData
 except ImportError:
-    from unprocessed_data import UnprocessedData
+    from elm_prediction.data_preprocessing.unprocessed_data import UnprocessedData
 
 
 class RegressionData(UnprocessedData):

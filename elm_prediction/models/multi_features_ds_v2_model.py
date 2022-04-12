@@ -1,14 +1,13 @@
 import argparse
-from typing import Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
-from elm_prediction.src import torch_dct as dct
 
 import pywt
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
 
+from elm_prediction.src import torch_dct as dct
 
 class _FeatureBase(nn.Module):
     def __init__(

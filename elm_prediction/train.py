@@ -14,7 +14,7 @@ from typing import Union
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import roc_auc_score, f1_score
+from sklearn.metrics import roc_auc_score, f1_score, r2_score
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -68,6 +68,11 @@ def train_loop(
     args.output_dir = output_dir.as_posix()
     shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
     output_dir.mkdir(parents=True)
+
+    if args.regression:
+        args.data_preproc = 'regression'
+        args.label_look_ahead = 0
+        args.truncate_buffer = 0
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
@@ -152,28 +157,6 @@ def train_loop(
     LOGGER.info(f"------>  Model: {args.model_name}       ")
 
     # display model details
-    # if args.model_name == "rnn":
-    #     input_size = (args.batch_size, args.signal_window_size, 64)
-    # else:
-    #     if args.data_preproc == "interpolate":
-    #         input_size = (
-    #             args.batch_size,
-    #             1,
-    #             args.signal_window_size,
-    #             args.interpolate_size,
-    #             args.interpolate_size,
-    #         )
-    #     elif args.data_preproc == "gradient":
-    #         input_size = (
-    #             args.batch_size,
-    #             6,
-    #             args.signal_window_size,
-    #             8,
-    #             8,
-    #         )
-    #     elif args.data_preproc == "rnn":
-    #         input_size = (args.batch_size, args.signal_window_size, 64)
-    #     else:
     input_size = (
         args.batch_size,
         1,
@@ -224,10 +207,13 @@ def train_loop(
     )
 
     # loss function
-    criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
+    if args.regression:
+        criterion = torch.nn.MSELoss(reduction="none")
+    else:
+        criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
-    best_score = 0
+    best_score = -np.inf
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -243,8 +229,11 @@ def train_loop(
     # containers to hold train and validation losses
     train_loss = np.empty(0)
     valid_loss = np.empty(0)
-    roc_scores = np.empty(0)
-    f1_scores = np.empty(0)
+    scores = np.empty(0)
+    if args.regression:
+        pass
+    else:
+        roc_scores = np.empty(0)
 
     outputs = {}
 
@@ -260,6 +249,8 @@ def train_loop(
             epoch, 
             print_every=args.train_print_every,
         )
+        if args.regression:
+            avg_loss = np.sqrt(avg_loss)
         train_loss = np.append(train_loss, avg_loss)
 
         # evaluate validation data
@@ -267,39 +258,47 @@ def train_loop(
             valid_loader, 
             print_every=args.valid_print_every
         )
+        if args.regression:
+            avg_val_loss = np.sqrt(avg_val_loss)
         valid_loss = np.append(valid_loss, avg_val_loss)
 
         # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
-        # ROC scoring
-        roc_score = roc_auc_score(valid_labels, preds)
-        roc_scores = np.append(roc_scores, roc_score)
+        if args.regression:
+            score = r2_score(valid_labels, preds)
+            scores = np.append(scores, score)
+        else:
+            # ROC scoring
+            roc_score = roc_auc_score(valid_labels, preds)
+            roc_scores = np.append(roc_scores, roc_score)
 
-        # F1 scoring
-        # hard coding the threshold value for F1 score, smaller value will reduce
-        # the number of false negatives while larger value reduces the number of
-        # false positives
-        thresh = 0.35
-        f1 = f1_score(valid_labels, (preds > thresh).astype(int))
-        f1_scores = np.append(f1_scores, f1)
+            # F1 scoring
+            score = f1_score(valid_labels, (preds > args.threshold).astype(int))
+            scores = np.append(scores, score)
+
         elapsed = time.time() - start_time
 
-        LOGGER.info(f"Epoch: {epoch+1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
-        LOGGER.info(f"Epoch: {epoch+1:03d} \tROC-AUC: {roc_score:.3f} \tF1: {f1:.3f} \ttime elapsed: {elapsed:.1f} s")
+        LOGGER.info(
+            f"Epoch: {epoch+1:03d} \ttrain loss: {avg_loss:.3f} \tval. loss: {avg_val_loss:.3f} " 
+            f"\tscore: {score:.3f} \ttime elapsed: {elapsed:.1f} s"
+        )
 
         # update and save outputs
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
-        outputs['roc_scores'] = roc_scores
-        outputs['f1_scores'] = f1_scores
+        outputs['scores'] = scores
+        if args.regression:
+            pass
+        else:
+            outputs['roc_scores'] = roc_scores
 
-        with open(output_file.as_posix(), "wb") as f:
+        with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)
 
         # track best f1 score and save model
-        if f1 > best_score or epoch == 0:
-            best_score = f1
+        if score > best_score or epoch == 0:
+            best_score = score
             LOGGER.info(f"Epoch: {epoch+1:03d} \tBest Score: {best_score:.3f}")
             if not args.dry_run:
                 LOGGER.info(f"  Saving model to: {checkpoint_file.as_posix()}")
@@ -327,7 +326,7 @@ def train_loop(
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
-            trial.report(f1, epoch)
+            trial.report(score, epoch)
             # save outputs as lists in trial user attributes
             for key, item in outputs.items():
                 trial.set_user_attr(key, item.tolist())
@@ -338,13 +337,8 @@ def train_loop(
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
-            LOGGER.info(f1_scores)
+            LOGGER.info(scores)
             LOGGER.info(trial.user_attrs['f1_scores'])
-
-    # shut down logger handlers
-    for handler in LOGGER.handlers[:]:
-        handler.close()
-        LOGGER.removeHandler(handler)
 
     if args.do_analysis:
         run = Analysis(output_dir)
@@ -354,6 +348,11 @@ def train_loop(
     total_elapsed = time.time() - training_start_time
     LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
 
+    # shut down logger handlers
+    for handler in LOGGER.handlers[:]:
+        handler.close()
+        LOGGER.removeHandler(handler)
+
     return outputs
 
 
@@ -362,18 +361,15 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'max_elms':10,
-            'n_epochs':3,
+            'n_epochs':2,
             'fraction_valid':0.2,
             'fraction_test':0.2,
             'signal_window_size':128,
             'label_look_ahead':200,
-            'valid_indices_method':0,
-            'do_analysis':True,
-            'optimizer':'sgd',
-            'momentum':0.1,
+            # 'optimizer':'sgd',
+            # 'regression':'log',
         }
     else:
         # use command line arguments in `sys.argv`
         input_args = None
     train_loop(input_args=input_args)
-    

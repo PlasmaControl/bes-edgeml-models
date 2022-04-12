@@ -57,10 +57,10 @@ class UnprocessedData(BaseData):
         # iterate through all the ELM indices
         with h5py.File(self.datafile, 'r') as hf:
             if save_filename:
-                if self.args.regression:
-                    save_filename += '_regression'
-                    if self.args.regression == 'log':
-                        save_filename += '_log'
+                # if self.args.regression:
+                #     save_filename += '_regression'
+                #     if self.args.regression == 'log':
+                #         save_filename += '_log'
                 plt.ioff()
                 _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
                 output_dir = Path(self.args.output_dir)
