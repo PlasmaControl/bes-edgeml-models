@@ -2,7 +2,7 @@
 Main module for training ELM prediction models
 
 To train an ELM prediction model, call `train_loop()` using
-a recipe similar to `if __name__=="main"` block.
+a recipe similar to `if __name__=="__main__"` block.
 """
 
 import sys
