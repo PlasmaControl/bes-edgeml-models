@@ -7,11 +7,14 @@ the ELM events with the ground truth and model predictions as well as the confus
 matrices for both macro and micro predictions. Using the  command line argument 
 `--dry_run` will just show the plots, it will not save them.
 """
+import os
+import pickle
+from typing import Tuple, List, Union, Any
+import argparse
 import shutil
 import subprocess
-import pickle
+import logging
 from pathlib import Path
-from typing import Union
 from xmlrpc.client import Boolean
 
 import matplotlib.pyplot as plt
@@ -114,7 +117,7 @@ class Analysis(object):
             self._load_test_data()
         print('Creating data loader for valid indices')
         test_dataset = dataset.ELMDataset(
-            self.args, 
+            self.args,
             self.test_data['signals'],
             self.test_data['labels'],
             self.test_data['sample_indices'],
@@ -244,7 +247,7 @@ class Analysis(object):
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
     def plot_valid_indices_analysis(
-        self, 
+        self,
         threshold: Union[float, None] = None,
     ):
         if self.valid_indices_data_loader is None:
@@ -302,8 +305,8 @@ class Analysis(object):
         # plot confusion matrix
         plt.sca(axes.flat[2])
         sns.heatmap(
-            cm, 
-            annot=True, 
+            cm,
+            annot=True,
             norm=LogNorm(),
             xticklabels=['No ELM', 'ELM'],
             yticklabels=['No ELM', 'ELM'],
@@ -316,7 +319,7 @@ class Analysis(object):
             filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
             print(f'Saving matrix figure: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-    
+
     def plot_full_inference(self):
         if self.elm_predictions is None:
             self._calc_inference_full()
@@ -408,8 +411,8 @@ class Analysis(object):
             axis = axes.flat[2] if mode == 'micro' else axes.flat[3]
             plt.sca(axis)
             sns.heatmap(
-                cm, 
-                annot=True, 
+                cm,
+                annot=True,
                 norm=LogNorm() if mode=='micro' else None,
                 xticklabels=['No ELM', 'ELM'],
                 yticklabels=['No ELM', 'ELM'],

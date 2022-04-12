@@ -248,6 +248,7 @@ def train_loop(
 
     outputs = {}
 
+    training_start_time = time.time()
     # iterate through all the epochs
     LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
     for epoch in range(args.n_epochs):
@@ -349,6 +350,9 @@ def train_loop(
         run = Analysis(output_dir)
         run.plot_training_epochs()
         run.plot_valid_indices_analysis()
+        
+    total_elapsed = time.time() - training_start_time
+    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
 
     return outputs
 
