@@ -5,7 +5,6 @@ To train an ELM prediction model, call `train_loop()` using
 a recipe similar to `if __name__=="main"` block.
 """
 
-from codecs import ignore_errors
 import sys
 import time
 import pickle
@@ -13,15 +12,12 @@ import shutil
 import io
 from typing import Union
 from pathlib import Path
-from joblib import Logger
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 
 import torch
-import torch.nn as nn
-import torch.distributed
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DistributedDataParallel as DDP
 import torchinfo
 
 try:
@@ -32,9 +28,11 @@ except ImportError:
 try:
     from .options.train_arguments import TrainArguments
     from .src import utils, trainer, dataset
+    from .analyze import Analysis
 except ImportError:
     from elm_prediction.options.train_arguments import TrainArguments
     from elm_prediction.src import utils, trainer, dataset
+    from elm_prediction.analyze import Analysis
 
 
 def train_loop(
@@ -66,7 +64,8 @@ def train_loop(
     args = args_obj.parse(arg_list=input_args)
 
     # output directory and files
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
+    args.output_dir = output_dir.as_posix()
     shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
     output_dir.mkdir(parents=True)
 
@@ -148,40 +147,40 @@ def train_loop(
 
     # distribute model for data-parallel training
     if _rank is not None:
-        model = DistributedDataParallel(model, device_ids=[_rank])
+        model = DDP(model, device_ids=[_rank])
 
     LOGGER.info(f"------>  Model: {args.model_name}       ")
 
     # display model details
-    if args.model_name == "rnn":
-        input_size = (args.batch_size, args.signal_window_size, 64)
-    else:
-        if args.data_preproc == "interpolate":
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                args.interpolate_size,
-                args.interpolate_size,
-            )
-        elif args.data_preproc == "gradient":
-            input_size = (
-                args.batch_size,
-                6,
-                args.signal_window_size,
-                8,
-                8,
-            )
-        elif args.data_preproc == "rnn":
-            input_size = (args.batch_size, args.signal_window_size, 64)
-        else:
-            input_size = (
-                args.batch_size,
-                1,
-                args.signal_window_size,
-                8,
-                8,
-            )
+    # if args.model_name == "rnn":
+    #     input_size = (args.batch_size, args.signal_window_size, 64)
+    # else:
+    #     if args.data_preproc == "interpolate":
+    #         input_size = (
+    #             args.batch_size,
+    #             1,
+    #             args.signal_window_size,
+    #             args.interpolate_size,
+    #             args.interpolate_size,
+    #         )
+    #     elif args.data_preproc == "gradient":
+    #         input_size = (
+    #             args.batch_size,
+    #             6,
+    #             args.signal_window_size,
+    #             8,
+    #             8,
+    #         )
+    #     elif args.data_preproc == "rnn":
+    #         input_size = (args.batch_size, args.signal_window_size, 64)
+    #     else:
+    input_size = (
+        args.batch_size,
+        1,
+        args.signal_window_size,
+        8,
+        8,
+    )
     x = torch.rand(*input_size)
     x = x.to(device)
     if _rank is None:
@@ -198,9 +197,22 @@ def train_loop(
     LOGGER.info(f"  Model contains {n_params} trainable parameters!")
 
     # optimizer
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-    )
+    if args.optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=args.lr, 
+            weight_decay=args.weight_decay,
+        )
+    elif args.optimizer.lower() == 'sgd':
+        optimizer = torch.optim.SGD(
+            model.parameters(), 
+            lr=args.lr, 
+            weight_decay=args.weight_decay,
+            momentum=args.momentum,
+            dampening=args.dampening,
+        )
+    else:
+        raise ValueError
 
     # get the lr scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -212,7 +224,7 @@ def train_loop(
     )
 
     # loss function
-    criterion = nn.BCEWithLogitsLoss(reduction="none")
+    criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = 0
@@ -238,6 +250,7 @@ def train_loop(
 
     training_start_time = time.time()
     # iterate through all the epochs
+    LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
     for epoch in range(args.n_epochs):
         start_time = time.time()
 
@@ -325,11 +338,19 @@ def train_loop(
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
+            LOGGER.info(f1_scores)
+            LOGGER.info(trial.user_attrs['f1_scores'])
+
     # shut down logger handlers
     for handler in LOGGER.handlers[:]:
         handler.close()
         LOGGER.removeHandler(handler)
 
+    if args.do_analysis:
+        run = Analysis(output_dir)
+        run.plot_training_epochs()
+        run.plot_valid_indices_analysis()
+        
     total_elapsed = time.time() - training_start_time
     LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
 
@@ -341,12 +362,15 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'max_elms':10,
-            'n_epochs':2,
-            'fraction_valid':0.4,
-            'fraction_test':0.4,
+            'n_epochs':3,
+            'fraction_valid':0.2,
+            'fraction_test':0.2,
             'signal_window_size':128,
-            'label_look_ahead':300,
+            'label_look_ahead':200,
             'valid_indices_method':0,
+            'do_analysis':True,
+            'optimizer':'sgd',
+            'momentum':0.1,
         }
     else:
         # use command line arguments in `sys.argv`

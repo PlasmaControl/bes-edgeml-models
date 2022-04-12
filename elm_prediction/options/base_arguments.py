@@ -17,6 +17,7 @@ class BaseArguments:
     def __init__(self):
         """Reset the class; used to further initialize the class."""
         self.initialized = False
+        self.parser = None
 
     def create_parser(self, parser: argparse.ArgumentParser):
         """Define the options common for training and testing."""
@@ -117,6 +118,18 @@ class BaseArguments:
             help="model checkpoint file, rel. to `run_dir`",
         )
         parser.add_argument(
+            "--do_analysis",
+            action="store_true",
+            default=False,
+            help="if true, run analysis after training.",
+        )
+        parser.add_argument(
+            "--oversample_active_elm",
+            action="store_true",
+            default=False,
+            help="if true, oversample active ELM to ensure >= 20% active.",
+        )
+        parser.add_argument(
             "--dry_run",
             action="store_true",
             default=False,
@@ -145,21 +158,22 @@ class BaseArguments:
             help="if true, use automatic labels from the HDF5 file instead of manual labels..",
         )
         parser.add_argument(
-                "--balance_data",
-                nargs='?',
-                const='clip_outside',
-                default=False,
-                help="Balance pre-ELM and ELM classes. Must be used with truncate_data."
-                     "clip_outside to remove leading or trailing indices."
-                     "clip_inside to remove interior indices between ELM and pre-ELM."
-                     "clip_even to resize larger class evenly to match smaller class.",
-                choices=['clip_outside', 'clip_inside', 'clip_even']
-            )
+            "--balance_data",
+            nargs='?',
+            const='clip_outside',
+            default=False,
+            help="Balance pre-ELM and ELM classes. Must be used with truncate_data."
+            "clip_outside to remove leading or trailing indices."
+            "clip_inside to remove interior indices between ELM and pre-ELM."
+            "clip_even to resize larger class evenly to match smaller class.",
+            choices=['clip_outside', 'clip_inside', 'clip_even']
+        )
         parser.add_argument("--use_all_data",
-                action="store_true",
-                default=False,
-                help="if true, don't split the data into training, testing and validation "
-                     "sets.", )
+            action="store_true",
+            default=False,
+            help="if true, don't split the data into training, testing and validation "
+            "sets.",
+        )
         parser.add_argument(
             "--add_tensorboard",
             action="store_true",
@@ -178,6 +192,24 @@ class BaseArguments:
             default="",
             help="suffix in the file name. It can be passed when args like interpolate, "
             "etc. are passed. Must be passed with a leading underscore '_'.",
+        )
+        parser.add_argument(
+            "--optimizer",
+            type=str,
+            default="adam",
+            help="optimizer: `adam` | `sgd`",
+        )
+        parser.add_argument(
+            "--momentum",
+            type=float,
+            default=0.0,
+            help="momentum for SGD",
+        )
+        parser.add_argument(
+            "--dampening",
+            type=float,
+            default=0.0,
+            help="dampening for SGD",
         )
         parser.add_argument(
             "--num_workers",
@@ -355,6 +387,8 @@ class BaseArguments:
 
         self.initialized = True
 
+        self.parser = parser
+
         return parser
 
     def _gather_args(
@@ -365,16 +399,17 @@ class BaseArguments:
         """Initialize the parser."""
         if not self.initialized:
             parser = argparse.ArgumentParser(
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter
+                formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                allow_abbrev=False,
             )
-            parser = self.create_parser(parser)
+            self.create_parser(parser)
 
-        # get the base options
-        self.parser = parser
-        args = parser.parse_args(
+        args, unknown_args = self.parser.parse_known_args(
             args=arg_list,
             namespace=existing_namespace,
             )
+        if unknown_args:
+            print(f"  Warning, unknown args: {unknown_args}")
 
         # return args, parser
         return args

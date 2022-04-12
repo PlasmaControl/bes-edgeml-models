@@ -3,6 +3,8 @@
 
 import re
 import os
+import shutil
+import subprocess
 import pickle
 import sys
 import logging
@@ -10,7 +12,7 @@ import time
 import math
 import argparse
 import importlib
-from typing import Union, Tuple
+from typing import Union, Tuple, Sequence
 from pathlib import Path
 from collections import OrderedDict
 from traceback import print_tb
@@ -252,7 +254,7 @@ def create_output_paths(
         Tuple containing output paths.
     """
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
 
     test_data_file = output_dir / args.test_data_file
     checkpoint_file = output_dir / args.checkpoint_file
@@ -313,6 +315,36 @@ def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
     print(f'Batched input size: {x.shape}')
     print(f"Batched output size: {model(x).shape}")
     print(f"Model contains {get_params(model)} trainable parameters!")
+
+
+def merge_pdfs(
+    inputs: Sequence,
+    output: Union[str,Path],
+    delete_inputs: bool = False,
+):
+    inputs = [Path(input) for input in inputs]
+    output = Path(output)
+    gs_cmd = shutil.which('gs')
+    if gs_cmd is None:
+        return
+    print(f"Merging PDFs into file: {output.as_posix()}")
+    cmd = [
+        gs_cmd,
+        '-q',
+        '-dBATCH',
+        '-dNOPAUSE',
+        '-sDEVICE=pdfwrite',
+        '-dPDFSETTINGS=/prepress',
+        '-dCompatibilityLevel=1.4',
+    ]
+    cmd.append(f"-sOutputFile={output.as_posix()}")
+    for pdf_file in inputs:
+        cmd.append(f"{pdf_file.as_posix()}")
+    result = subprocess.run(cmd, check=True)
+    assert result.returncode == 0 and output.exists()
+    if delete_inputs is True:
+        for pdf_file in inputs:
+            pdf_file.unlink()
 
 
 def create_model_class(
