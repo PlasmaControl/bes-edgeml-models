@@ -11,12 +11,6 @@ class TestArguments(BaseArguments):
         # test parameters
 
         parser.add_argument(
-            "--threshold",
-            type=float,
-            default=0.5,
-            help="threshold to create binary predictions from probability.",
-        )
-        parser.add_argument(
             "--test_data_info",
             action="store_false",
             default=False,

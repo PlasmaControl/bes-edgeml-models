@@ -259,12 +259,12 @@ def create_output_paths(
     test_data_file = output_dir / args.test_data_file
     checkpoint_file = output_dir / args.checkpoint_file
 
-    if args.regression:
-        addon = "_regression"
-        if args.regression == "log":
-            addon += "_log"
-        checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + addon + checkpoint_file.suffix)
-        test_data_file = test_data_file.parent / (test_data_file.stem + addon + test_data_file.suffix)
+    # if args.regression:
+    #     addon = "_regression"
+    #     if args.regression == "log":
+    #         addon += "_log"
+    #     checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + addon + checkpoint_file.suffix)
+    #     test_data_file = test_data_file.parent / (test_data_file.stem + addon + test_data_file.suffix)
 
     if infer_mode:
         clf_report_dir = output_dir / "classification_reports"

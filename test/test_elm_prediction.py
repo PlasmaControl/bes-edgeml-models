@@ -124,6 +124,7 @@ def test_multifeatures_v2_regression():
     input_args['model_name'] = 'multi_features_ds_v2'
     input_args['output_dir'] = RUN_DIR + '/mf_v2_regression'
     input_args['regression'] = True
+    input_args['data_preproc'] = 'regression'
     train_regression_loop(input_args)
 
 def test_multifeatures_v2_regression_with_log():
@@ -131,6 +132,7 @@ def test_multifeatures_v2_regression_with_log():
     input_args['model_name'] = 'multi_features_ds_v2'
     input_args['output_dir'] = RUN_DIR + '/mf_v2_regression_with_log'
     input_args['regression'] = 'log'
+    input_args['data_preproc'] = 'regression'
     train_regression_loop(input_args)
 
 
