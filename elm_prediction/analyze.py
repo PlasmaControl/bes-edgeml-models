@@ -210,9 +210,8 @@ class Analysis(object):
             self._load_training_output()
         train_loss = self.training_output['train_loss']
         valid_loss = self.training_output['valid_loss']
-        roc_scores = self.training_output['roc_scores']
-        f1_scores = self.training_output['f1_scores']
-        epochs = np.arange(f1_scores.size) + 1
+        scores = self.training_output['scores']
+        epochs = np.arange(scores.size) + 1
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
         plt.suptitle(f"{self.run_dir_short}")
         plt.sca(axes.flat[0])
@@ -221,8 +220,10 @@ class Analysis(object):
         plt.title('Training/validation loss')
         plt.ylabel('Loss')
         plt.sca(axes.flat[1])
-        plt.plot(epochs, roc_scores, label='ROC-AUC')
-        plt.plot(epochs, f1_scores, label=f'F1 (thr={self.args.threshold:.2f})')
+        if not self.args.regression:
+            roc_scores = self.training_output['roc_scores']
+            plt.plot(epochs, roc_scores, label='ROC-AUC')
+        plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
         plt.title('Validation scores')
         plt.ylabel('Score')
         for axis in axes.flat:

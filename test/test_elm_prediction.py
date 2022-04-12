@@ -4,7 +4,6 @@ import shutil
 
 from elm_prediction.train import train_loop
 from elm_prediction.analyze import Analysis
-from elm_prediction.train_regression import train_loop as train_regression_loop
 
 
 RUN_DIR = 'run_dir'
@@ -124,16 +123,14 @@ def test_multifeatures_v2_regression():
     input_args['model_name'] = 'multi_features_ds_v2'
     input_args['output_dir'] = RUN_DIR + '/mf_v2_regression'
     input_args['regression'] = True
-    input_args['data_preproc'] = 'regression'
-    train_regression_loop(input_args)
+    train_loop(input_args)
 
 def test_multifeatures_v2_regression_with_log():
     input_args = DEFAULT_INPUT_ARGS.copy()
     input_args['model_name'] = 'multi_features_ds_v2'
     input_args['output_dir'] = RUN_DIR + '/mf_v2_regression_with_log'
     input_args['regression'] = 'log'
-    input_args['data_preproc'] = 'regression'
-    train_regression_loop(input_args)
+    train_loop(input_args)
 
 
 if __name__=="__main__":
