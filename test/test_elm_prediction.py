@@ -136,4 +136,4 @@ def test_multifeatures_v2_regression_with_log():
 
 if __name__=="__main__":
     shutil.rmtree(RUN_DIR, ignore_errors=True)
-    sys.exit( pytest.main( ['--verbose'] ) )
+    sys.exit( pytest.main( ['--verbose', '-x'] ) )

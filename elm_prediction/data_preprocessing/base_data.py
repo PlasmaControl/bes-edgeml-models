@@ -1,7 +1,6 @@
 """
 Data class to package BES data for training using PyTorch
 """
-# from multiprocessing.sharedctypes import Value
 import os
 import logging
 import argparse
