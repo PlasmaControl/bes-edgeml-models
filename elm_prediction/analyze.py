@@ -7,15 +7,10 @@ the ELM events with the ground truth and model predictions as well as the confus
 matrices for both macro and micro predictions. Using the  command line argument 
 `--dry_run` will just show the plots, it will not save them.
 """
-import os
 import pickle
-from typing import Tuple, List, Union, Any
-import argparse
+from typing import Union
 import shutil
-import subprocess
-import logging
 from pathlib import Path
-from xmlrpc.client import Boolean
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,11 +23,9 @@ from sklearn import metrics
 from tqdm import tqdm
 
 try:
-    from .data_preprocessing import *
     from .src import utils, dataset
     from .options.test_arguments import TestArguments
 except ImportError:
-    from elm_prediction.data_preprocessing import *
     from elm_prediction.src import utils, dataset
     from elm_prediction.options.test_arguments import TestArguments
 
@@ -42,7 +35,7 @@ class Analysis(object):
         self,
         run_dir: Union[Path, str, None] = None,
         device: Union[str, None] = None,
-        save: Boolean = True,
+        save: bool = True,
     ):
         self.run_dir = Path(run_dir).resolve()
         if self.run_dir.is_file():
@@ -56,13 +49,10 @@ class Analysis(object):
 
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
-            # self.args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
 
         if self.device is None:
             self.device = self.args.device
-        # if self.device.startswith('cuda'):
-        #     self.device = 'cuda'
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.args.device = self.device

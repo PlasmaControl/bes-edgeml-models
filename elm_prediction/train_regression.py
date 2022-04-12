@@ -269,13 +269,13 @@ def train_loop(input_args: Union[list, dict, None] = None,
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
+    total_elapsed = time.time() - training_start_time
+    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
+
     # shut down logger handlers
     for handler in LOGGER.handlers[:]:
         handler.close()
         LOGGER.removeHandler(handler)
-
-    total_elapsed = time.time() - training_start_time
-    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
 
     return outputs, model_data
 

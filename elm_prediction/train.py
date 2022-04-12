@@ -341,11 +341,6 @@ def train_loop(
             LOGGER.info(f1_scores)
             LOGGER.info(trial.user_attrs['f1_scores'])
 
-    # shut down logger handlers
-    for handler in LOGGER.handlers[:]:
-        handler.close()
-        LOGGER.removeHandler(handler)
-
     if args.do_analysis:
         run = Analysis(output_dir)
         run.plot_training_epochs()
@@ -353,6 +348,11 @@ def train_loop(
         
     total_elapsed = time.time() - training_start_time
     LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
+
+    # shut down logger handlers
+    for handler in LOGGER.handlers[:]:
+        handler.close()
+        LOGGER.removeHandler(handler)
 
     return outputs
 
