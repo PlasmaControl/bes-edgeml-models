@@ -51,7 +51,7 @@ class _FeatureBase(nn.Module):
         assert self.subwindow_nbins >= 1
         
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
-        self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
+        self.dropout = nn.Dropout3d(p=self.args.mf_dropout_rate)
 
         self.num_filters = None  # set in subclass
         self.conv = None  # set in subclass
@@ -64,7 +64,7 @@ class _FeatureBase(nn.Module):
         return x
 
     def _dropout_relu_flatten(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.flatten(self.relu(self.dropout3d(x)), 1)
+        return torch.flatten(self.relu(self.dropout(x)), 1)
 
 
 class CNNFeatureModel(_FeatureBase):
@@ -73,15 +73,31 @@ class CNNFeatureModel(_FeatureBase):
 
         super(CNNFeatureModel, self).__init__(*args, **kwargs)
 
+        # CNN only valid with subwindow_size == time_points == signal_window_size
         assert self.subwindow_size == self.signal_window_size
         assert self.time_slice_interval == 1
+        assert self.subwindow_nbins == 1
+        assert self.time_points == self.signal_window_size
+        assert self.maxpool_size == 1
 
-        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
-        self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
+        input_shape = (1, self.signal_window_size, 8, 8)
+
+        def test_bad_shape(shape):
+            if np.any(np.array(shape)<1):
+                print(f"Bad shape: {shape}")
+                assert False
 
         self.layer1_num_filters = self.args.cnn_layer1_num_filters
         self.layer1_kernel_time_size = 5
         self.layer1_kernel_spatial_size = 3
+        self.layer1_maxpool_time_size = 4
+        self.layer1_maxpool_spatial_size = 1
+        self.layer2_num_filters = 8
+        self.layer2_kernel_time_size = 5
+        self.layer2_kernel_spatial_size = 3
+        self.layer2_maxpool_time_size = 4
+        self.layer2_maxpool_spatial_size = 1
+
         self.layer1_conv = nn.Conv3d(
             in_channels=1,
             out_channels=self.layer1_num_filters,
@@ -94,18 +110,14 @@ class CNNFeatureModel(_FeatureBase):
             padding=((self.layer1_kernel_time_size-1)//2, 0, 0),
         )
 
-        input_shape = (1, self.signal_window_size, 8, 8)
         output_shape = [
             self.layer1_num_filters,
             input_shape[1],
             input_shape[2]-(self.layer1_kernel_spatial_size-1),
             input_shape[3]-(self.layer1_kernel_spatial_size-1),
         ]
-        for dim in output_shape:
-            assert dim >= 1
+        test_bad_shape(output_shape)
 
-        self.layer1_maxpool_time_size = 4
-        self.layer1_maxpool_spatial_size = 1
         self.layer1_maxpool = nn.MaxPool3d(
             kernel_size=(
                 self.layer1_maxpool_time_size,
@@ -120,12 +132,8 @@ class CNNFeatureModel(_FeatureBase):
             output_shape[2] // self.layer1_maxpool_spatial_size,
             output_shape[3] // self.layer1_maxpool_spatial_size,
         ]
-        for dim in output_shape:
-            assert dim >= 1
+        test_bad_shape(output_shape)
 
-        self.layer2_num_filters = 8
-        self.layer2_kernel_time_size = 5
-        self.layer2_kernel_spatial_size = 3
         self.layer2_conv = nn.Conv3d(
             in_channels=self.layer1_num_filters,
             out_channels=self.layer2_num_filters,
@@ -144,11 +152,8 @@ class CNNFeatureModel(_FeatureBase):
             output_shape[2] - (self.layer2_kernel_spatial_size-1),
             output_shape[3] - (self.layer2_kernel_spatial_size-1),
         ]
-        for dim in output_shape:
-            assert dim >= 1
+        test_bad_shape(output_shape)
 
-        self.layer2_maxpool_time_size = 4
-        self.layer2_maxpool_spatial_size = 1
         self.layer2_maxpool = nn.MaxPool3d(
             kernel_size=(
                 self.layer2_maxpool_time_size,
@@ -163,16 +168,15 @@ class CNNFeatureModel(_FeatureBase):
             output_shape[2] // self.layer2_maxpool_spatial_size,
             output_shape[3] // self.layer2_maxpool_spatial_size,
         ]
-        for dim in output_shape:
-            assert dim >= 1
+        test_bad_shape(output_shape)
 
         self.num_filters = np.prod(output_shape, dtype=int)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.relu(self.dropout3d(self.layer1_conv(x)))
+        x = self.relu(self.dropout(self.layer1_conv(x)))
         x = self.layer1_maxpool(x)
-        x = self.relu(self.dropout3d(self.layer2_conv(x)))
+        x = self.relu(self.dropout(self.layer2_conv(x)))
         x = self.layer2_maxpool(x)
         return torch.flatten(x, 1)
 
@@ -234,15 +238,15 @@ class RawFeatureModel(_FeatureBase):
             1,
         ]
         x_new = torch.empty(size=x_new_size, dtype=x.dtype, device=x.device)
-        for i_bin in torch.arange(self.subwindow_nbins):
+        for i_bin in range(self.subwindow_nbins):
             i_start = i_bin * self.subwindow_size
             i_stop = (i_bin+1) * self.subwindow_size
             x_new[:, :, i_start:i_stop, :, :] = self.conv[i_bin](
                 x[:, :, i_start:i_stop, :, :]
             )
         x = self._dropout_relu_flatten(x_new)
-        if x.isnan().any():
-            raise ValueError
+        # if x.isnan().any():
+        #     raise ValueError
         return x
 
 
@@ -576,7 +580,7 @@ class MultiFeaturesDsV2Model(nn.Module):
         )
         self.cnn_features_model = (
             CNNFeatureModel(args)
-            if args.cnn_layer1_num_filters > 0
+            if args.cnn_layer1_num_filters > 0 and args.cnn_layer2_num_filters > 0
             else None
         )
 

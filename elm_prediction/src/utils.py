@@ -21,9 +21,14 @@ import numpy as np
 import torch
 from torchinfo import summary
 
-from elm_prediction import package_dir
-from elm_prediction.src import utils, dataset
-from elm_prediction.models import multi_features_ds_v2_model
+try:
+    from .. import package_dir
+    from . import utils, dataset
+    from ..models import multi_features_ds_v2_model
+except ImportError:
+    from elm_prediction import package_dir
+    from elm_prediction.src import utils, dataset
+    from elm_prediction.models import multi_features_ds_v2_model
 
 
 class MetricMonitor:
