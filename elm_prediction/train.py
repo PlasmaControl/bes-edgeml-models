@@ -366,9 +366,12 @@ if __name__ == "__main__":
             'fraction_test':0.2,
             'signal_window_size':64,
             'label_look_ahead':200,
-            'cnn_layer1_num_filters':8,
-            'cnn_layer2_num_filters':8,
-            'raw_num_filters':0,
+            'lr':1e-5,
+            # 'cnn_layer1_num_filters':8,
+            # 'cnn_layer2_num_filters':8,
+            # 'raw_num_filters':0,
+            'regression':True,
+            'optimizer':'sgd',
         }
     else:
         # use command line arguments in `sys.argv`

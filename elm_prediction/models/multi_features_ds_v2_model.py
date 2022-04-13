@@ -241,12 +241,12 @@ class RawFeatureModel(_FeatureBase):
         for i_bin in range(self.subwindow_nbins):
             i_start = i_bin * self.subwindow_size
             i_stop = (i_bin+1) * self.subwindow_size
-            x_new[:, :, i_start:i_stop, :, :] = self.conv[i_bin](
+            if torch.any(torch.isnan(self.conv[i_bin].weight)) or torch.any(torch.isnan(self.conv[i_bin].bias)):
+                raise ValueError
+            x_new[:, :, i_bin:i_bin+1, :, :] = self.conv[i_bin](
                 x[:, :, i_start:i_stop, :, :]
             )
         x = self._dropout_relu_flatten(x_new)
-        # if x.isnan().any():
-        #     raise ValueError
         return x
 
 
@@ -624,6 +624,8 @@ class MultiFeaturesDsV2Model(nn.Module):
         ]
 
         x = torch.cat(active_features_list, dim=1)
+        if torch.any(torch.isnan(x)):
+            raise ValueError
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)
