@@ -7,7 +7,10 @@ import torch.nn as nn
 import pywt
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
 
-from elm_prediction.src import torch_dct as dct
+try:
+    from ..src import torch_dct as dct
+except ImportError:
+    import elm_prediction.src.torch_dct as dct
 
 class _FeatureBase(nn.Module):
     def __init__(
@@ -62,6 +65,117 @@ class _FeatureBase(nn.Module):
 
     def _dropout_relu_flatten(self, x: torch.Tensor) -> torch.Tensor:
         return torch.flatten(self.relu(self.dropout3d(x)), 1)
+
+
+class CNNFeatureModel(_FeatureBase):
+
+    def __init__(self, *args, **kwargs):
+
+        super(CNNFeatureModel, self).__init__(*args, **kwargs)
+
+        assert self.subwindow_size == self.signal_window_size
+        assert self.time_slice_interval == 1
+
+        self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
+        self.dropout3d = nn.Dropout3d(p=self.args.mf_dropout_rate)
+
+        self.layer1_num_filters = self.args.cnn_layer1_num_filters
+        self.layer1_kernel_time_size = 5
+        self.layer1_kernel_spatial_size = 3
+        self.layer1_conv = nn.Conv3d(
+            in_channels=1,
+            out_channels=self.layer1_num_filters,
+            kernel_size=(
+                self.layer1_kernel_time_size,
+                self.layer1_kernel_spatial_size,
+                self.layer1_kernel_spatial_size,
+            ),
+            stride=(1, 1, 1),
+            padding=((self.layer1_kernel_time_size-1)//2, 0, 0),
+        )
+
+        input_shape = (1, self.signal_window_size, 8, 8)
+        output_shape = [
+            self.layer1_num_filters,
+            input_shape[1],
+            input_shape[2]-(self.layer1_kernel_spatial_size-1),
+            input_shape[3]-(self.layer1_kernel_spatial_size-1),
+        ]
+        for dim in output_shape:
+            assert dim >= 1
+
+        self.layer1_maxpool_time_size = 4
+        self.layer1_maxpool_spatial_size = 1
+        self.layer1_maxpool = nn.MaxPool3d(
+            kernel_size=(
+                self.layer1_maxpool_time_size,
+                self.layer1_maxpool_spatial_size,
+                self.layer1_maxpool_spatial_size,
+            ),
+        )
+
+        output_shape = [
+            output_shape[0],
+            output_shape[1] // self.layer1_maxpool_time_size,
+            output_shape[2] // self.layer1_maxpool_spatial_size,
+            output_shape[3] // self.layer1_maxpool_spatial_size,
+        ]
+        for dim in output_shape:
+            assert dim >= 1
+
+        self.layer2_num_filters = 8
+        self.layer2_kernel_time_size = 5
+        self.layer2_kernel_spatial_size = 3
+        self.layer2_conv = nn.Conv3d(
+            in_channels=self.layer1_num_filters,
+            out_channels=self.layer2_num_filters,
+            kernel_size=(
+                self.layer2_kernel_time_size,
+                self.layer2_kernel_spatial_size,
+                self.layer2_kernel_spatial_size,
+            ),
+            stride=(1, 1, 1),
+            padding=((self.layer2_kernel_time_size-1)//2, 0, 0),
+        )
+
+        output_shape = [
+            self.layer2_num_filters,
+            output_shape[1],
+            output_shape[2] - (self.layer2_kernel_spatial_size-1),
+            output_shape[3] - (self.layer2_kernel_spatial_size-1),
+        ]
+        for dim in output_shape:
+            assert dim >= 1
+
+        self.layer2_maxpool_time_size = 4
+        self.layer2_maxpool_spatial_size = 1
+        self.layer2_maxpool = nn.MaxPool3d(
+            kernel_size=(
+                self.layer2_maxpool_time_size,
+                self.layer2_maxpool_spatial_size,
+                self.layer2_maxpool_spatial_size,
+            ),
+        )
+
+        output_shape = [
+            output_shape[0],
+            output_shape[1] // self.layer2_maxpool_time_size,
+            output_shape[2] // self.layer2_maxpool_spatial_size,
+            output_shape[3] // self.layer2_maxpool_spatial_size,
+        ]
+        for dim in output_shape:
+            assert dim >= 1
+
+        self.num_filters = np.prod(output_shape, dtype=int)
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.relu(self.dropout3d(self.layer1_conv(x)))
+        x = self.layer1_maxpool(x)
+        x = self.relu(self.dropout3d(self.layer2_conv(x)))
+        x = self.layer2_maxpool(x)
+        return torch.flatten(x, 1)
+
 
 
 class RawFeatureModel(_FeatureBase):
@@ -456,9 +570,14 @@ class MultiFeaturesDsV2Model(nn.Module):
             else None
         )
         self.dwt_features_model = (
-                DWTFeatureModel(args)
-                if args.dwt_num_filters > 0
-                else None
+            DWTFeatureModel(args)
+            if args.dwt_num_filters > 0
+            else None
+        )
+        self.cnn_features_model = (
+            CNNFeatureModel(args)
+            if args.cnn_layer1_num_filters > 0
+            else None
         )
 
         input_features = 0
@@ -466,7 +585,8 @@ class MultiFeaturesDsV2Model(nn.Module):
             self.raw_features_model,
             self.fft_features_model,
             self.dwt_features_model,
-            self.dct_features_model
+            self.dct_features_model,
+            self.cnn_features_model,
         ]:
             if model is not None:
                 input_features += model.num_filters * model.subwindow_nbins
@@ -489,10 +609,13 @@ class MultiFeaturesDsV2Model(nn.Module):
         dct_features = (
             self.dct_features_model(x) if self.dct_features_model else None
         )
+        cnn_features = (
+            self.cnn_features_model(x) if self.cnn_features_model else None
+        )
 
         active_features_list = [
             features
-            for features in [raw_features, fft_features, dwt_features, dct_features]
+            for features in [raw_features, fft_features, dwt_features, dct_features, cnn_features]
             if features is not None
         ]
 

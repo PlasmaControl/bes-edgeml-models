@@ -23,7 +23,7 @@ from torchinfo import summary
 
 from elm_prediction import package_dir
 from elm_prediction.src import utils, dataset
-from elm_prediction.models import multi_features_ds_model
+from elm_prediction.models import multi_features_ds_v2_model
 
 
 class MetricMonitor:
@@ -386,9 +386,9 @@ def get_model(args: argparse.Namespace,
                                                   f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
                                                   f'{"_" + args.balance_data if args.balance_data else ""}.pth')
 
-    raw_model = (multi_features_ds_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_ds_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_ds_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    raw_model = (multi_features_ds_v2_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_ds_v2_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_ds_v2_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None)
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')

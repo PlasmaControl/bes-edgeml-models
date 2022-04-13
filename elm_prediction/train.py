@@ -364,8 +364,10 @@ if __name__ == "__main__":
             'n_epochs':2,
             'fraction_valid':0.2,
             'fraction_test':0.2,
-            'signal_window_size':128,
+            'signal_window_size':64,
             'label_look_ahead':200,
+            'cnn_layer1_num_filters':8,
+            'raw_num_filters':0,
             # 'optimizer':'sgd',
             # 'regression':'log',
         }

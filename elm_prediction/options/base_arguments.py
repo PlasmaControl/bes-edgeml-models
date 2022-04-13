@@ -31,7 +31,7 @@ class BaseArguments:
         parser.add_argument(
             "--model_name",
             type=str,
-            default='multi_features_ds',
+            default='multi_features_ds_v2',
             help="name of the model to be used for training. Do not add a trailing "
             "`_model` in the name."
         )
@@ -334,6 +334,12 @@ class BaseArguments:
             type=int,
             default=8,
             help="Number of features for RawFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer1_num_filters",
+            type=int,
+            default=0,
+            help="Number of features for CnnFeatureModel: int >= 0",
         )
         parser.add_argument(
             "--fft_num_filters",
