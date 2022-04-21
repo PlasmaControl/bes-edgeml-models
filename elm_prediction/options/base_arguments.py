@@ -300,7 +300,7 @@ class BaseArguments:
             "--optimizer",
             type=str,
             default="adam",
-            help="optimizer: `adam` | `sgd`",
+            help="optimizer: `adam` (default) | `sgd`",
         )
         parser.add_argument(
             "--momentum",
