@@ -1,7 +1,6 @@
 """
 Data class to package BES data for training using PyTorch
 """
-# from multiprocessing.sharedctypes import Value
 import os
 import logging
 import argparse
@@ -121,7 +120,7 @@ class BaseData:
                 save_filename='test',
             )
 
-            if self.args.balance_data:
+            if self.args.balance_data and not self.args.regression:
                 train_data, validation_data, test_data = self._balance_data(train_data,
                                                                             validation_data,
                                                                             test_data)

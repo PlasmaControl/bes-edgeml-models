@@ -9,12 +9,7 @@ class TestArguments(BaseArguments):
     def create_parser(self, parser):
         parser = BaseArguments.create_parser(self, parser)
         # test parameters
-        parser.add_argument(
-            "--threshold",
-            type=float,
-            default=0.5,
-            help="threshold to create binary predictions from probability.",
-        )
+
         parser.add_argument(
             "--test_data_info",
             action="store_false",

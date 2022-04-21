@@ -66,8 +66,7 @@ def test_mfv2_analyze():
 def test_mfv2_do_analysis():
     input_args = DEFAULT_INPUT_ARGS.copy()
     input_args['model_name'] = 'multi_features_ds_v2'
-    input_args['output_dir'] = RUN_DIR + '/mfv2_aalysis'
-    input_args['signal_window_size'] = 128
+    input_args['output_dir'] = RUN_DIR + '/mfv2_analysis'
     input_args['do_analysis'] = True
     train_loop(input_args)
 
@@ -115,12 +114,33 @@ def test_mfv2_sgd():
     input_args = DEFAULT_INPUT_ARGS.copy()
     input_args['model_name'] = 'multi_features_ds_v2'
     input_args['output_dir'] = RUN_DIR + '/mfv2_sgd'
-    input_args['signal_window_size'] = 128
     input_args['optimizer'] = 'sgd'
     input_args['momentum'] = 0.1
     train_loop(input_args)
 
+def test_multifeatures_v2_regression():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_regression'
+    input_args['regression'] = True
+    train_loop(input_args)
+
+def test_multifeatures_v2_regression_with_log():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_regression_with_log'
+    input_args['regression'] = 'log'
+    train_loop(input_args)
+
+def test_multifeatures_v2_cnn():
+    input_args = DEFAULT_INPUT_ARGS.copy()
+    input_args['model_name'] = 'multi_features_ds_v2'
+    input_args['output_dir'] = RUN_DIR + '/mf_v2_cnn'
+    input_args['cnn_layer1_num_filters'] = 8
+    input_args['cnn_layer2_num_filters'] = 8
+    input_args['raw_num_filters'] = 0
+    train_loop(input_args)
 
 if __name__=="__main__":
     shutil.rmtree(RUN_DIR, ignore_errors=True)
-    sys.exit( pytest.main( ['--verbose'] ) )
+    sys.exit( pytest.main( ['--verbose', '--exitfirst'] ) )

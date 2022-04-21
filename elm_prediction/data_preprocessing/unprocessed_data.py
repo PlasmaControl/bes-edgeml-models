@@ -57,6 +57,10 @@ class UnprocessedData(BaseData):
         # iterate through all the ELM indices
         with h5py.File(self.datafile, 'r') as hf:
             if save_filename:
+                # if self.args.regression:
+                #     save_filename += '_regression'
+                #     if self.args.regression == 'log':
+                #         save_filename += '_log'
                 plt.ioff()
                 _, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9))
                 output_dir = Path(self.args.output_dir)
@@ -167,7 +171,7 @@ class UnprocessedData(BaseData):
             + (self.args.signal_window_size-1)
             + self.args.label_look_ahead
             )
-        packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
+        packaged_labels_for_valid_t0 = packaged_labels[packaged_label_indices_for_valid_t0]
         n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
         n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
         active_elm_fraction = n_active_elm/(n_active_elm+n_inactive_elm)

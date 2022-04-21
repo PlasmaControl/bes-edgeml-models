@@ -1,129 +1,76 @@
 """
-Data class to package BES data for training using PyTorch without any
-modifications and transformations.
+Data class to package BES data for training with regression algorithm.
+changes target variable form class based to time based.
 """
 from typing import Tuple
 
 import numpy as np
-import h5py
 
 try:
-    from .base_data import BaseData
+    from .unprocessed_data import UnprocessedData
 except ImportError:
-    from base_data import BaseData
+    from elm_prediction.data_preprocessing.unprocessed_data import UnprocessedData
 
 
-class RegressionData(BaseData):
-    def _preprocess_data(
+class RegressionData(UnprocessedData):
+
+    def _get_valid_indices(
         self,
-        elm_indices: np.ndarray = None,
-        shuffle_sample_indices: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Helper function to preprocess the data: reshape the input signal, use
-        allowed indices to upsample the class minority labels [active ELM events].
+        signals: np.ndarray,
+        labels: np.ndarray,
+        verbose=False,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Helper function to concatenate the signals and labels for the ELM events
+        for a given mode. It also creates allowed indices to sample from with respect
+        to signal window size and label look ahead. See the README to know more
+        about it.
 
         Args:
         -----
-            elm_indices (np.ndarray, optional): ELM event indices for the corresponding
-                mode. Defaults to None.
-            shuffle_sample_indices (bool, optional): Whether to shuffle the sample
-                indices. Defaults to False.
+            _signals (np.ndarray): NumPy array containing the inputs.
+            _labels (np.ndarray): NumPy array containing the labels.
+            window_start_indices (np.ndarray, optional): Array containing the
+                start indices of the ELM events till (t-1)th time data point. Defaults
+                to None.
+            elm_start_indices (np.ndarray, optional): Array containing the start
+                indices of the active ELM events till (t-1)th time data point.
+                Defaults to None.
+            elm_stop_indices (np.ndarray, optional): Array containing the end
+                vertices of the active ELM events till (t-1)th time data point.
+                Defaults to None.
+            valid_t0 (np.ndarray, optional): Array containing all the allowed
+                vertices of the ELM events till (t-1)th time data point. Defaults
+                to None.
+            labels (torch.Tensor, optional): Tensor containing the labels of the ELM
+                events till (t-1)th time data point. Defaults to None.
+            signals (torch.Tensor, optional): Tensor containing the input signals of
+                the ELM events till (t-1)th time data point. Defaults to None.
 
         Returns:
         --------
-            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Tuple containing
-                original signals, correponding labels, sample indices obtained
-                after upsampling and start index for each ELM event.
+            Tuple[ np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray ]: Tuple containing
+                signals, labels, valid_t0, start and stop indices appended with current
+                time data point.
         """
-        signals = None
-        window_start = None
-        elm_start = None
-        elm_stop = None
-        valid_t0 = []
-        labels = []
+        # indices for active elm times in each elm event
+        active_elm_indices = np.nonzero(labels == 1)[0]
+        active_elm_start_index = active_elm_indices[0]
 
-        # get ELM indices from the data file if not provided
-        if elm_indices is None:
-            elm_indices = self.elm_indices
+        # concat on axis 0 (time dimension)
+        valid_t0 = np.ones(active_elm_start_index, dtype=np.int32)
+        valid_t0[-self.args.signal_window_size + 1:] = 0
+        labels = np.arange(active_elm_start_index, 0, -1)
+        signals = signals[:active_elm_start_index]
 
-        # iterate through all the ELM indices
-        with h5py.File(self.datafile, 'r') as hf:
-            for elm_index in elm_indices:
-                elm_key = f"{elm_index:05d}"
-                elm_event = hf[elm_key]
-                _signals = np.array(elm_event["signals"], dtype=np.float32)
-                # transposing so that the time dimension comes forward
-                _signals = np.transpose(_signals, (1, 0)).reshape(-1, 8, 8)
-                if self.args.automatic_labels:
-                    _labels = np.array(elm_event["automatic_labels"], dtype=np.float32)
-                else:
-                    try:
-                        _labels = np.array(elm_event["labels"], dtype=np.float32)
-                    except KeyError:
-                        _labels = np.array(elm_event["manual_labels"], dtype=np.float32)
+        if self.args.regression == 'log':
+            labels = np.log(labels)
 
-                if self.args.normalize_data:
-                    _signals = _signals.reshape(-1, 64)
-                    _signals[:, :32] = _signals[:, :32] / np.max(_signals[:, :32])
-                    _signals[:, 32:] = _signals[:, 32:] / np.max(_signals[:, 32:])
-                    _signals = _signals.reshape(-1, 8, 8)
+        if verbose:
+            self.logger.info(f'  Total time points {labels.size}')
+            self.logger.info(f'  Pre-ELM time points {active_elm_indices[0]}')
+            self.logger.info(f'  Active ELM time points {active_elm_indices.size}')
+            self.logger.info(f'  Post-ELM time points {labels.size - active_elm_indices[-1]-1}')
+            self.logger.info(f'  Cound valid t0: {np.count_nonzero(valid_t0)}')
+            self.logger.info(f'  Cound invalid t0: {np.count_nonzero(valid_t0-1)}')
 
-                if self.args.truncate_inputs:
-                    active_elm_indices = np.where(_labels > 0)[0]
-                    elm_end_index = active_elm_indices[-1] + self.args.truncate_buffer
-                    _signals = _signals[:elm_end_index, ...]
-                    _labels = _labels[:elm_end_index]
-
-                # if len(_labels) < 2000:
-                #     continue
-                # get all the allowed indices till current time step
-                result = self._get_valid_indices(
-                    signals=_signals,
-                    labels=_labels,
-                    window_start_indices=window_start,
-                    elm_start_indices=elm_start,
-                    elm_stop_indices=elm_stop,
-                    valid_t0=valid_t0,
-                    labels=labels,
-                    signals=signals,
-                )
-
-                result = self._create_target(*result)
-
-                if result is None:
-                    # insufficient pre-ELM period, continue
-                    continue
-
-
-                (
-                    signals,
-                    labels,
-                    valid_t0,
-                    window_start,
-                    elm_start,
-                    elm_stop,
-                ) = result
-
-
-
-        # valid indices for data sampling
-        sample_indices = np.arange(labels.size)
-
-        if shuffle_sample_indices:
-            np.random.shuffle(sample_indices)
-
-        self.logger.info(
-            "Data tensors -> signals, labels, sample_indices, window_start_indices:"
-        )
-        for tensor in [
-            signals,
-            labels,
-            sample_indices,
-            window_start,
-        ]:
-            tmp = f" shape {tensor.shape}, dtype {tensor.dtype},"
-            tmp += f" min {np.min(tensor):.3f}, max {np.max(tensor):.3f}"
-            if hasattr(tensor, "device"):
-                tmp += f" device {tensor.device[-5:]}"
-            self.logger.info(tmp)
-        return signals, labels, sample_indices, window_start, elm_indices
+        return (signals, labels, valid_t0)

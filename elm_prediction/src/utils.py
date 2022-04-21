@@ -1,9 +1,12 @@
 """Various utility functions used for data preprocessing, training and validation.
 """
-from genericpath import exists
+
+import re
 import os
 import shutil
 import subprocess
+import pickle
+import sys
 import logging
 import time
 import math
@@ -11,9 +14,21 @@ import argparse
 import importlib
 from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
+from collections import OrderedDict
+from traceback import print_tb
 
+import numpy as np
 import torch
 from torchinfo import summary
+
+try:
+    from .. import package_dir
+    from . import utils, dataset
+    from ..models import multi_features_ds_v2_model
+except ImportError:
+    from elm_prediction import package_dir
+    from elm_prediction.src import utils, dataset
+    from elm_prediction.models import multi_features_ds_v2_model
 
 
 class MetricMonitor:
@@ -42,6 +57,106 @@ class MetricMonitor:
         self.count += n
         self.avg = self.sum / self.count
 
+
+class logParse:
+    """Initiate the logger to log the progress into a file.
+
+    Args:
+    -----
+        script_name (str): Name of the scripts outputting the logs.
+        log_file (str): Name of the log file.
+        stream_handler (bool, optional): Whether or not to show logs in the
+            console. Defaults to True.
+
+    Returns:
+    --------
+        logging.getLogger: Logger object.
+    """
+
+    def __init__(self, script_name: str = None, args: argparse.Namespace = None, stream_handler: bool = True,
+                 log_exceptions: bool = True):
+
+        self.logger = None
+        self.script_name = script_name
+        self.log_file = os.path.join(package_dir, 'logs', f'{args.model_name}.log')
+        self.stream_handler = stream_handler
+        self.log_exceptions = log_exceptions
+
+        if not (stream_handler and self.log_file):
+            raise TypeError('Logger must have Handler')
+
+    def __call__(self):
+
+        logger = logging.getLogger(name=self.script_name)
+        logger.setLevel(logging.INFO)
+
+        if self.log_file is not None:
+            log_path = Path(self.log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
+            # create handlers
+            f_handler = logging.FileHandler(log_path.as_posix(), mode="w")
+            # create formatters and add it to the handlers
+            f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
+            f_handler.setFormatter(f_format)
+            # add handlers to the logger
+            logger.addHandler(f_handler)
+
+        # display the logs in console
+        if self.stream_handler:
+            s_handler = logging.StreamHandler()
+            s_format = logging.Formatter("%(name)s: %(levelname)s:%(message)s")
+            s_handler.setFormatter(s_format)
+            logger.addHandler(s_handler)
+
+        self.logger = logger
+
+        if self.log_exceptions:
+            sys.excepthook = self.log_exceptions_()
+
+        return logger
+
+    def log_exceptions_(self):
+        def my_handler(type, value, tb):
+            print_tb(tb)
+            self.logger.exception(f' {type.__name__}: {value}')
+
+        return my_handler
+
+    @staticmethod
+    def getGlobalLogger():
+        logger = logging.getLogger('__main__')
+        if not logger.hasHandlers():
+            raise AttributeError('No logger exists. Logger must be declared.')
+        return logger
+
+
+def get_test_dataset(args: argparse.Namespace, file_name: str, logger: logging.getLogger = None, ) -> Tuple[
+    tuple, dataset.ELMDataset]:
+    """Read the pickle file containing the test data and return PyTorch dataset
+    and data attributes such as signals, labels, sample_indices, and
+    window_start_indices.
+
+    Args:
+    -----
+        args (argparse.Namespace): Argparse namespace object containing all the
+            base and test arguments.
+        file_name (str): Name of the test data file.
+        logger (logging.getLogger): Logger object that adds inference logs to
+            a file. Defaults to None.
+        transforms: Image transforms to perform data augmentation on the given
+            input. Defaults to None.
+    """
+    with open(file_name, "rb") as f:
+        test_data = pickle.load(f)
+
+    signals = np.array(test_data["signals"])
+    labels = np.array(test_data["labels"])
+    sample_indices = np.array(test_data["sample_indices"])
+    window_start = np.array(test_data["window_start"])
+    data_attrs = (signals, labels, sample_indices, window_start)
+    test_dataset = dataset.ELMDataset(args, *data_attrs, logger=logger, phase="testing")
+
+    return data_attrs, test_dataset
 
 # log the model and data preprocessing outputs
 def get_logger(
@@ -149,6 +264,13 @@ def create_output_paths(
     test_data_file = output_dir / args.test_data_file
     checkpoint_file = output_dir / args.checkpoint_file
 
+    # if args.regression:
+    #     addon = "_regression"
+    #     if args.regression == "log":
+    #         addon += "_log"
+    #     checkpoint_file = checkpoint_file.parent / (checkpoint_file.stem + addon + checkpoint_file.suffix)
+    #     test_data_file = test_data_file.parent / (test_data_file.stem + addon + test_data_file.suffix)
+
     if infer_mode:
         clf_report_dir = output_dir / "classification_reports"
         plot_dir = output_dir / "plots"
@@ -164,6 +286,7 @@ def create_output_paths(
         )
     else:
         output = (test_data_file, checkpoint_file)
+
     return output
 
 
@@ -255,3 +378,34 @@ def create_model_class(
             model = cls
 
     return model
+
+def get_model(args: argparse.Namespace,
+              logger: logging.Logger):
+    _, model_cpt_path = utils.create_output_paths(args)
+    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
+    model_name = args.model_name + gen_type_suffix
+    accepted_preproc = ['wavelet', 'unprocessed']
+
+    model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
+                                                  f'{gen_type_suffix}'
+                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
+                                                  f'{"_" + args.balance_data if args.balance_data else ""}.pth')
+
+    raw_model = (multi_features_ds_v2_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_ds_v2_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_ds_v2_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
+
+    logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
+    model_cls = utils.create_model(args.model_name)
+    if 'MULTI' in args.model_name.upper():
+        model = model_cls(args, raw_model, fft_model, cwt_model)
+    else:
+        model = model_cls(args)
+    state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
+    model.load_state_dict(state_dict)
+    logger.info(f'Loaded {model_name} state dict.')
+
+    model.layers = OrderedDict([child for child in model.named_modules() if hasattr(child[1], 'weight')])
+
+    return model.to(args.device)
