@@ -53,7 +53,7 @@ class Analysis(object):
 
         if self.device is None:
             self.device = self.args.device
-        if self.device == 'auto':
+        if self.device == 'auto' or self.device.startswith('cuda'):
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.args.device = self.device
         self.device = torch.device(self.device)
@@ -223,7 +223,9 @@ class Analysis(object):
         if not self.args.regression:
             roc_scores = self.training_output['roc_scores']
             plt.plot(epochs, roc_scores, label='ROC-AUC')
-        plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
+            plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
+        else:
+            plt.plot(epochs, scores, label=f'R2')
         plt.title('Validation scores')
         plt.ylabel('Score')
         for axis in axes.flat:
@@ -251,65 +253,75 @@ class Analysis(object):
                 images = images.to(self.device)
                 preds = self.model(images)
                 preds = preds.view(-1)
-                predictions.append(torch.sigmoid(preds).cpu().numpy())
+                if self.args.regression is False:
+                    predictions.append(torch.sigmoid(preds).cpu().numpy())
+                else:
+                    predictions.append(preds.cpu().numpy())
                 targets.append(labels.cpu().numpy())
         predictions = np.concatenate(predictions)
+        # print(predictions.min(), predictions.max())
         targets = np.concatenate(targets)
-        # display ROC and F1-score
-        roc_auc = metrics.roc_auc_score(targets, predictions)
-        print(f"ROC-AUC on valid indices: {roc_auc:.4f}")
-        if threshold is None:
-            threshold = self.args.threshold
-        print(f'F1 threshold: {threshold:.2f}')
-        f1 = metrics.f1_score(
-            targets,
-            (predictions > threshold).astype(int),
-            zero_division=0,
-        )
-        print(f"F1 score on valid indices: {f1:.4f}")
-        # calc TPR, FPR for ROC
-        fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
-        # plot ROC
-        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle(f"{self.run_dir_short} | Test data (valid indices)")
-        plt.sca(axes.flat[0])
-        plt.plot(fpr, tpr)
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('ROC')
-        plt.annotate(
-            f'ROC-AUC = {roc_auc:.2f}',
-            xy=(0.5, 0.03),
-            xycoords='axes fraction',
-        )
-        plt.sca(axes.flat[1])
-        plt.plot(thresh, tpr, label='True pos. rate')
-        plt.plot(thresh, fpr, label='False pos. rate')
-        plt.title('TPR/FPR')
-        plt.xlabel('Threshold')
-        plt.ylabel('Rate')
-        plt.xlim(0,1)
-        plt.legend()
-        # calc confusion matrix
-        bool_predictions = (predictions > threshold).astype(int)
-        cm = metrics.confusion_matrix(targets, bool_predictions)
-        # plot confusion matrix
-        plt.sca(axes.flat[2])
-        sns.heatmap(
-            cm,
-            annot=True,
-            norm=LogNorm(),
-            xticklabels=['No ELM', 'ELM'],
-            yticklabels=['No ELM', 'ELM'],
-        )
-        plt.title(f'Confusion matrix (thr={threshold:.2f})')
-        plt.xlabel("Predicted label")
-        plt.ylabel("True label")
-        plt.tight_layout()
-        if self.save:
-            filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
-            print(f'Saving matrix figure: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+        # print(targets.min(), targets.max())
+        print(targets.shape, targets.dtype, predictions.shape, predictions.dtype)
+        if self.args.regression is False:
+            # display ROC and F1-score
+            roc_auc = metrics.roc_auc_score(targets, predictions)
+            print(f"ROC-AUC on valid indices: {roc_auc:.4f}")
+            if threshold is None:
+                threshold = self.args.threshold
+            print(f'F1 threshold: {threshold:.2f}')
+            f1 = metrics.f1_score(
+                targets,
+                (predictions > threshold).astype(int),
+                zero_division=0,
+            )
+            print(f"F1 score on valid indices: {f1:.4f}")
+            # calc TPR, FPR for ROC
+            fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
+            # plot ROC
+            _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+            plt.suptitle(f"{self.run_dir_short} | Test data (valid indices)")
+            plt.sca(axes.flat[0])
+            plt.plot(fpr, tpr)
+            plt.xlabel('False positive rate')
+            plt.ylabel('True positive rate')
+            plt.title('ROC')
+            plt.annotate(
+                f'ROC-AUC = {roc_auc:.2f}',
+                xy=(0.5, 0.03),
+                xycoords='axes fraction',
+            )
+            plt.sca(axes.flat[1])
+            plt.plot(thresh, tpr, label='True pos. rate')
+            plt.plot(thresh, fpr, label='False pos. rate')
+            plt.title('TPR/FPR')
+            plt.xlabel('Threshold')
+            plt.ylabel('Rate')
+            plt.xlim(0,1)
+            plt.legend()
+            # calc confusion matrix
+            bool_predictions = (predictions > threshold).astype(int)
+            cm = metrics.confusion_matrix(targets, bool_predictions)
+            # plot confusion matrix
+            plt.sca(axes.flat[2])
+            sns.heatmap(
+                cm,
+                annot=True,
+                norm=LogNorm(),
+                xticklabels=['No ELM', 'ELM'],
+                yticklabels=['No ELM', 'ELM'],
+            )
+            plt.title(f'Confusion matrix (thr={threshold:.2f})')
+            plt.xlabel("Predicted label")
+            plt.ylabel("True label")
+            plt.tight_layout()
+            if self.save:
+                filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
+                print(f'Saving matrix figure: {filepath.as_posix()}')
+                plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+        else:
+            r2 = metrics.r2_score(targets, predictions)
+            print(f"R2: {r2:.2f}")
 
     def plot_full_inference(self):
         if self.elm_predictions is None:
@@ -440,6 +452,18 @@ class Analysis(object):
 if __name__ == "__main__":
     plt.close('all')
 
-    run = Analysis('run_dir')
-    run.plot_all()
-    run.show()
+    # run = Analysis('run_dir')
+    # run = Analysis('/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006')
+    # run.plot_training_epochs()
+    # run2 = Analysis('/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003')
+    # run2.plot_training_epochs()
+
+    for run_dir in [
+        # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
+        '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006',
+    ]:
+        run = Analysis(run_dir=run_dir)
+        run.plot_training_epochs()
+        run.plot_valid_indices_analysis()
+
+    plt.show()

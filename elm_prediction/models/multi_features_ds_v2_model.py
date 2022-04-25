@@ -91,21 +91,12 @@ class CNNFeatureModel(_FeatureBase):
         self.layer1_kernel_time_size = self.args.cnn_layer1_kernel_time_size
         self.layer1_kernel_spatial_size = self.args.cnn_layer1_kernel_spatial_size
         self.layer1_maxpool_time_size = self.args.cnn_layer1_maxpool_time_size
-        self.layer1_maxpool_spatial_size = self.args.layer1_maxpool_spatial_size
+        self.layer1_maxpool_spatial_size = self.args.cnn_layer1_maxpool_spatial_size
         self.layer2_num_filters = self.args.cnn_layer2_num_filters
         self.layer2_kernel_time_size = self.args.cnn_layer2_kernel_time_size
         self.layer2_kernel_spatial_size = self.args.cnn_layer2_kernel_spatial_size
         self.layer2_maxpool_time_size = self.args.cnn_layer2_maxpool_time_size
         self.layer2_maxpool_spatial_size = self.args.cnn_layer2_maxpool_spatial_size
-        # self.layer1_kernel_time_size = 5
-        # self.layer1_kernel_spatial_size = 3
-        # self.layer1_maxpool_time_size = 4
-        # self.layer1_maxpool_spatial_size = 1
-        # self.layer2_num_filters = 8
-        # self.layer2_kernel_time_size = 5
-        # self.layer2_kernel_spatial_size = 3
-        # self.layer2_maxpool_time_size = 4
-        # self.layer2_maxpool_spatial_size = 1
 
         self.layer1_conv = nn.Conv3d(
             in_channels=1,
@@ -251,7 +242,7 @@ class RawFeatureModel(_FeatureBase):
             i_start = i_bin * self.subwindow_size
             i_stop = (i_bin+1) * self.subwindow_size
             if torch.any(torch.isnan(self.conv[i_bin].weight)) or torch.any(torch.isnan(self.conv[i_bin].bias)):
-                raise ValueError
+                assert False
             x_new[:, :, i_bin:i_bin+1, :, :] = self.conv[i_bin](
                 x[:, :, i_start:i_stop, :, :]
             )
@@ -634,7 +625,7 @@ class MultiFeaturesDsV2Model(nn.Module):
 
         x = torch.cat(active_features_list, dim=1)
         if torch.any(torch.isnan(x)):
-            raise ValueError
+            assert False
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)
