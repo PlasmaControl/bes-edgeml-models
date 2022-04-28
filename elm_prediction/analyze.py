@@ -50,6 +50,7 @@ class Analysis(object):
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
+        self.is_classification = not self.args.regression
 
         if self.device is None:
             self.device = self.args.device
@@ -126,6 +127,7 @@ class Analysis(object):
     def _calc_inference_full(
         self,
         threshold=None,
+        max_elms=None,
     ):
         if self.test_data is None:
             self._load_test_data()
@@ -144,6 +146,8 @@ class Analysis(object):
         elm_predictions = {}
         with torch.no_grad():
             for i_elm, elm_index in enumerate(elm_indices):
+                if max_elms and i_elm >= max_elms:
+                    break
                 i_start = window_start[i_elm]
                 if i_elm < n_elms - 1:
                     i_stop = window_start[i_elm + 1] - 1
@@ -151,10 +155,6 @@ class Analysis(object):
                     i_stop = labels.size
                 elm_signals = signals[i_start:i_stop, ...]
                 elm_labels = labels[i_start:i_stop]
-                active_elm = np.where(elm_labels > 0.0)[0]
-                active_elm_start = active_elm[0]
-                active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
-                active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
                 print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
                     f"Signal size: {elm_signals.shape}")
                 predictions = []
@@ -168,37 +168,47 @@ class Analysis(object):
                     predictions.append(outputs.item())
                 predictions = np.array(predictions)
                 # micro predictions
-                micro_predictions = torch.sigmoid(
-                    torch.as_tensor(predictions, dtype=torch.float32)
-                ).cpu().numpy()
-                micro_predictions = np.pad(
-                    micro_predictions,
+                if self.is_classification:
+                    predictions = torch.sigmoid(
+                        torch.as_tensor(predictions, dtype=torch.float32)
+                    ).cpu().numpy()
+                predictions = np.pad(
+                    predictions,
                     pad_width=(sws_plus_la, 0),
                     mode="constant",
                     constant_values=0,
                 )
-                # macro predictions
-                micro_predictions_pre_active_elms = \
-                    micro_predictions[:active_elm_lower_buffer]
-                macro_predictions_pre_active_elms = np.array(
-                    [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
-                )
-                micro_predictions_active_elms = \
-                    micro_predictions[active_elm_lower_buffer:active_elm_upper_buffer]
-                macro_predictions_active_elms = np.array(
-                    [np.any(micro_predictions_active_elms > threshold).astype(int)]
-                )
-                macro_labels = np.array([0, 1], dtype="int")
-                macro_predictions = np.concatenate(
-                    [
-                        macro_predictions_pre_active_elms,
-                        macro_predictions_active_elms,
-                    ]
-                )
+                if self.is_classification:
+                    # macro predictions
+                    active_elm = np.where(elm_labels > 0.0)[0]
+                    active_elm_start = active_elm[0]
+                    active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
+                    active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
+                    micro_predictions_pre_active_elms = \
+                        predictions[:active_elm_lower_buffer]
+                    macro_predictions_pre_active_elms = np.array(
+                        [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
+                    )
+                    micro_predictions_active_elms = \
+                        predictions[active_elm_lower_buffer:active_elm_upper_buffer]
+                    macro_predictions_active_elms = np.array(
+                        [np.any(micro_predictions_active_elms > threshold).astype(int)]
+                    )
+                    macro_labels = np.array([0, 1], dtype="int")
+                    macro_predictions = np.concatenate(
+                        [
+                            macro_predictions_pre_active_elms,
+                            macro_predictions_active_elms,
+                        ]
+                    )
+                else:
+                    macro_labels = None
+                    macro_predictions = None
+
                 elm_predictions[elm_index] = {
                     "signals": elm_signals,
                     "labels": elm_labels,
-                    "micro_predictions": micro_predictions,
+                    "predictions": predictions,
                     "macro_labels": macro_labels,
                     "macro_predictions": macro_predictions,
                 }
@@ -243,7 +253,7 @@ class Analysis(object):
         self,
         threshold: Union[float, None] = None,
     ):
-        if self.valid_indices_data_loader is None:
+        if not self.valid_indices_data_loader:
             self._make_valid_indices_data_loader()
         predictions = []
         targets = []
@@ -323,29 +333,34 @@ class Analysis(object):
             r2 = metrics.r2_score(targets, predictions)
             print(f"R2: {r2:.2f}")
 
-    def plot_full_inference(self):
-        if self.elm_predictions is None:
-            self._calc_inference_full()
+    def plot_full_inference(
+            self,
+            max_elms=None,
+        ):
+        if not self.elm_predictions:
+            self._calc_inference_full(max_elms=max_elms)
         elm_indices = self.test_data['elm_indices']
         n_elms = elm_indices.size
         i_page = 1
-        for i_elm, elm_index in enumerate(elm_indices):
+        for i_elm, elm_index in enumerate(self.elm_predictions):
+            # if i_elm >= len(self.elm_predictions):
+            #     break
             if i_elm % 6 == 0:
                 _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
                 plt.suptitle(f"{self.run_dir_short} | Test data (full)")
             elm_data = self.elm_predictions[elm_index]
             signals = elm_data["signals"]
             labels = elm_data["labels"]
-            predictions = elm_data["micro_predictions"]
+            predictions = elm_data["predictions"]
             elm_time = np.arange(labels.size)
             # plot signal, labels, and prediction
             plt.sca(axes.flat[i_elm % 6])
             plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-            plt.plot(elm_time, labels + 0.02, label="Ground truth")
+            plt.plot(elm_time, labels, label="Ground truth")
             plt.plot(elm_time, predictions, label="Prediction")
             plt.xlabel("Time (micro-s)")
             plt.ylabel("Signal | label")
-            plt.ylim([None, 1.1])
+            # plt.ylim([None, 1.1])
             plt.legend(fontsize='small')
             plt.title(f'ELM index {elm_index}')
             if i_elm % 6 == 5 or i_elm == n_elms-1:
@@ -364,11 +379,12 @@ class Analysis(object):
     def plot_full_analysis(
             self,
             threshold: Union[float, None] = None,
+            max_elms = None,
         ):
         if threshold is None:
             threshold = self.args.threshold
         if self.elm_predictions is None:
-            self._calc_inference_full(threshold=threshold)
+            self._calc_inference_full(threshold=threshold, max_elms=max_elms)
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
         for mode in ['micro', 'macro']:
