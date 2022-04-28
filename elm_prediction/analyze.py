@@ -50,10 +50,11 @@ class Analysis(object):
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
+        self.is_classification = not self.args.regression
 
         if self.device is None:
             self.device = self.args.device
-        if self.device == 'auto':
+        if self.device == 'auto' or self.device.startswith('cuda'):
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.args.device = self.device
         self.device = torch.device(self.device)
@@ -126,6 +127,7 @@ class Analysis(object):
     def _calc_inference_full(
         self,
         threshold=None,
+        max_elms=None,
     ):
         if self.test_data is None:
             self._load_test_data()
@@ -144,6 +146,8 @@ class Analysis(object):
         elm_predictions = {}
         with torch.no_grad():
             for i_elm, elm_index in enumerate(elm_indices):
+                if max_elms and i_elm >= max_elms:
+                    break
                 i_start = window_start[i_elm]
                 if i_elm < n_elms - 1:
                     i_stop = window_start[i_elm + 1] - 1
@@ -151,10 +155,6 @@ class Analysis(object):
                     i_stop = labels.size
                 elm_signals = signals[i_start:i_stop, ...]
                 elm_labels = labels[i_start:i_stop]
-                active_elm = np.where(elm_labels > 0.0)[0]
-                active_elm_start = active_elm[0]
-                active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
-                active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
                 print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
                     f"Signal size: {elm_signals.shape}")
                 predictions = []
@@ -168,37 +168,47 @@ class Analysis(object):
                     predictions.append(outputs.item())
                 predictions = np.array(predictions)
                 # micro predictions
-                micro_predictions = torch.sigmoid(
-                    torch.as_tensor(predictions, dtype=torch.float32)
-                ).cpu().numpy()
-                micro_predictions = np.pad(
-                    micro_predictions,
+                if self.is_classification:
+                    predictions = torch.sigmoid(
+                        torch.as_tensor(predictions, dtype=torch.float32)
+                    ).cpu().numpy()
+                predictions = np.pad(
+                    predictions,
                     pad_width=(sws_plus_la, 0),
                     mode="constant",
                     constant_values=0,
                 )
-                # macro predictions
-                micro_predictions_pre_active_elms = \
-                    micro_predictions[:active_elm_lower_buffer]
-                macro_predictions_pre_active_elms = np.array(
-                    [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
-                )
-                micro_predictions_active_elms = \
-                    micro_predictions[active_elm_lower_buffer:active_elm_upper_buffer]
-                macro_predictions_active_elms = np.array(
-                    [np.any(micro_predictions_active_elms > threshold).astype(int)]
-                )
-                macro_labels = np.array([0, 1], dtype="int")
-                macro_predictions = np.concatenate(
-                    [
-                        macro_predictions_pre_active_elms,
-                        macro_predictions_active_elms,
-                    ]
-                )
+                if self.is_classification:
+                    # macro predictions
+                    active_elm = np.where(elm_labels > 0.0)[0]
+                    active_elm_start = active_elm[0]
+                    active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
+                    active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
+                    micro_predictions_pre_active_elms = \
+                        predictions[:active_elm_lower_buffer]
+                    macro_predictions_pre_active_elms = np.array(
+                        [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
+                    )
+                    micro_predictions_active_elms = \
+                        predictions[active_elm_lower_buffer:active_elm_upper_buffer]
+                    macro_predictions_active_elms = np.array(
+                        [np.any(micro_predictions_active_elms > threshold).astype(int)]
+                    )
+                    macro_labels = np.array([0, 1], dtype="int")
+                    macro_predictions = np.concatenate(
+                        [
+                            macro_predictions_pre_active_elms,
+                            macro_predictions_active_elms,
+                        ]
+                    )
+                else:
+                    macro_labels = None
+                    macro_predictions = None
+
                 elm_predictions[elm_index] = {
                     "signals": elm_signals,
                     "labels": elm_labels,
-                    "micro_predictions": micro_predictions,
+                    "predictions": predictions,
                     "macro_labels": macro_labels,
                     "macro_predictions": macro_predictions,
                 }
@@ -223,7 +233,9 @@ class Analysis(object):
         if not self.args.regression:
             roc_scores = self.training_output['roc_scores']
             plt.plot(epochs, roc_scores, label='ROC-AUC')
-        plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
+            plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
+        else:
+            plt.plot(epochs, scores, label=f'R2')
         plt.title('Validation scores')
         plt.ylabel('Score')
         for axis in axes.flat:
@@ -241,7 +253,7 @@ class Analysis(object):
         self,
         threshold: Union[float, None] = None,
     ):
-        if self.valid_indices_data_loader is None:
+        if not self.valid_indices_data_loader:
             self._make_valid_indices_data_loader()
         predictions = []
         targets = []
@@ -251,89 +263,104 @@ class Analysis(object):
                 images = images.to(self.device)
                 preds = self.model(images)
                 preds = preds.view(-1)
-                predictions.append(torch.sigmoid(preds).cpu().numpy())
+                if self.args.regression is False:
+                    predictions.append(torch.sigmoid(preds).cpu().numpy())
+                else:
+                    predictions.append(preds.cpu().numpy())
                 targets.append(labels.cpu().numpy())
         predictions = np.concatenate(predictions)
+        # print(predictions.min(), predictions.max())
         targets = np.concatenate(targets)
-        # display ROC and F1-score
-        roc_auc = metrics.roc_auc_score(targets, predictions)
-        print(f"ROC-AUC on valid indices: {roc_auc:.4f}")
-        if threshold is None:
-            threshold = self.args.threshold
-        print(f'F1 threshold: {threshold:.2f}')
-        f1 = metrics.f1_score(
-            targets,
-            (predictions > threshold).astype(int),
-            zero_division=0,
-        )
-        print(f"F1 score on valid indices: {f1:.4f}")
-        # calc TPR, FPR for ROC
-        fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
-        # plot ROC
-        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle(f"{self.run_dir_short} | Test data (valid indices)")
-        plt.sca(axes.flat[0])
-        plt.plot(fpr, tpr)
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('ROC')
-        plt.annotate(
-            f'ROC-AUC = {roc_auc:.2f}',
-            xy=(0.5, 0.03),
-            xycoords='axes fraction',
-        )
-        plt.sca(axes.flat[1])
-        plt.plot(thresh, tpr, label='True pos. rate')
-        plt.plot(thresh, fpr, label='False pos. rate')
-        plt.title('TPR/FPR')
-        plt.xlabel('Threshold')
-        plt.ylabel('Rate')
-        plt.xlim(0,1)
-        plt.legend()
-        # calc confusion matrix
-        bool_predictions = (predictions > threshold).astype(int)
-        cm = metrics.confusion_matrix(targets, bool_predictions)
-        # plot confusion matrix
-        plt.sca(axes.flat[2])
-        sns.heatmap(
-            cm,
-            annot=True,
-            norm=LogNorm(),
-            xticklabels=['No ELM', 'ELM'],
-            yticklabels=['No ELM', 'ELM'],
-        )
-        plt.title(f'Confusion matrix (thr={threshold:.2f})')
-        plt.xlabel("Predicted label")
-        plt.ylabel("True label")
-        plt.tight_layout()
-        if self.save:
-            filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
-            print(f'Saving matrix figure: {filepath.as_posix()}')
-            plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+        # print(targets.min(), targets.max())
+        print(targets.shape, targets.dtype, predictions.shape, predictions.dtype)
+        if self.args.regression is False:
+            # display ROC and F1-score
+            roc_auc = metrics.roc_auc_score(targets, predictions)
+            print(f"ROC-AUC on valid indices: {roc_auc:.4f}")
+            if threshold is None:
+                threshold = self.args.threshold
+            print(f'F1 threshold: {threshold:.2f}')
+            f1 = metrics.f1_score(
+                targets,
+                (predictions > threshold).astype(int),
+                zero_division=0,
+            )
+            print(f"F1 score on valid indices: {f1:.4f}")
+            # calc TPR, FPR for ROC
+            fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
+            # plot ROC
+            _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+            plt.suptitle(f"{self.run_dir_short} | Test data (valid indices)")
+            plt.sca(axes.flat[0])
+            plt.plot(fpr, tpr)
+            plt.xlabel('False positive rate')
+            plt.ylabel('True positive rate')
+            plt.title('ROC')
+            plt.annotate(
+                f'ROC-AUC = {roc_auc:.2f}',
+                xy=(0.5, 0.03),
+                xycoords='axes fraction',
+            )
+            plt.sca(axes.flat[1])
+            plt.plot(thresh, tpr, label='True pos. rate')
+            plt.plot(thresh, fpr, label='False pos. rate')
+            plt.title('TPR/FPR')
+            plt.xlabel('Threshold')
+            plt.ylabel('Rate')
+            plt.xlim(0,1)
+            plt.legend()
+            # calc confusion matrix
+            bool_predictions = (predictions > threshold).astype(int)
+            cm = metrics.confusion_matrix(targets, bool_predictions)
+            # plot confusion matrix
+            plt.sca(axes.flat[2])
+            sns.heatmap(
+                cm,
+                annot=True,
+                norm=LogNorm(),
+                xticklabels=['No ELM', 'ELM'],
+                yticklabels=['No ELM', 'ELM'],
+            )
+            plt.title(f'Confusion matrix (thr={threshold:.2f})')
+            plt.xlabel("Predicted label")
+            plt.ylabel("True label")
+            plt.tight_layout()
+            if self.save:
+                filepath = self.analysis_dir / f"valid_indices_analysis.pdf"
+                print(f'Saving matrix figure: {filepath.as_posix()}')
+                plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+        else:
+            r2 = metrics.r2_score(targets, predictions)
+            print(f"R2: {r2:.2f}")
 
-    def plot_full_inference(self):
-        if self.elm_predictions is None:
-            self._calc_inference_full()
+    def plot_full_inference(
+            self,
+            max_elms=None,
+        ):
+        if not self.elm_predictions:
+            self._calc_inference_full(max_elms=max_elms)
         elm_indices = self.test_data['elm_indices']
         n_elms = elm_indices.size
         i_page = 1
-        for i_elm, elm_index in enumerate(elm_indices):
+        for i_elm, elm_index in enumerate(self.elm_predictions):
+            # if i_elm >= len(self.elm_predictions):
+            #     break
             if i_elm % 6 == 0:
                 _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
                 plt.suptitle(f"{self.run_dir_short} | Test data (full)")
             elm_data = self.elm_predictions[elm_index]
             signals = elm_data["signals"]
             labels = elm_data["labels"]
-            predictions = elm_data["micro_predictions"]
+            predictions = elm_data["predictions"]
             elm_time = np.arange(labels.size)
             # plot signal, labels, and prediction
             plt.sca(axes.flat[i_elm % 6])
             plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-            plt.plot(elm_time, labels + 0.02, label="Ground truth")
+            plt.plot(elm_time, labels, label="Ground truth")
             plt.plot(elm_time, predictions, label="Prediction")
             plt.xlabel("Time (micro-s)")
             plt.ylabel("Signal | label")
-            plt.ylim([None, 1.1])
+            # plt.ylim([None, 1.1])
             plt.legend(fontsize='small')
             plt.title(f'ELM index {elm_index}')
             if i_elm % 6 == 5 or i_elm == n_elms-1:
@@ -352,11 +379,12 @@ class Analysis(object):
     def plot_full_analysis(
             self,
             threshold: Union[float, None] = None,
+            max_elms = None,
         ):
         if threshold is None:
             threshold = self.args.threshold
         if self.elm_predictions is None:
-            self._calc_inference_full(threshold=threshold)
+            self._calc_inference_full(threshold=threshold, max_elms=max_elms)
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
         for mode in ['micro', 'macro']:
@@ -440,6 +468,18 @@ class Analysis(object):
 if __name__ == "__main__":
     plt.close('all')
 
-    run = Analysis('run_dir')
-    run.plot_all()
-    run.show()
+    # run = Analysis('run_dir')
+    # run = Analysis('/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006')
+    # run.plot_training_epochs()
+    # run2 = Analysis('/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003')
+    # run2.plot_training_epochs()
+
+    for run_dir in [
+        # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
+        '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006',
+    ]:
+        run = Analysis(run_dir=run_dir)
+        run.plot_training_epochs()
+        run.plot_valid_indices_analysis()
+
+    plt.show()

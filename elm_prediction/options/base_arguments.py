@@ -1,11 +1,10 @@
-import sys
 import argparse
 from typing import Union
 
 try:
     from .. import sample_labeled_elm_data_file
-except (ImportError, ValueError):
-    from ...elm_prediction import sample_labeled_elm_data_file
+except ImportError:
+    from elm_prediction import sample_labeled_elm_data_file
 
 
 class BaseArguments:
@@ -21,7 +20,9 @@ class BaseArguments:
 
     def create_parser(self, parser: argparse.ArgumentParser):
         """Define the options common for training and testing."""
-        # basic parameters
+
+        ### inputs and outputs
+        
         parser.add_argument(
             "--input_data_file",
             type=str,
@@ -29,9 +30,67 @@ class BaseArguments:
             help="path to the input hdf5 file.",
         )
         parser.add_argument(
+            "--output_dir",
+            type=str,
+            default="run_dir",
+            help="path to output directory, rel. or abs.",
+        )
+        parser.add_argument(
+            "--output_file",
+            type=str,
+            default="output.pkl",
+            help="output training metrics file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--log_file",
+            type=str,
+            default="output.log",
+            help="log file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--args_file",
+            type=str,
+            default="args.pkl",
+            help="arguments file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--test_data_file",
+            type=str,
+            default="test_data.pkl",
+            help="test data file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--checkpoint_file",
+            type=str,
+            default="checkpoint.pytorch",
+            help="model checkpoint file, rel. to `run_dir`",
+        )
+        parser.add_argument(
+            "--do_analysis",
+            action="store_true",
+            default=False,
+            help="if true, run analysis after training.",
+        )
+        parser.add_argument(
+            "--export_onnx",
+            action='store_true',
+            default=False,
+            help="Export model to ONNX format."
+        )
+        # parser.add_argument(
+        #     "--filename_suffix",
+        #     type=str,
+        #     default="",
+        #     help="suffix in the file name. It can be passed when args like interpolate, "
+        #     "etc. are passed. Must be passed with a leading underscore '_'.",
+        # )
+
+        ### training settings
+
+        parser.add_argument(
             "--model_name",
             type=str,
-            default='multi_features_ds',
+            default='multi_features_ds_v2',
             help="name of the model to be used for training. Do not add a trailing "
             "`_model` in the name."
         )
@@ -80,48 +139,6 @@ class BaseArguments:
             help="`look ahead`, meaning the label for the entire signal window is taken to "
             "be label corresponding to the last element (0 ahead) of the signal window, "
             "[ int >= 0 (200 default) ].",
-        )
-        parser.add_argument(
-            "--output_dir",
-            type=str,
-            default="run_dir",
-            help="path to output directory, rel. or abs.",
-        )
-        parser.add_argument(
-            "--output_file",
-            type=str,
-            default="output.pkl",
-            help="output training metrics file, rel. to `run_dir`",
-        )
-        parser.add_argument(
-            "--log_file",
-            type=str,
-            default="output.log",
-            help="log file, rel. to `run_dir`",
-        )
-        parser.add_argument(
-            "--args_file",
-            type=str,
-            default="args.pkl",
-            help="arguments file, rel. to `run_dir`",
-        )
-        parser.add_argument(
-            "--test_data_file",
-            type=str,
-            default="test_data.pkl",
-            help="test data file, rel. to `run_dir`",
-        )
-        parser.add_argument(
-            "--checkpoint_file",
-            type=str,
-            default="checkpoint.pytorch",
-            help="model checkpoint file, rel. to `run_dir`",
-        )
-        parser.add_argument(
-            "--do_analysis",
-            action="store_true",
-            default=False,
-            help="if true, run analysis after training.",
         )
         parser.add_argument(
             "--oversample_active_elm",
@@ -174,42 +191,17 @@ class BaseArguments:
             help="if true, don't split the data into training, testing and validation "
             "sets.",
         )
-        parser.add_argument(
-            "--add_tensorboard",
-            action="store_true",
-            default=False,
-            help="if true, write loss summary to a tensorboard log file.",
-        )
+        # parser.add_argument(
+        #     "--add_tensorboard",
+        #     action="store_true",
+        #     default=False,
+        #     help="if true, write loss summary to a tensorboard log file.",
+        # )
         parser.add_argument(
             "--seed",
             type=int,
             default=0,
             help="seed of the PRNG for reproducibity of results.",
-        )
-        parser.add_argument(
-            "--filename_suffix",
-            type=str,
-            default="",
-            help="suffix in the file name. It can be passed when args like interpolate, "
-            "etc. are passed. Must be passed with a leading underscore '_'.",
-        )
-        parser.add_argument(
-            "--optimizer",
-            type=str,
-            default="adam",
-            help="optimizer: `adam` | `sgd`",
-        )
-        parser.add_argument(
-            "--momentum",
-            type=float,
-            default=0.0,
-            help="momentum for SGD",
-        )
-        parser.add_argument(
-            "--dampening",
-            type=float,
-            default=0.0,
-            help="dampening for SGD",
         )
         parser.add_argument(
             "--num_workers",
@@ -264,27 +256,27 @@ class BaseArguments:
             help="if true, normalizes the data in spatial dimensions. Divides the "
             "channels 1 to 32 by 10 and channels 33 to 64 by 5.",
         )
-        parser.add_argument(
-            "--interpolate_size",
-            type=int,
-            required="interpolate" in sys.argv,
-            help="final size of the spatial dimensions of the input if interpolation is done. "
-            "Must be passed if `data_preproc` == `interpolate`.",
-        )
-        parser.add_argument(
-            "--mu",
-            type=float,
-            required="gaussian_noise" in sys.argv,
-            help="mean of the Gaussian noise. Must be passed "
-            "when `gaussian_noise` is passed as `data_preproc`.",
-        )
-        parser.add_argument(
-            "--sigma",
-            type=float,
-            required="gaussian_noise" in sys.argv,
-            help="standard deviation of the Gaussian noise. Must be passed "
-            "when `gaussian_noise` is passed as `data_preproc`.",
-        )
+        # parser.add_argument(
+        #     "--interpolate_size",
+        #     type=int,
+        #     required="interpolate" in sys.argv,
+        #     help="final size of the spatial dimensions of the input if interpolation is done. "
+        #     "Must be passed if `data_preproc` == `interpolate`.",
+        # )
+        # parser.add_argument(
+        #     "--mu",
+        #     type=float,
+        #     required="gaussian_noise" in sys.argv,
+        #     help="mean of the Gaussian noise. Must be passed "
+        #     "when `gaussian_noise` is passed as `data_preproc`.",
+        # )
+        # parser.add_argument(
+        #     "--sigma",
+        #     type=float,
+        #     required="gaussian_noise" in sys.argv,
+        #     help="standard deviation of the Gaussian noise. Must be passed "
+        #     "when `gaussian_noise` is passed as `data_preproc`.",
+        # )
         parser.add_argument(
             "--shuffle_sample_indices",
             action="store_true",
@@ -292,7 +284,39 @@ class BaseArguments:
             help="if true, shuffle the sample indices calculated based on `signal_window_size` "
             "and `label_look_ahead`.",
         )
-        # arguments for `multi_features_model.py`
+        parser.add_argument(
+            "--regression",
+            nargs='?',
+            const=True,
+            default=False,
+            help="Flag if testing regression model. Use arg 'log' if training args with log of time to "
+                    "ELM as target.",
+            choices=['log'],
+        )
+
+        ### optimizer settings
+
+        parser.add_argument(
+            "--optimizer",
+            type=str,
+            default="adam",
+            help="optimizer: `adam` (default) | `sgd`",
+        )
+        parser.add_argument(
+            "--momentum",
+            type=float,
+            default=0.0,
+            help="momentum for SGD",
+        )
+        parser.add_argument(
+            "--dampening",
+            type=float,
+            default=0.0,
+            help="dampening for SGD",
+        )
+
+        # multifeatures global settings
+
         parser.add_argument(
             "--mf_maxpool_size",
             type=int,
@@ -329,12 +353,81 @@ class BaseArguments:
             default=32,
             help="Size for fully-connected layer #2: int, default 32",
         )
+
+        # Raw model
+
         parser.add_argument(
             "--raw_num_filters",
             type=int,
             default=8,
             help="Number of features for RawFeatureModel: int >= 0",
         )
+
+        # CNN model
+
+        parser.add_argument(
+            "--cnn_layer1_num_filters",
+            type=int,
+            default=0,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer1_kernel_time_size",
+            type=int,
+            default=5,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer1_kernel_spatial_size",
+            type=int,
+            default=3,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer1_maxpool_time_size",
+            type=int,
+            default=4,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer1_maxpool_spatial_size",
+            type=int,
+            default=1,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer2_num_filters",
+            type=int,
+            default=0,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer2_kernel_time_size",
+            type=int,
+            default=5,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer2_kernel_spatial_size",
+            type=int,
+            default=3,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer2_maxpool_time_size",
+            type=int,
+            default=4,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+        parser.add_argument(
+            "--cnn_layer2_maxpool_spatial_size",
+            type=int,
+            default=1,
+            help="Number of features for CnnFeatureModel: int >= 0",
+        )
+
+        # FFT model
+
         parser.add_argument(
             "--fft_num_filters",
             type=int,
@@ -347,6 +440,9 @@ class BaseArguments:
             default=1,
             help="FFT bins for FFTFeatureModel; power of 2: 1(default)|2|4...",
         )
+
+        # DCT model
+
         parser.add_argument(
             "--dct_num_filters",
             type=int,
@@ -359,6 +455,9 @@ class BaseArguments:
             default=1,
             help="DCT bins for DCTFeatureModel; power of 2: 1(default)|2|4...",
         )
+
+        # DWT model
+
         parser.add_argument(
             "--dwt_num_filters",
             type=int,
@@ -377,19 +476,6 @@ class BaseArguments:
             default=-1,
             help="Wavelet decomposition level: int >=1 (-1 (default) = max dwt level)",
         )
-        parser.add_argument(
-                "--export_onnx",
-                action='store_true',
-                default=False,
-                help="Export model to ONNX format."
-        )
-        parser.add_argument("--regression",
-                            nargs='?',
-                            const=True,
-                            default=False,
-                            help="Flag if testing regression model. Use arg 'log' if training args with log of time to "
-                                 "ELM as target.",
-                            choices=['log'])
 
         self.initialized = True
 

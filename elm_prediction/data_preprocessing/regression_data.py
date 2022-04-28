@@ -59,11 +59,11 @@ class RegressionData(UnprocessedData):
         # concat on axis 0 (time dimension)
         valid_t0 = np.ones(active_elm_start_index, dtype=np.int32)
         valid_t0[-self.args.signal_window_size + 1:] = 0
-        labels = np.arange(active_elm_start_index, 0, -1)
-        signals = signals[:active_elm_start_index]
+        labels = np.arange(active_elm_start_index, 0, -1, dtype=float)
+        signals = signals[:active_elm_start_index, :, :]
 
         if self.args.regression == 'log':
-            labels = np.log(labels)
+            labels = np.log10(labels, dtype=float)
 
         if verbose:
             self.logger.info(f'  Total time points {labels.size}')

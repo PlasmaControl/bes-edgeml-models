@@ -12,7 +12,7 @@ import time
 import math
 import argparse
 import importlib
-from typing import Union, Tuple, Sequence
+from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
 from collections import OrderedDict
 from traceback import print_tb
@@ -21,9 +21,14 @@ import numpy as np
 import torch
 from torchinfo import summary
 
-from elm_prediction import package_dir
-from elm_prediction.src import utils, dataset
-from elm_prediction.models import multi_features_ds_model
+try:
+    from .. import package_dir
+    from . import utils, dataset
+    from ..models import multi_features_ds_v2_model
+except ImportError:
+    from elm_prediction import package_dir
+    from elm_prediction.src import utils, dataset
+    from elm_prediction.models import multi_features_ds_v2_model
 
 
 class MetricMonitor:
@@ -211,7 +216,7 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def create_data_class(data_name: str) -> object:
+def create_data_class(data_name: str) -> Callable:
     """
     Helper function to import the data preprocessing module as per the command
     line argument `--data_preproc`.
@@ -285,7 +290,7 @@ def create_output_paths(
     return output
 
 
-def get_params(model: object) -> int:
+def get_params(model: torch.nn.Module) -> int:
     """Helper function to find the total number of trainable parameters in the
     PyTorch model.
 
@@ -298,7 +303,7 @@ def get_params(model: object) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def model_details(model: object, x: torch.Tensor, input_size: tuple) -> None:
+def model_details(model: torch.nn.Module, x: torch.Tensor, input_size: tuple) -> None:
     """
     Print Keras like model details on the screen before training.
 
@@ -386,9 +391,9 @@ def get_model(args: argparse.Namespace,
                                                   f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
                                                   f'{"_" + args.balance_data if args.balance_data else ""}.pth')
 
-    raw_model = (multi_features_ds_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_ds_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_ds_model.CWTFeatureModel(args) if args.wt_num_filters > 0 else None)
+    raw_model = (multi_features_ds_v2_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
+    fft_model = (multi_features_ds_v2_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
+    cwt_model = (multi_features_ds_v2_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None)
     features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
 
     logger.info(f'Found {model_name} state dict at {model_cpt_file}.')

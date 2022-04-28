@@ -110,7 +110,7 @@ class Run:
             self,
             data_loader: torch.utils.data.DataLoader,
             print_every: int = 50,
-    ) -> Tuple[utils.MetricMonitor, np.ndarray, np.ndarray]:
+    ) -> Tuple[float, np.ndarray, np.ndarray]:
         batch_time = utils.MetricMonitor()
         data_time = utils.MetricMonitor()
         losses = utils.MetricMonitor()

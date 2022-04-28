@@ -2,7 +2,7 @@
 Main module for training ELM prediction models
 
 To train an ELM prediction model, call `train_loop()` using
-a recipe similar to `if __name__=="main"` block.
+a recipe similar to `if __name__=="__main__"` block.
 """
 
 import sys
@@ -73,6 +73,7 @@ def train_loop(
         args.data_preproc = 'regression'
         args.label_look_ahead = 0
         args.truncate_buffer = 0
+        args.oversample_active_elm = False
 
     output_file = output_dir / args.output_file
     log_file = output_dir / args.log_file
@@ -266,16 +267,16 @@ def train_loop(
         scheduler.step(avg_val_loss)
 
         if args.regression:
+            # R2 score
             score = r2_score(valid_labels, preds)
             scores = np.append(scores, score)
         else:
-            # ROC scoring
-            roc_score = roc_auc_score(valid_labels, preds)
-            roc_scores = np.append(roc_scores, roc_score)
-
             # F1 scoring
             score = f1_score(valid_labels, (preds > args.threshold).astype(int))
             scores = np.append(scores, score)
+            # ROC scoring
+            roc_score = roc_auc_score(valid_labels, preds)
+            roc_scores = np.append(roc_scores, roc_score)
 
         elapsed = time.time() - start_time
 
@@ -338,7 +339,7 @@ def train_loop(
                 optuna.TrialPruned()
 
             LOGGER.info(scores)
-            LOGGER.info(trial.user_attrs['f1_scores'])
+            LOGGER.info(trial.user_attrs['scores'])
 
     if args.do_analysis:
         run = Analysis(output_dir)
@@ -364,10 +365,14 @@ if __name__ == "__main__":
             'n_epochs':2,
             'fraction_valid':0.2,
             'fraction_test':0.2,
-            'signal_window_size':128,
+            'signal_window_size':64,
             'label_look_ahead':200,
-            # 'optimizer':'sgd',
-            # 'regression':'log',
+            'lr':1e-5,
+            # 'cnn_layer1_num_filters':8,
+            # 'cnn_layer2_num_filters':8,
+            # 'raw_num_filters':0,
+            'regression':True,
+            'optimizer':'sgd',
         }
     else:
         # use command line arguments in `sys.argv`
