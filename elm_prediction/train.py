@@ -371,7 +371,7 @@ if __name__ == "__main__":
             # 'cnn_layer1_num_filters':8,
             # 'cnn_layer2_num_filters':8,
             # 'raw_num_filters':0,
-            'regression':True,
+            'regression':'log',
             'optimizer':'sgd',
         }
     else:
