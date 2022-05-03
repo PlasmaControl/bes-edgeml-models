@@ -293,6 +293,12 @@ class BaseArguments:
                     "ELM as target.",
             choices=['log'],
         )
+        parser.add_argument(
+            "--inverse_label_weight",
+            action='store_true',
+            default=False,
+            help="Weight loss by label inverse, element-wise."
+        )
 
         ### optimizer settings
 

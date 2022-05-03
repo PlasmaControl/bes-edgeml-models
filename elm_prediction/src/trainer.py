@@ -16,6 +16,7 @@ class Run:
             optimizer: torch.optim.Optimizer,
             use_focal_loss: bool = False,
             use_rnn: bool = False,
+            inverse_label_weight: bool = False,
     ):
         """
         Trainer class containing the boilerplate code for training and evaluation.
@@ -34,6 +35,7 @@ class Run:
         self.device = device
         self.use_focal_loss = use_focal_loss
         self.use_rnn = use_rnn
+        self.inverse_label_weight = inverse_label_weight
 
     def train(
             self,
@@ -72,8 +74,14 @@ class Run:
 
             loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
 
+            if not torch.all(torch.isfinite(loss)):
+                assert False
+
             if self.use_focal_loss:
                 loss = self._focal_loss(labels, y_preds, loss)
+
+            if self.inverse_label_weight:
+                loss = torch.div(loss, labels)
 
             # perform loss reduction
             loss = loss.mean()
@@ -86,6 +94,10 @@ class Run:
 
             # optimizer step
             self.optimizer.step()
+
+            for p in self.model.parameters():
+                if p.requires_grad and not torch.all(torch.isfinite(p)):
+                    assert False
 
             # elapsed time
             batch_time.update(time.time() - end)
@@ -143,6 +155,9 @@ class Run:
 
             if self.use_focal_loss:
                 loss = self._focal_loss(labels, y_preds, loss)
+
+            if self.inverse_label_weight:
+                loss = torch.div(loss, labels)
 
             # perform loss reduction
             loss = loss.mean()

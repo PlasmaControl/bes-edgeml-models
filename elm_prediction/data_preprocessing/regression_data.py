@@ -57,12 +57,14 @@ class RegressionData(UnprocessedData):
         active_elm_start_index = active_elm_indices[0]
 
         # concat on axis 0 (time dimension)
-        valid_t0 = np.ones(active_elm_start_index, dtype=np.int32)
+        valid_t0 = np.ones(active_elm_start_index-1, dtype=np.int32)
         valid_t0[-self.args.signal_window_size + 1:] = 0
-        labels = np.arange(active_elm_start_index, 0, -1, dtype=float)
-        signals = signals[:active_elm_start_index, :, :]
+        labels = np.arange(active_elm_start_index, 1, -1, dtype=float)
+        signals = signals[:active_elm_start_index-1, :, :]
 
         if self.args.regression == 'log':
+            if np.any(labels==0):
+                assert False
             labels = np.log10(labels, dtype=float)
 
         if verbose:
