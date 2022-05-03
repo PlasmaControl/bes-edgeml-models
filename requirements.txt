@@ -9,4 +9,4 @@ scikit-learn
 matplotlib
 scipy
 pywt
-pytorch-wavelets
+pytorch_wavelets

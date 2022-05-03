@@ -63,7 +63,7 @@ class ELMDataset(torch.utils.data.Dataset):
             + self.args.signal_window_size
             + self.args.label_look_ahead
             - 1
-        ].astype("int")
+        ]
         if self.args.data_preproc == "gradient":
             signal_window = np.transpose(signal_window, axes=(3, 0, 1, 2))
         elif self.args.data_preproc == "rnn":
@@ -73,7 +73,7 @@ class ELMDataset(torch.utils.data.Dataset):
         else:
             signal_window = signal_window[np.newaxis, ...]
         signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
-        label = torch.as_tensor(label, dtype=torch.long)
+        label = torch.as_tensor(label)
 
         return signal_window, label
 

@@ -225,6 +225,7 @@ def train_loop(
         optimizer=optimizer,
         use_focal_loss=args.focal_loss,
         use_rnn=use_rnn,
+        inverse_label_weight=args.inverse_label_weight,
     )
 
     # containers to hold train and validation losses
@@ -371,8 +372,9 @@ if __name__ == "__main__":
             # 'cnn_layer1_num_filters':8,
             # 'cnn_layer2_num_filters':8,
             # 'raw_num_filters':0,
-            'regression':True,
+            'regression':'log',
             'optimizer':'sgd',
+            'inverse_label_weight':True,
         }
     else:
         # use command line arguments in `sys.argv`
