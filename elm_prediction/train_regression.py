@@ -38,7 +38,7 @@ except ImportError:
 def train_loop(input_args: Union[list, dict, None] = None,
                trial=None,  # optuna `trial` object
                _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
-) -> dict:
+) -> tuple[dict, dict]:
     """Actual function to put the model to training. Use command line arg
     `--dry_run` to not create test data file and model checkpoint.
 
@@ -249,6 +249,7 @@ def train_loop(input_args: Union[list, dict, None] = None,
         if r2 > best_score:
             best_score = r2
             LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest R2 Score: {best_score:.3f}")
+            model_data = None
             if not args.dry_run:
                 LOGGER.info(f"Epoch: {epoch + 1:03d} \tSaving model to: {checkpoint_file}")
                 model_data = {"model": model.state_dict(), "preds": preds, }

@@ -66,19 +66,22 @@ class logParse:
         logging.getLogger: Logger object.
     """
 
-    def __init__(self, script_name: str = None, args: argparse.Namespace = None, stream_handler: bool = True,
+    def __init__(self, script_name: str = None, log_file: str = None, stream_handler: bool = True,
                  log_exceptions: bool = True):
 
         self.logger = None
         self.script_name = script_name
-        self.log_file = os.path.join(package_dir, 'logs', f'{args.model_name}.log')
+        self.log_file = log_file
         self.stream_handler = stream_handler
         self.log_exceptions = log_exceptions
 
-        if not (stream_handler and self.log_file):
+        global logging_script_name
+        logging_script_name = script_name
+
+        if not (stream_handler or self.log_file):
             raise TypeError('Logger must have Handler')
 
-    def __call__(self):
+    def create_logger(self):
 
         logger = logging.getLogger(name=self.script_name)
         logger.setLevel(logging.INFO)
@@ -115,10 +118,11 @@ class logParse:
 
         return my_handler
 
-    @staticmethod
-    def getGlobalLogger():
-        logger = logging.getLogger('__main__')
-        if not logger.hasHandlers():
+    def getGlobalLogger(self):
+        logger = logging.getLogger(__name__)
+        if not logger:
+            raise AttributeError('No logger exists. Logger must be declared.')
+        elif not logger.hasHandlers():
             raise AttributeError('No logger exists. Logger must be declared.')
         return logger
 
@@ -176,7 +180,7 @@ def get_logger(
         log_file = Path(log_file)
         log_file.parent.mkdir(parents=True, exist_ok=True)  # make dir. for log file
         # create handlers
-        f_handler = logging.FileHandler(log_file.as_posix(), mode="w")
+        f_handler = logging.FileHandler(log_file.as_posix(), mode="a")
         # create formatters and add it to the handlers
         f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:%(message)s")
         f_handler.setFormatter(f_format)
