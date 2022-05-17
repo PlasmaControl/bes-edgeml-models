@@ -18,6 +18,7 @@ class BaseData:
         self,
         args: argparse.Namespace,
         logger: logging.getLogger,
+        select_elms: Union[list, np.ndarray] = None,
         # datafile: str = None,
     ):
         """Helper class that takes care of all the data preparation steps: reading
@@ -32,7 +33,7 @@ class BaseData:
         """
         self.args = args
         self.datafile = self.args.input_data_file
-        assert(os.path.exists(self.datafile))
+        assert(os.path.exists(self.datafile)), f'{self.datafile} does not exist.'
 
         self.logger = logger
 
@@ -41,10 +42,10 @@ class BaseData:
         # get ELM indices from datafile
         with h5py.File(self.datafile, "r") as hf:
             self.elm_indices = np.array(
-                [ int(key) for key in hf ], 
+                [int(key) for key in hf],
                 dtype=np.int32,
                 )
-            count = sum( [ hf[key]['labels'].shape[0] for key in hf ] )
+            count = sum([hf[key]['labels'].shape[0] for key in hf])
 
         self.logger.info(f"  Number of ELM events: {len(self.elm_indices)}")
         self.logger.info(f"  Total time frames: {count}")
