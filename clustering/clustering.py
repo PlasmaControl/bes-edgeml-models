@@ -70,7 +70,7 @@ class Clustering:
         ids = []
         for i, elm in enumerate(self.elm_predictions.values()):
             cs = elm['signals'][:, 2, :]
-            p_elm = cs[:(elm['labels'] == 0).argmax()]
+            p_elm = cs[:(elm['labels'] == 1).argmax()]
             a_elm = cs[elm['labels'] == 1]
             precursor = p_elm[-300:]
             p_elm = p_elm[:-300]
