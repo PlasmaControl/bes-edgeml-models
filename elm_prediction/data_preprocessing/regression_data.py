@@ -63,7 +63,7 @@ class RegressionData(UnprocessedData):
         signals = signals[:active_elm_start_index-1, :, :]
 
         if self.args.regression == 'log':
-            if np.any(labels==0):
+            if np.any(labels == 0):
                 assert False
             labels = np.log10(labels, dtype=float)
 
