@@ -69,7 +69,8 @@ def train_loop(
     shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
     output_dir.mkdir(parents=True)
 
-    if args.data_preproc == 'regression':
+    if args.regression:
+        args.data_preproc = 'regression'
         args.label_look_ahead = 0
         args.truncate_buffer = 0
         # file_suffix = ''
