@@ -62,7 +62,7 @@ class Analysis(object):
         self.output_dir = Path(self.args.output_dir)
         if not self.output_dir.is_absolute():
             self.output_dir = self.args_file.parent
-        assert self.output_dir.exists()
+        assert self.output_dir.exists(), f"{self.output_dir} does not exist."
         self.analysis_dir = self.output_dir / 'analysis'
         shutil.rmtree(self.analysis_dir, ignore_errors=True)
         self.analysis_dir.mkdir()
