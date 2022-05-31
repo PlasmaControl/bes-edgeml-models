@@ -16,6 +16,20 @@ class TrainArguments(PredictionArguments):
             help="Location of HDF5 data sets.",
         )
 
+        parser.add_argument(
+            "--confinement_database",
+            type=str,
+            default=str(Path(__file__).parents[1] / 'confinement_database.xlsx'),
+            help="File location of confinement database times and labels."
+        )
+
+        parser.add_argument(
+            "--dataset_to_ram",
+            action="store_true",
+            default=False,
+            help="Loads entire directory of datasets into RAM for faster access."
+        )
+
         parser.is_train = True
 
         return parser

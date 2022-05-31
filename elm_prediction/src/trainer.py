@@ -60,8 +60,8 @@ class Run:
             self.optimizer.zero_grad()
 
             # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            images = images.to(self.device, dtype=torch.float)
+            labels = labels.to(self.device, dtype=torch.float)
 
             batch_size = images.size(0)
 
@@ -72,7 +72,7 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
+            loss = self.criterion(y_preds.view(), labels.type_as(y_preds))
 
             if not torch.all(torch.isfinite(loss)):
                 assert False
