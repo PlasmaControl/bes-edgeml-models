@@ -7,8 +7,10 @@ import time
 import io
 import numpy as np
 
+
 # Local Imports
 from elm_prediction.src import utils, trainer
+from elm_prediction.analyze import Analysis
 from turbulence_regime_classification.data_preprocessing.base_data import BaseData
 from turbulence_regime_classification.options.train_arguments import TrainArguments
 from turbulence_regime_classification.src.dataset import TurbulenceDataset
@@ -17,11 +19,15 @@ from turbulence_regime_classification.src.utils import make_labels
 from turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
 
 # ML imports
-from sklearn.metrics import roc_auc_score, f1_score, r2_score
+from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
 import torch
 import torchinfo
 from torch.utils.data import DataLoader, BatchSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
+try:
+    import optuna
+except ImportError:
+    optuna = None
 
 
 def train_loop(input_args: dict,
@@ -79,112 +85,233 @@ def train_loop(input_args: dict,
     LOGGER.info(f'Checking for labeled datasets.')
     make_labels(Path(__file__).parent, LOGGER)
 
+    model = MultiFeaturesClassificationModel(args).to(device)
+    # distribute model for data-parallel training
+    if _rank is not None:
+        model = DDP(model, device_ids=[_rank])
+
+    LOGGER.info(f"------>  Model: {args.model_name}       ")
+
+    # display model details
+    input_size = (
+        args.batch_size,
+        1,
+        args.signal_window_size,
+        8,
+        8,
+    )
+    x = torch.rand(*input_size)
+    x = x.to(device)
+    if _rank is None:
+        # skip torchinfo.summary if DistributedDataParallel
+        tmp_io = io.StringIO()
+        sys.stdout = tmp_io
+        torchinfo.summary(model, input_size=input_size, device=device)
+        sys.stdout = sys.__stdout__
+        LOGGER.info("\t\t\t\tMODEL SUMMARY")
+        LOGGER.info(tmp_io.getvalue())
+    LOGGER.info(f'  Batched input size: {x.shape}')
+    LOGGER.info(f"  Batched output size: {model(x).shape}")
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    LOGGER.info(f"  Model contains {n_params} trainable parameters!")
+
+    # optimizer
+    if args.optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+        )
+    elif args.optimizer.lower() == 'sgd':
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+            momentum=args.momentum,
+            dampening=args.dampening,
+        )
+    else:
+        raise ValueError
+
+    # get the lr scheduler
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=2,
+        verbose=True,
+    )
+
+    criterion = torch.nn.CrossEntropyLoss(reduction="none")
+
+    # define variables for ROC and loss
+    best_score = -np.inf
+    best_cr = None
+
+    # instantiate training object
+    use_rnn = True if args.data_preproc == "rnn" else False
+    engine = trainer.Run(
+        model,
+        device=device,
+        criterion=criterion,
+        optimizer=optimizer,
+        use_focal_loss=args.focal_loss,
+        use_rnn=use_rnn,
+        inverse_label_weight=args.inverse_label_weight,
+    )
+
+    # containers to hold train and validation losses
+    train_loss = np.empty(0)
+    valid_loss = np.empty(0)
+    roc_scores = np.empty(0)
+
+    outputs = {}
+
+    # Create datasets
     dataset = TurbulenceDataset(args, LOGGER)
-    train_set, test_set = dataset.train_test_split(0.5, seed=42)
-    with train_set as ts:
-        if args.dataset_to_ram:
-            ts.load_datasets()
-        train_loader = DataLoader(ts,
-                                  batch_size=None,  # must be disabled when using samplers
-                                  sampler=BatchSampler(RandomBatchSampler(ts, args),
-                                                       batch_size=args.batch_size + args.signal_window_size - 1,
-                                                       drop_last=True)
-                                  )
+    train_set, valid_set = dataset.train_test_split(0.5, seed=42)
 
-        model = MultiFeaturesClassificationModel(args).to(device)
-        # distribute model for data-parallel training
-        if _rank is not None:
-            model = DDP(model, device_ids=[_rank])
-
-        LOGGER.info(f"------>  Model: {args.model_name}       ")
-
-        # display model details
-        input_size = (
-            args.batch_size,
-            1,
-            args.signal_window_size,
-            8,
-            8,
-        )
-        x = torch.rand(*input_size)
-        x = x.to(device)
-        if _rank is None:
-            # skip torchinfo.summary if DistributedDataParallel
-            tmp_io = io.StringIO()
-            sys.stdout = tmp_io
-            torchinfo.summary(model, input_size=input_size, device=device)
-            sys.stdout = sys.__stdout__
-            LOGGER.info("\t\t\t\tMODEL SUMMARY")
-            LOGGER.info(tmp_io.getvalue())
-        LOGGER.info(f'  Batched input size: {x.shape}')
-        LOGGER.info(f"  Batched output size: {model(x).shape}")
-        n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        LOGGER.info(f"  Model contains {n_params} trainable parameters!")
-
-        # optimizer
-        if args.optimizer.lower() == 'adam':
-            optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=args.lr,
-                weight_decay=args.weight_decay,
-            )
-        elif args.optimizer.lower() == 'sgd':
-            optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr=args.lr,
-                weight_decay=args.weight_decay,
-                momentum=args.momentum,
-                dampening=args.dampening,
-            )
-        else:
-            raise ValueError
-
-        # get the lr scheduler
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            factor=0.5,
-            patience=2,
-            verbose=True,
-        )
-
-        criterion = torch.nn.CrossEntropyLoss(reduction="none")
-
-        # define variables for ROC and loss
-        best_score = -np.inf
-
-        # instantiate training object
-        use_rnn = True if args.data_preproc == "rnn" else False
-        engine = trainer.Run(
-            model,
-            device=device,
-            criterion=criterion,
-            optimizer=optimizer,
-            use_focal_loss=args.focal_loss,
-            use_rnn=use_rnn,
-            inverse_label_weight=args.inverse_label_weight,
-        )
-
-        # containers to hold train and validation losses
-        train_loss = np.empty(0)
-        valid_loss = np.empty(0)
-        scores = np.empty(0)
-        roc_scores = np.empty(0)
-
-        outputs = {}
-
-        training_start_time = time.time()
-        # iterate through all the epochs
-        LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
-        for epoch in range(args.n_epochs):
-            start_time = time.time()
-
+    training_start_time = time.time()
+    # iterate through all the epochs
+    LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
+    for epoch in range(args.n_epochs):
+        start_time = time.time()
+        with train_set as ts:
+            if args.dataset_to_ram:
+                ts.load_datasets()
+            train_loader = DataLoader(ts,
+                                      batch_size=None,  # must be disabled when using samplers
+                                      sampler=BatchSampler(RandomBatchSampler(ts, args),
+                                                           batch_size=args.batch_size,
+                                                           drop_last=True)
+                                      )
             # train over an epoch
             avg_loss = engine.train(
                 train_loader,
                 epoch,
                 print_every=args.train_print_every,
             )
+
+        train_loss = np.append(train_loss, avg_loss)
+
+        with valid_set as vs:
+            valid_loader = DataLoader(ts,
+                                      batch_size=None,  # must be disabled when using samplers
+                                      sampler=BatchSampler(RandomBatchSampler(vs, args),
+                                                           batch_size=args.batch_size,
+                                                           drop_last=True)
+                                      )
+            # evaluate validation data
+            avg_val_loss, preds, valid_labels = engine.evaluate(
+                valid_loader,
+                print_every=args.valid_print_every
+            )
+
+        valid_loss = np.append(valid_loss, avg_val_loss)
+
+        # step the learning rate scheduler
+        scheduler.step(avg_val_loss)
+
+        # ROC scoring
+        class_labels = ['Unlabeled',
+                        'L-Mode',
+                        'H-Mode',
+                        'QH-Mode',
+                        'WP QH-Mode'
+                        ]
+        one_hot = np.zeros((len(valid_labels), 5))
+        for i, label in zip(one_hot, valid_labels):
+            i[label] = 1
+        roc_score = roc_auc_score(one_hot, preds, multi_class='ovr', average='macro')
+        roc_scores = np.append(roc_scores, roc_score)
+        cm = confusion_matrix(valid_labels, preds.argmax(axis=1))
+        print(cm)
+        cr = classification_report(valid_labels, preds.argmax(axis=1), target_names=class_labels, zero_division=0)
+        print(cr)
+
+        # ROC scoring
+        roc_score = roc_auc_score(valid_labels, preds)
+        roc_scores = np.append(roc_scores, roc_score)
+
+        elapsed = time.time() - start_time
+
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \tROC-AUC: {roc_score:.3f} \ttime elapsed: {elapsed:.1f} s")
+
+        # update and save outputs
+        outputs['train_loss'] = train_loss
+        outputs['valid_loss'] = valid_loss
+        outputs['roc_scores'] = roc_scores
+
+        with open(output_file.as_posix(), "w+b") as f:
+            pickle.dump(outputs, f)
+
+        # track best f1 score and save model
+        if roc_score > best_score or epoch == 0:
+            best_score = roc_score
+            best_cr = cr
+            best_cm = cm
+            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_score:.3f}")
+            print(f"\tEpoch: {epoch + 1:03d} \nBest Confusion Matrix:\n{best_cm}")
+            print(f"Classification report:\n{best_cr}")
+
+            if not args.dry_run:
+                LOGGER.info(f"  Saving model to: {checkpoint_file.as_posix()}")
+                model_data = {
+                    "model": model.state_dict(),
+                    "preds": preds,
+                }
+                torch.save(model_data, checkpoint_file.as_posix())
+                LOGGER.info(f"  File size: {checkpoint_file.stat().st_size / 1e3:.1f} kB")
+                if args.save_onnx:
+                    input_name = ['signal_window']
+                    output_name = ['micro_prediction']
+                    onnx_file = Path(args.output_dir) / 'checkpoint.onnx'
+                    LOGGER.info(f"  Saving to ONNX: {onnx_file.as_posix()}")
+                    torch.onnx.export(
+                        model,
+                        x[0].unsqueeze(0),
+                        onnx_file.as_posix(),
+                        input_names=input_name,
+                        output_names=output_name,
+                        verbose=True,
+                        opset_version=11
+                    )
+                    LOGGER.info(f"  File size: {onnx_file.stat().st_size / 1e3:.1f} kB")
+
+        # optuna hook to monitor training epochs
+        if trial is not None and optuna is not None:
+            trial.report(roc_score, epoch)
+            # save outputs as lists in trial user attributes
+            for key, item in outputs.items():
+                trial.set_user_attr(key, item.tolist())
+            if trial.should_prune():
+                LOGGER.info("--------> Trial pruned by Optuna")
+                for handler in LOGGER.handlers[:]:
+                    handler.close()
+                    LOGGER.removeHandler(handler)
+                optuna.TrialPruned()
+
+            LOGGER.info(roc_scores)
+            LOGGER.info(trial.user_attrs['scores'])
+
+    # Save best classification report
+    LOGGER.info(f'\n{best_cr}')
+
+    if args.do_analysis:
+        run = Analysis(output_dir)
+        run.plot_training_epochs()
+        run.plot_valid_indices_analysis()
+
+    total_elapsed = time.time() - training_start_time
+    LOGGER.info(f'Training complete in {total_elapsed:0.1f}')
+
+    # shut down logger handlers
+    for handler in LOGGER.handlers[:]:
+        handler.close()
+        LOGGER.removeHandler(handler)
+
+    return outputs
 
 
 if __name__ == '__main__':
@@ -193,8 +320,9 @@ if __name__ == '__main__':
         args = {'model_name': 'multi_features_ds_v2',
                 'input_data_dir': Path(__file__).parent / 'data',
                 'device': 'cuda',
+                'dry_run': True,
                 'batch_size': 64,
-                'n_epochs': 20,
+                'n_epochs': 1,
                 'max_elms': -1,
                 'fraction_test': 0.025,
                 'dataset_to_ram': False,
