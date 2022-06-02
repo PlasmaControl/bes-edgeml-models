@@ -195,7 +195,7 @@ def train_loop(input_args: dict,
         train_loss = np.append(train_loss, avg_loss)
 
         with valid_set as vs:
-            valid_loader = DataLoader(ts,
+            valid_loader = DataLoader(vs,
                                       batch_size=None,  # must be disabled when using samplers
                                       sampler=BatchSampler(RandomBatchSampler(vs, args),
                                                            batch_size=args.batch_size,

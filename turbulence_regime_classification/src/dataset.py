@@ -97,6 +97,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         idx_offset = self.hf_cumsum[(self.hf_cumsum <= index[0])][-1] - self.args.signal_window_size # Adjust index relative to specific HDF5
         hf_index = [i - idx_offset for i in index]
         hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
+
         hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
 
         signal_windows = self._roll_window(self.hf2np_signals.transpose(), self.args.signal_window_size, self.args.batch_size)
@@ -155,7 +156,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         fs = []
         for f in self.input_files:
             with h5py.File(f, 'r') as ds:
-                fs.append(len(ds['labels']) - self.args.signal_window_size - self.args.batch_size + 1)
+                fs.append(len(ds['labels']) - self.args.signal_window_size + 1)
         return np.array(fs)
 
     def train_test_split(self, test_frac: float, seed=None):
