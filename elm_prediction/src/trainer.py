@@ -141,8 +141,8 @@ class Run:
             data_time.update(time.time() - end)
 
             # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            images = images.to(self.device, dtype=torch.float)
+            labels = labels.to(self.device, dtype=torch.float)
 
             batch_size = images.size(0)
 

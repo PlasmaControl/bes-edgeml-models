@@ -97,9 +97,10 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         idx_offset = self.hf_cumsum[(self.hf_cumsum <= index[0])][-1] - self.args.signal_window_size # Adjust index relative to specific HDF5
         hf_index = [i - idx_offset for i in index]
         hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
-
-        hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
-
+        try:
+            hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
+        except Exception as e:
+             pass
         signal_windows = self._roll_window(self.hf2np_signals.transpose(), self.args.signal_window_size, self.args.batch_size)
 
         hf['labels'].read_direct(self.hf2np_labels, np.s_[hf_index[-self.args.batch_size:]], np.s_[...])
@@ -237,14 +238,17 @@ class TurbulenceDataset(torch.utils.data.Dataset):
     def make_labels(data, df_loc):
         df = pd.read_excel(df_loc)
         time = np.array(data['time'])
+        signals = np.array(data['signals'])
         labels = np.zeros_like(time)
         for i, row in df.iterrows():
             tstart = row['tstart (ms)']
             tstop = row['tstop (ms)']
             label = row[[col for col in row.index if 'mode' in col]].values.argmax() + 1
             labels[np.nonzero((time > tstart) & (time < tstop))] = label
+            signals = labels[np.nonzero(labels)[0]]
+            labels = labels[np.nonzero(labels)[0]] - 1
 
-        return labels.tolist()
+        return signals.tolist(), labels.tolist()
 
 
 

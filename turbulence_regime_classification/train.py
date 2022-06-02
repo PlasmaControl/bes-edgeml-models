@@ -9,13 +9,15 @@ import numpy as np
 
 
 # Local Imports
+from matplotlib import pyplot as plt
+
 from elm_prediction.src import utils, trainer
 from elm_prediction.analyze import Analysis
 from turbulence_regime_classification.data_preprocessing.base_data import BaseData
 from turbulence_regime_classification.options.train_arguments import TrainArguments
 from turbulence_regime_classification.src.dataset import TurbulenceDataset
 from turbulence_regime_classification.src.sampler import RandomBatchSampler
-from turbulence_regime_classification.src.utils import make_labels
+from turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
 from turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
 
 # ML imports
@@ -83,8 +85,7 @@ def train_loop(input_args: dict,
     LOGGER.info(f'------>  Target device: {device}')
 
     LOGGER.info(f'Checking for labeled datasets.')
-    make_labels(Path(__file__).parent, LOGGER)
-
+    # make_labels(Path(__file__).parent, LOGGER)
     model = MultiFeaturesClassificationModel(args).to(device)
     # distribute model for data-parallel training
     if _rank is not None:
@@ -145,8 +146,12 @@ def train_loop(input_args: dict,
     criterion = torch.nn.CrossEntropyLoss(reduction="none")
 
     # define variables for ROC and loss
+    best_score_epoch = None
     best_score = -np.inf
+    best_loss = np.inf
+    best_loss_epoch = None
     best_cr = None
+    best_cm = None
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -212,26 +217,22 @@ def train_loop(input_args: dict,
         # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
-        # ROC scoring
-        class_labels = ['Unlabeled',
-                        'L-Mode',
+        # Make classification report
+        class_labels = ['L-Mode',
                         'H-Mode',
                         'QH-Mode',
                         'WP QH-Mode'
                         ]
-        one_hot = np.zeros((len(valid_labels), 5))
-        for i, label in zip(one_hot, valid_labels):
-            i[label] = 1
-        roc_score = roc_auc_score(one_hot, preds, multi_class='ovr', average='macro')
+        # one_hot = np.zeros((len(valid_labels), 4))
+        # for i, label in zip(one_hot, valid_labels):
+        #     i[int(label)] = 1
+        # roc_auc_score 'ovo' computes average of all pairwise combinations of classes. Insensitive to imbalance.
+        roc_score = roc_auc_score(valid_labels, preds, multi_class='ovo', average='macro', labels=[0,1,2,3])
         roc_scores = np.append(roc_scores, roc_score)
         cm = confusion_matrix(valid_labels, preds.argmax(axis=1))
         print(cm)
-        cr = classification_report(valid_labels, preds.argmax(axis=1), target_names=class_labels, zero_division=0)
+        cr = classification_report(valid_labels, preds.argmax(axis=1), target_names=class_labels, zero_division=0, labels=[0,1,2,3])
         print(cr)
-
-        # ROC scoring
-        roc_score = roc_auc_score(valid_labels, preds)
-        roc_scores = np.append(roc_scores, roc_score)
 
         elapsed = time.time() - start_time
 
@@ -246,8 +247,14 @@ def train_loop(input_args: dict,
         with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)
 
-        # track best f1 score and save model
+
+        # track best loss
+        if avg_val_loss < best_loss:
+            best_loss = avg_val_loss
+            best_loss_epoch = epoch
+        # track best roc score and save model
         if roc_score > best_score or epoch == 0:
+            best_score_epoch = epoch
             best_score = roc_score
             best_cr = cr
             best_cm = cm
@@ -297,6 +304,31 @@ def train_loop(input_args: dict,
 
     # Save best classification report
     LOGGER.info(f'\n{best_cr}')
+
+    # Make plots of results
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(16, 9))
+
+    plot_confusion_matrix(best_cm,
+                          classes=class_labels,
+                          ax=ax1)
+
+    ax1.text(-1.3, 0.5,
+             f'{best_cr}\n'
+             f'ROC: {best_score:0.2f} (epoch {best_score_epoch})    '
+             f'Best Loss: {best_loss:0.2f} (epoch {best_loss_epoch})',
+             transform=ax1.transAxes,
+             ha='right', va='center', ma='left',
+             bbox=dict(boxstyle="square", fc='w', lw=2))
+
+    ax2.plot(outputs['valid_loss'])
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Loss')
+    ax2.set_title('Validation Loss by Epoch')
+
+    fig.suptitle(f'Summary results of {type(model).__name__}')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'summary.png')
+    plt.show()
 
     if args.do_analysis:
         run = Analysis(output_dir)
