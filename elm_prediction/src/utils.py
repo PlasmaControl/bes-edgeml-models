@@ -216,7 +216,7 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def create_data_class(data_name: str) -> Callable:
+def gcreate_data_class(data_name: str) -> Callable:
     """
     Helper function to import the data preprocessing module as per the command
     line argument `--data_preproc`.
