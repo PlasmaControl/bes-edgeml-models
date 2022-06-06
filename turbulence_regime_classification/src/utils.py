@@ -13,23 +13,29 @@ from matplotlib import pyplot as plt
 def make_labels(base_dir: str | Path,
                 logger: logging.Logger,
                 df_name: str = 'confinement_database.xlsx',
-                data_dir: str = 'data',
-                labeled_dir: str = 'labeled_datasets'):
+                data_dir: str | Path = 'data',
+                labeled_dir: str | Path = 'labeled_datasets'):
     """
     Function to create labeled datasets for turbulence regime classification.
     Shot data is sourced from base_dir / data.
     Resulting labeled datasets are stored as HDF5 files in base_dir / data / labeled_datasets.
     :param base_dir: Home directory of project. Should contain 'confinement_database.xlsx' and 'data/'
     :param df_name: Name of the confinement regime database.
-    :param data_dir: Path to datasets (rel. to base_dir)
-    :param labeled_dir: Path to labeled datasets (rel. to data_dir)
+    :param data_dir: Path to datasets (rel. to base_dir if str, else specify whole path as Path type.)
+    :param labeled_dir: Path to labeled datasets (rel. to data_dir if str, else specify whole path as Path type.)
     :return: None
     """
 
     # Pathify all directories
     base_dir = Path(base_dir)
-    data_dir = Path(base_dir) / data_dir
-    labeled_dir = Path(data_dir) / labeled_dir
+    if type(data_dir) == str:
+        data_dir = Path(base_dir) / data_dir
+    else:
+        data_dir = Path(data_dir)
+    if type(labeled_dir) == str:
+        labeled_dir = Path(data_dir) / labeled_dir
+    else:
+        labeled_dir = Path(labeled_dir)
 
     # Find already labeled datasets
     labeled_dir.mkdir(exist_ok=True)

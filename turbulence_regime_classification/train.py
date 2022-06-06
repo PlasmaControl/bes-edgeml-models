@@ -85,7 +85,9 @@ def train_loop(input_args: dict,
     LOGGER.info(f'------>  Target device: {device}')
 
     LOGGER.info(f'Checking for labeled datasets.')
-    # make_labels(Path(__file__).parent, LOGGER)
+    make_labels(Path(__file__).parent, LOGGER,
+                data_dir=Path(args.input_data_dir),
+                labeled_dir=Path(args.labeled_data_dir))
     model = MultiFeaturesClassificationModel(args).to(device)
     # distribute model for data-parallel training
     if _rank is not None:
@@ -351,10 +353,11 @@ if __name__ == '__main__':
         # input arguments if no command line arguments in `sys.argv`
         args = {'model_name': 'multi_features_ds_v2',
                 'input_data_dir': Path(__file__).parent / 'data',
+                'labeled_data_dir': Path(__file__).parent / 'data/labeled_datasets',
                 'device': 'cuda',
                 'dry_run': True,
                 'batch_size': 64,
-                'n_epochs': 1,
+                'n_epochs': 10,
                 'max_elms': -1,
                 'fraction_test': 0.025,
                 'dataset_to_ram': False,

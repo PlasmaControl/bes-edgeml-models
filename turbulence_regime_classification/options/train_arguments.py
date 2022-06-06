@@ -13,7 +13,15 @@ class TrainArguments(PredictionArguments):
             "--input_data_dir",
             type=str,
             default=str(Path(__file__).parents[1] / 'data'),
-            help="Location of HDF5 data sets.",
+            help="Location of HDF5 data sets. If absolute path, that path is used. If relative, path is relative to base_dir.",
+        )
+
+        # training parameters
+        parser.add_argument(
+            "--labeled_data_dir",
+            type=str,
+            default=str(Path(__file__).parents[1] / 'data'),
+            help="Location to store labeled data sets. If absolute path, that path is used. If relative, path is relative to base_dir.",
         )
 
         parser.add_argument(
