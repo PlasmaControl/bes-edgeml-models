@@ -1,3 +1,5 @@
+from typing import Union
+
 from elm_prediction.options.train_arguments import TrainArguments as PredictionArguments
 
 import argparse
@@ -44,7 +46,7 @@ class TrainArguments(PredictionArguments):
 
     def parse(
         self,
-        arg_list: list | None = None,
+        arg_list: Union[list, None] = None,
         existing_namespace=None,
     ):
         """

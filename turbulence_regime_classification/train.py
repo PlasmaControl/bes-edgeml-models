@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 import io
 import numpy as np
-
+from typing import Union
 
 # Local Imports
 from matplotlib import pyplot as plt
@@ -34,7 +34,7 @@ except ImportError:
 
 def train_loop(input_args: dict,
                trial=None,
-               _rank: int | None = None,
+               _rank: Union[int, None] = None,
                ) -> dict:
 
     # parse input args
