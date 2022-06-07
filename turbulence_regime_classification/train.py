@@ -31,6 +31,10 @@ try:
 except ImportError:
     optuna = None
 
+def test_sbatch(*args, **kwargs):
+	print('inside test_sbatch')
+	print(args, kwargs, flush=True)
+	return
 
 def train_loop(input_args: dict,
                trial=None,
@@ -86,8 +90,8 @@ def train_loop(input_args: dict,
 
     LOGGER.info(f'Checking for labeled datasets.')
     make_labels(Path(__file__).parent, LOGGER,
-                data_dir=Path(args.input_data_dir),
-                labeled_dir=Path(args.labeled_data_dir))
+                data_dir=args.input_data_dir,
+                labeled_dir=args.labeled_data_dir)
     model = MultiFeaturesClassificationModel(args).to(device)
     # distribute model for data-parallel training
     if _rank is not None:

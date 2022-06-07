@@ -28,14 +28,14 @@ def make_labels(base_dir: str | Path,
 
     # Pathify all directories
     base_dir = Path(base_dir)
-    if type(data_dir) == str:
+    if Path(data_dir).exits():
+	data_dir = Path(data_dir)
+    else:
         data_dir = Path(base_dir) / data_dir
+    if Path(labeled_dir).exists():
+	labeled_dir = Path(labeled_dir)
     else:
-        data_dir = Path(data_dir)
-    if type(labeled_dir) == str:
-        labeled_dir = Path(data_dir) / labeled_dir
-    else:
-        labeled_dir = Path(labeled_dir)
+	labeled_dir = Path(base_dir) / labeled_dir
 
     # Find already labeled datasets
     labeled_dir.mkdir(exist_ok=True)

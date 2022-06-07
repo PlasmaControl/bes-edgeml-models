@@ -20,7 +20,7 @@ class TrainArguments(PredictionArguments):
         parser.add_argument(
             "--labeled_data_dir",
             type=str,
-            default=str(Path(__file__).parents[1] / 'data'),
+            default=str(Path(__file__).parents[1] / 'data/labeled_datasets'),
             help="Location to store labeled data sets. If absolute path, that path is used. If relative, path is relative to base_dir.",
         )
 
