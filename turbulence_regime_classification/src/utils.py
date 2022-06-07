@@ -6,15 +6,16 @@ import re
 import h5py
 import pandas as pd
 from pathlib import Path
+from typing import Union
 
 from matplotlib import pyplot as plt
 
 
-def make_labels(base_dir: str | Path,
+def make_labels(base_dir: Union[str, Path],
                 logger: logging.Logger,
                 df_name: str = 'confinement_database.xlsx',
-                data_dir: str | Path = 'data',
-                labeled_dir: str | Path = 'labeled_datasets'):
+                data_dir: Union[str, Path] = 'data',
+                labeled_dir: Union[str, Path] = 'labeled_datasets'):
     """
     Function to create labeled datasets for turbulence regime classification.
     Shot data is sourced from base_dir / data.

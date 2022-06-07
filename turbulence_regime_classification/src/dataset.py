@@ -1,6 +1,5 @@
 import copy
 import traceback
-
 import h5py
 import pandas as pd
 import torch
@@ -9,13 +8,14 @@ import logging
 import numpy as np
 import re
 from pathlib import Path
+from typing import Union
 from sklearn.model_selection import train_test_split
 
 
 class TurbulenceDataset(torch.utils.data.Dataset):
     def __init__(self,
                  args: argparse.Namespace,
-                 logger: logging.Logger | None = None,
+                 logger: Union[logging.Logger, None] = None,
                  ):
         """PyTorch dataset class to get the ELM data and corresponding labels
         according to the sample_indices. The signals are grouped by `signal_window_size`
