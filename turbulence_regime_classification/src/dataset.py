@@ -100,7 +100,9 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         try:
             hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
         except Exception as e:
-             pass
+            print('hdf5 length: ', len(hf))
+            print(f'first index: {hf_index[0]}, last index: {hf_index[-1]}')
+            pass
         signal_windows = self._roll_window(self.hf2np_signals.transpose(), self.args.signal_window_size, self.args.batch_size)
 
         hf['labels'].read_direct(self.hf2np_labels, np.s_[hf_index[-self.args.batch_size:]], np.s_[...])
@@ -171,10 +173,10 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         """
         np.random.seed(seed)
         shots_files = np.array(list(zip(self.shot_nums, self.input_files)))
-        sf_idx = np.arange(len(shots_files))
+        sf_idx = np.arange(len(shots_files), dtype=np.int32)
         n_test = int(np.floor(len(shots_files) * test_frac))
         test_idx = np.random.choice(sf_idx, n_test, replace=False)
-        train_idx = np.array([i for i in sf_idx if i not in test_idx])
+        train_idx = np.array([i for i in sf_idx if i not in test_idx], dtype=np.int32)
 
         test_set = shots_files[test_idx]
         train_set = shots_files[train_idx]
@@ -229,9 +231,11 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         Close all the data sets previously opened.
         :return:
         """
-        self.open_ = False
-        for f in self.hf_opened:
-            f.close()
+        if self.open_:
+            self.open_ = False
+            self.logger.info('Closing all open hdf5 files.')
+            for f in self.hf_opened:
+                f.close()
         return
 
     @staticmethod

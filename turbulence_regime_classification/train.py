@@ -31,11 +31,6 @@ try:
 except ImportError:
     optuna = None
 
-def test_sbatch(*args, **kwargs):
-	print('inside test_sbatch')
-	print(args, kwargs, flush=True)
-	return
-
 def train_loop(input_args: dict,
                trial=None,
                _rank: Union[int, None] = None,
@@ -180,7 +175,7 @@ def train_loop(input_args: dict,
 
     # Create datasets
     dataset = TurbulenceDataset(args, LOGGER)
-    train_set, valid_set = dataset.train_test_split(0.5, seed=42)
+    train_set, valid_set = dataset.train_test_split(args.fraction_valid, seed=42)
 
     training_start_time = time.time()
     # iterate through all the epochs
@@ -206,6 +201,8 @@ def train_loop(input_args: dict,
         train_loss = np.append(train_loss, avg_loss)
 
         with valid_set as vs:
+            if args.dataset_to_ram:
+                vs.load_datasets()
             valid_loader = DataLoader(vs,
                                       batch_size=None,  # must be disabled when using samplers
                                       sampler=BatchSampler(RandomBatchSampler(vs, args),

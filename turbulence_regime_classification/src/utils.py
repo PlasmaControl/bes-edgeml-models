@@ -29,15 +29,17 @@ def make_labels(base_dir: Union[str, Path],
 
     # Pathify all directories
     base_dir = Path(base_dir)
-    if Path(data_dir).exits():
-	data_dir = Path(data_dir)
+    if Path(data_dir).exists():
+        data_dir = Path(data_dir)
     else:
         data_dir = Path(base_dir) / data_dir
     if Path(labeled_dir).exists():
-	labeled_dir = Path(labeled_dir)
+        labeled_dir = Path(labeled_dir)
     else:
-	labeled_dir = Path(base_dir) / labeled_dir
-
+        labeled_dir = Path(data_dir) / labeled_dir
+    print("data dir: ", data_dir)
+    print("base dir: ", base_dir)
+    print('Labeled dir: ', labeled_dir)
     # Find already labeled datasets
     labeled_dir.mkdir(exist_ok=True)
     labeled_shots = {}
