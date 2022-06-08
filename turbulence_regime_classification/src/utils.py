@@ -37,9 +37,6 @@ def make_labels(base_dir: Union[str, Path],
         labeled_dir = Path(labeled_dir)
     else:
         labeled_dir = Path(data_dir) / labeled_dir
-    print("data dir: ", data_dir)
-    print("base dir: ", base_dir)
-    print('Labeled dir: ', labeled_dir)
     # Find already labeled datasets
     labeled_dir.mkdir(exist_ok=True)
     labeled_shots = {}

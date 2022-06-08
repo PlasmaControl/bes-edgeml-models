@@ -177,14 +177,16 @@ def train_loop(input_args: dict,
     dataset = TurbulenceDataset(args, LOGGER)
     train_set, valid_set = dataset.train_test_split(args.fraction_valid, seed=42)
 
+    if args.dataset_to_ram:
+        train_set.load_datasets()
+        valid_set.load_datasets()
+
     training_start_time = time.time()
     # iterate through all the epochs
     LOGGER.info(f"  Begin training loop with {args.n_epochs} epochs")
     for epoch in range(args.n_epochs):
         start_time = time.time()
         with train_set as ts:
-            if args.dataset_to_ram:
-                ts.load_datasets()
             train_loader = DataLoader(ts,
                                       batch_size=None,  # must be disabled when using samplers
                                       sampler=BatchSampler(RandomBatchSampler(ts, args),
@@ -201,8 +203,6 @@ def train_loop(input_args: dict,
         train_loss = np.append(train_loss, avg_loss)
 
         with valid_set as vs:
-            if args.dataset_to_ram:
-                vs.load_datasets()
             valid_loader = DataLoader(vs,
                                       batch_size=None,  # must be disabled when using samplers
                                       sampler=BatchSampler(RandomBatchSampler(vs, args),
@@ -354,15 +354,15 @@ if __name__ == '__main__':
         # input arguments if no command line arguments in `sys.argv`
         args = {'model_name': 'multi_features_ds_v2',
                 'input_data_dir': Path(__file__).parent / 'data',
-                'labeled_data_dir': Path(__file__).parent / 'data/labeled_datasets',
+                'labeled_data_dir': 'labeled_datasets',
                 'device': 'cuda',
-                'dry_run': True,
+                'dry_run': False,
                 'batch_size': 64,
                 'n_epochs': 10,
                 'max_elms': -1,
-                'fraction_test': 0.025,
-                'dataset_to_ram': False,
-                'fft_num_filters': 20,
+                'fraction_valid': 0.25,
+                'dataset_to_ram': True,
+                'fft_num_filters': 0,
                 'dwt_num_filters': 20,
                 'signal_window_size': 256,
                 'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/regime_classification'

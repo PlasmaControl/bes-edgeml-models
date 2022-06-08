@@ -40,7 +40,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.logger.info(f'\tFound {len(self.input_files)} files!')
 
         self.f_lengths = self._get_f_lengths()
-        self.hf_cumsum = np.cumsum(np.concatenate((np.array([0]), self.f_lengths)))[:-1]
+        self.valid_indices = np.cumsum(np.concatenate((np.array([0]), self.f_lengths)))[:-1]
 
         self.open_ = False
         self.signals = None
@@ -64,38 +64,42 @@ class TurbulenceDataset(torch.utils.data.Dataset):
             return self._get_from_hdf5(index)
 
     def __enter__(self):
-        self.open()
+        if not self.args.dataset_to_ram:
+            self.open()
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
-        self.close()
-        if exc_type is not None:
-            traceback.print_exception(exc_type, exc_value, tb)
-            # return False # uncomment to pass exception through
+        if self.open_:
+            self.logger.info('Closing all open datasets')
+            self.close()
+            if exc_type is not None:
+                traceback.print_exception(exc_type, exc_value, tb)
+                # return False # uncomment to pass exception through
+        return
 
     def _get_from_ram(self, index):
 
-        hf = self.signals[np.nonzero(self.hf_cumsum <= index[0])[0][-1]]
-        hf_labels = self.labels[np.nonzero(self.hf_cumsum <= index[0])[0][-1]]
+        hf = self.signals[np.nonzero(self.valid_indices <= index[0])[0][-1]]
+        hf_labels = self.labels[np.nonzero(self.valid_indices <= index[0])[0][-1]]
 
-        idx_offset = self.hf_cumsum[(self.hf_cumsum <= index[0])][-1] - self.args.signal_window_size  # Adjust index relative to specific HDF5
-        hf_index = [i - idx_offset for i in index]
+        idx_offset = self.valid_indices[(self.valid_indices <= index[0])][-1]  # Adjust index relative to specific HDF5
+        hf_index = [i - idx_offset + self.args.signal_window_size for i in index]
         hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
 
         signal_windows = self._roll_window(hf[hf_index], self.args.signal_window_size, self.args.batch_size)
-        labels = hf_labels[-self.args.batch_size:]
+        labels = hf_labels[hf_index[-self.args.batch_size:]]
 
         return torch.tensor(signal_windows).unsqueeze(1), torch.tensor(labels)
 
     def _get_from_hdf5(self, index):
         try:
             # Get correct index with respect to HDF5 file.
-            hf = self.hf_opened[np.nonzero(self.hf_cumsum <= index[0])[0][-1]]
+            hf = self.hf_opened[np.nonzero(self.valid_indices <= index[0])[0][-1]]
         except TypeError:
             raise AttributeError('HDF5 files have not been opened! Use TurbulenceDataset.open() ')
 
-        idx_offset = self.hf_cumsum[(self.hf_cumsum <= index[0])][-1] - self.args.signal_window_size # Adjust index relative to specific HDF5
-        hf_index = [i - idx_offset for i in index]
+        idx_offset = self.valid_indices[(self.valid_indices <= index[0])][-1]# Adjust index relative to specific HDF5
+        hf_index = [i - idx_offset + self.args.signal_window_size for i in index]
         hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
         try:
             hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
@@ -159,7 +163,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         fs = []
         for f in self.input_files:
             with h5py.File(f, 'r') as ds:
-                fs.append(len(ds['labels']) - self.args.signal_window_size + 1)
+                fs.append(len(ds['labels']) - self.args.signal_window_size - self.args.batch_size)
         return np.array(fs)
 
     def train_test_split(self, test_frac: float, seed=None):
@@ -185,19 +189,22 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         train.shot_nums = [i[0] for i in train_set]
         train.input_files = [i[1] for i in train_set]
         train.f_lengths = train._get_f_lengths()
-        train.hf_cumsum = np.cumsum(np.concatenate((np.array([0]), train.f_lengths)))[:-1]
+        train.valid_indices = np.cumsum(np.concatenate((np.array([0]), train.f_lengths)))[:-1]
 
         test = copy.deepcopy(self)
         test.shot_nums = [i[0] for i in test_set]
         test.input_files = [i[1] for i in test_set]
         test.f_lengths = test._get_f_lengths()
-        test.hf_cumsum = np.cumsum(np.concatenate((np.array([0]), test.f_lengths)))[:-1]
+        test.valid_indices = np.cumsum(np.concatenate((np.array([0]), test.f_lengths)))[:-1]
 
         return train, test
 
     def load_datasets(self):
-        self.logger.info("Loading datasets into RAM.")
+        """Load datasets into RAM"""
+        self.logger.info("\tLoading datasets into RAM.")
         signals, labels = [], []
+
+        self.open()
         for i, (sn, hf) in enumerate(zip(self.shot_nums, self.hf_opened)):
             print(f'\rProcessing shot {sn} ({i+1}/{len(self.shot_nums)})', end=' ')
             signals_np = np.array(hf['signals']).transpose()
@@ -205,9 +212,10 @@ class TurbulenceDataset(torch.utils.data.Dataset):
             print(f'{signals_np.nbytes + labels_np.nbytes} bytes!')
             signals.append(signals_np)
             labels.append(labels_np)
+        self.close()
 
         self.signals = signals
-        self.labels = signals
+        self.labels = labels
 
         self.logger.info(' Datasets loaded successfully.')
 
@@ -217,12 +225,11 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         """
         Open all the datasets in self.args.data_dir for access.
         """
-        if not self.args.dataset_to_ram:
-            self.open_ = True
-            inputs = []
-            for f in self.input_files:
-                inputs.append(h5py.File(f, 'r'))
-            self.hf_opened = inputs
+        self.open_ = True
+        hf_opened = []
+        for f in self.input_files:
+            hf_opened.append(h5py.File(f, 'r'))
+        self.hf_opened = hf_opened
 
         return self
 
@@ -233,27 +240,8 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         """
         if self.open_:
             self.open_ = False
-            self.logger.info('Closing all open hdf5 files.')
+            self.logger.info('\tClosing all open hdf5 files.')
             for f in self.hf_opened:
                 f.close()
+        self.hf_opened = None
         return
-
-    @staticmethod
-    def make_labels(data, df_loc):
-        df = pd.read_excel(df_loc)
-        time = np.array(data['time'])
-        signals = np.array(data['signals'])
-        labels = np.zeros_like(time)
-        for i, row in df.iterrows():
-            tstart = row['tstart (ms)']
-            tstop = row['tstop (ms)']
-            label = row[[col for col in row.index if 'mode' in col]].values.argmax() + 1
-            labels[np.nonzero((time > tstart) & (time < tstop))] = label
-            signals = labels[np.nonzero(labels)[0]]
-            labels = labels[np.nonzero(labels)[0]] - 1
-
-        return signals.tolist(), labels.tolist()
-
-
-
-
