@@ -352,6 +352,9 @@ class Analysis(object):
             signals = elm_data["signals"]
             labels = elm_data["labels"]
             predictions = elm_data["predictions"]
+            if self.args.regression == True:
+                predictions = predictions / labels.max() * 10
+                labels = labels / labels.max() * 10
             elm_time = np.arange(labels.size)
             # plot signal, labels, and prediction
             plt.sca(axes.flat[i_elm % 6])

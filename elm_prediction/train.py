@@ -30,9 +30,9 @@ try:
     from .src import utils, trainer, dataset
     from .analyze import Analysis
 except ImportError:
-    from elm_prediction.options.train_arguments import TrainArguments
-    from elm_prediction.src import utils, trainer, dataset
-    from elm_prediction.analyze import Analysis
+    from options.train_arguments import TrainArguments
+    from src import utils, trainer, dataset
+    from analyze import Analysis
 
 
 def train_loop(
@@ -336,14 +336,11 @@ def train_loop(
             for key, item in outputs.items():
                 trial.set_user_attr(key, item.tolist())
             if trial.should_prune():
-                LOGGER.info("--------> Trial pruned by Optuna")
+                LOGGER.info("--------> Pruning now, exiting training loop")
                 for handler in LOGGER.handlers[:]:
                     handler.close()
                     LOGGER.removeHandler(handler)
-                optuna.TrialPruned()
-
-            LOGGER.info(scores)
-            LOGGER.info(trial.user_attrs['scores'])
+                raise optuna.TrialPruned()
 
     if args.do_analysis:
         run = Analysis(output_dir)
@@ -375,8 +372,8 @@ if __name__ == "__main__":
             # 'cnn_layer1_num_filters':8,
             # 'cnn_layer2_num_filters':8,
             # 'raw_num_filters':0,
-            'regression':True,
-            'optimizer':'adam',
+            'regression':'log',
+            'optimizer':'sgd',
             'inverse_label_weight':True,
         }
     else:
