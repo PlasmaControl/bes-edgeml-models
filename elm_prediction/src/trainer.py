@@ -53,6 +53,7 @@ class Run:
 
         start = end = time.time()
         for batch_idx, (images, labels) in enumerate(data_loader):
+            print(f'\r{batch_idx}', end='')
             # data loading time
             data_time.update(time.time() - end)
 

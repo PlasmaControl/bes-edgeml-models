@@ -37,12 +37,17 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.logger.info(f'Loading files from {self.args.input_data_dir}')
 
         self.shot_nums, self.input_files = self._retrieve_filepaths()
-        self.logger.info(f'\tFound {len(self.input_files)} files!')
+        self.logger.info(f'Found {len(self.input_files)} files!')
 
         self.f_lengths = self._get_f_lengths()
         self.valid_indices = np.cumsum(np.concatenate((np.array([0]), self.f_lengths)))[:-1]
 
+        # Some flags for operations and checks
         self.open_ = False
+        self.istest_ = False
+        self.isvalid_ = False
+        self.istrain_ = False
+
         self.signals = None
         self.labels = None
         if not self.args.dataset_to_ram:
@@ -101,12 +106,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         idx_offset = self.valid_indices[(self.valid_indices <= index[0])][-1]# Adjust index relative to specific HDF5
         hf_index = [i - idx_offset + self.args.signal_window_size for i in index]
         hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
-        try:
-            hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
-        except Exception as e:
-            print('hdf5 length: ', len(hf))
-            print(f'first index: {hf_index[0]}, last index: {hf_index[-1]}')
-            pass
+        hf['signals'].read_direct(self.hf2np_signals, np.s_[:, hf_index], np.s_[...])
         signal_windows = self._roll_window(self.hf2np_signals.transpose(), self.args.signal_window_size, self.args.batch_size)
 
         hf['labels'].read_direct(self.hf2np_labels, np.s_[hf_index[-self.args.batch_size:]], np.s_[...])
@@ -169,7 +169,6 @@ class TurbulenceDataset(torch.utils.data.Dataset):
     def train_test_split(self, test_frac: float, seed=None):
         """
         Splits full dataset into train and test sets. Will only split by input file. Returns copies of
-        class that only contain inputs from random selection of input files.
         :param test_frac: Fraction of dataset for test set.
         :param seed: Numpy random seed. Default None.
         :return: train_set, test_set
@@ -201,7 +200,13 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
     def load_datasets(self):
         """Load datasets into RAM"""
-        self.logger.info("\tLoading datasets into RAM.")
+        if self.istrain_:
+            s = 'Training '
+        elif self.isvalid_:
+            s = 'Validation '
+        else:
+            s = ' '
+        self.logger.info(f"Loading {s}datasets into RAM.")
         signals, labels = [], []
 
         self.open()
@@ -216,8 +221,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
         self.signals = signals
         self.labels = labels
-
-        self.logger.info(' Datasets loaded successfully.')
+        self.logger.info(f'{s}datasets loaded successfully.')
 
         return
 
@@ -240,7 +244,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         """
         if self.open_:
             self.open_ = False
-            self.logger.info('\tClosing all open hdf5 files.')
+            self.logger.info('Closing all open hdf5 files.')
             for f in self.hf_opened:
                 f.close()
         self.hf_opened = None
