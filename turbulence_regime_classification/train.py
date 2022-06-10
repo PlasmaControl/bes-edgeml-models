@@ -323,10 +323,17 @@ def train_loop(input_args: dict,
              ha='right', va='center', ma='left',
              bbox=dict(boxstyle="square", fc='w', lw=2))
 
-    ax2.plot(outputs['valid_loss'])
+    ax2.plot(outputs['valid_loss'], label='valid. loss')
+    ax2.plot(outputs['train_loss'], label='training loss')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Loss')
-    ax2.set_title('Validation Loss by Epoch')
+    ax2.set_title('Performance Metrics by Epoch')
+    ax2.legend()
+
+    ax3 = ax2.twinx()
+    ax3.plot(outputs['roc_scores'], label='ROC-AUC score', color='r')
+    ax3.set_ylabel('ROC-AUC Score')
+    ax3.legend()
 
     fig.suptitle(f'Summary results of {type(model).__name__}')
     plt.tight_layout()
@@ -362,18 +369,18 @@ if __name__ == '__main__':
                 'max_elms': -1,
                 'fraction_valid': 0.25,
                 'dataset_to_ram': True,
-                'fft_num_filters': 0,
-                'dwt_num_filters': 20,
+                'fft_num_filters': 16,
+                'dwt_num_filters': 16,
                 'signal_window_size': 256,
-                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/regime_classification'
+                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/rc_10e_sws256_fft16_dwt16'
             }
     else:
         # use command line arguments in `sys.argv`
         args = None
 
-    print('From disk')
-    args['dataset_to_ram'] = False
+    print('From ram')
+    args['dataset_to_ram'] = True
     start = time.time()
     train_loop(input_args=args)
-    print("Time loaded from disk: ", time.time() - start)
+    print("Time loaded from ram: ", time.time() - start)
 

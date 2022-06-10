@@ -44,9 +44,9 @@ class TurbulenceDataset(torch.utils.data.Dataset):
 
         # Some flags for operations and checks
         self.open_ = False
+        self.istrain_ = False
         self.istest_ = False
         self.isvalid_ = False
-        self.istrain_ = False
 
         self.signals = None
         self.labels = None
@@ -185,12 +185,14 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         train_set = shots_files[train_idx]
 
         train = copy.deepcopy(self)
+        train.set_state_('train')
         train.shot_nums = [i[0] for i in train_set]
         train.input_files = [i[1] for i in train_set]
         train.f_lengths = train._get_f_lengths()
         train.valid_indices = np.cumsum(np.concatenate((np.array([0]), train.f_lengths)))[:-1]
 
         test = copy.deepcopy(self)
+        test.set_state_('valid')
         test.shot_nums = [i[0] for i in test_set]
         test.input_files = [i[1] for i in test_set]
         test.f_lengths = test._get_f_lengths()
@@ -249,3 +251,17 @@ class TurbulenceDataset(torch.utils.data.Dataset):
                 f.close()
         self.hf_opened = None
         return
+
+    def set_state_(self, state: str):
+        self.istrain_ = False
+        self.istest_ = False
+        self.isvalid_ = False
+        if state == 'train':
+            self.istrain_ = True
+        elif state == 'valid':
+            self.isvalid_ = True
+        elif state == 'test':
+            self.istest_ = True
+        else:
+            pass
+
