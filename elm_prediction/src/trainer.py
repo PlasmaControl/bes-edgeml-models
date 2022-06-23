@@ -53,7 +53,6 @@ class Run:
 
         start = end = time.time()
         for batch_idx, (images, labels) in enumerate(data_loader):
-            print(f'\r{batch_idx}', end='')
             # data loading time
             data_time.update(time.time() - end)
 
@@ -157,7 +156,6 @@ class Run:
             if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
                 loss = self.criterion(y_preds, labels.type(torch.long))
             else:
-                y_preds = y_preds.view(-1)
                 loss = self.criterion(y_preds, labels.type_as(y_preds))
 
 

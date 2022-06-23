@@ -19,7 +19,7 @@ from turbulence_regime_classification.src.sampler import RandomBatchSampler
 # from turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
 
 # ML imports
-from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
+from sklearn.metrics import r2_score
 import torch
 import torchinfo
 from torch.utils.data import DataLoader, BatchSampler
@@ -146,15 +146,13 @@ def train_loop(input_args: dict,
         verbose=True,
     )
 
-    criterion = torch.nn.CrossEntropyLoss(reduction="none")
+    criterion = torch.nn.MSELoss(reduction="none")
 
-    # define variables for ROC and loss
+    # define variables for loss
     best_score_epoch = None
     best_score = -np.inf
     best_loss = np.inf
     best_loss_epoch = None
-    best_cr = None
-    best_cm = None
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -171,7 +169,6 @@ def train_loop(input_args: dict,
     # containers to hold train and validation losses
     train_loss = np.empty(0)
     valid_loss = np.empty(0)
-    roc_scores = np.empty(0)
 
     outputs = {}
 
@@ -222,32 +219,14 @@ def train_loop(input_args: dict,
         # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
-        # Make classification report
-        class_labels = ['L-Mode',
-                        'H-Mode',
-                        'QH-Mode',
-                        'WP QH-Mode'
-                        ]
-        # one_hot = np.zeros((len(valid_labels), 4))
-        # for i, label in zip(one_hot, valid_labels):
-        #     i[int(label)] = 1
-        # roc_auc_score 'ovo' computes average of all pairwise combinations of classes. Insensitive to imbalance.
-        roc_score = roc_auc_score(valid_labels, preds, multi_class='ovo', average='macro', labels=[0,1,2,3])
-        roc_scores = np.append(roc_scores, roc_score)
-        cm = confusion_matrix(valid_labels, preds.argmax(axis=1))
-        print(cm)
-        cr = classification_report(valid_labels, preds.argmax(axis=1), target_names=class_labels, zero_division=0, labels=[0,1,2,3])
-        print(cr)
-
         elapsed = time.time() - start_time
 
         LOGGER.info(f"Epoch: {epoch + 1:03d} \tavg train loss: {avg_loss:.3f} \tavg val. loss: {avg_val_loss:.3f}")
-        LOGGER.info(f"Epoch: {epoch + 1:03d} \tROC-AUC: {roc_score:.3f} \ttime elapsed: {elapsed:.1f} s")
+        LOGGER.info(f"Epoch: {epoch + 1:03d} \ttime elapsed: {elapsed:.1f} s")
 
         # update and save outputs
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
-        outputs['roc_scores'] = roc_scores
 
         with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)
@@ -256,16 +235,7 @@ def train_loop(input_args: dict,
         # track best loss
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
-            best_loss_epoch = epoch
-        # track best roc score and save model
-        if roc_score > best_score or epoch == 0:
-            best_score_epoch = epoch
-            best_score = roc_score
-            best_cr = cr
-            best_cm = cm
-            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_score:.3f}")
-            print(f"\tEpoch: {epoch + 1:03d} \nBest Confusion Matrix:\n{best_cm}")
-            print(f"Classification report:\n{best_cr}")
+            LOGGER.info(f"Epoch: {epoch + 1:03d} \tBest Score: {best_loss:.3f}")
 
             if not args.dry_run:
                 LOGGER.info(f"  Saving model to: {checkpoint_file.as_posix()}")
@@ -293,7 +263,7 @@ def train_loop(input_args: dict,
 
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
-            trial.report(roc_score, epoch)
+            trial.report(avg_val_loss, epoch)
             # save outputs as lists in trial user attributes
             for key, item in outputs.items():
                 trial.set_user_attr(key, item.tolist())
@@ -304,43 +274,24 @@ def train_loop(input_args: dict,
                     LOGGER.removeHandler(handler)
                 optuna.TrialPruned()
 
-            LOGGER.info(roc_scores)
+            LOGGER.info(avg_val_loss)
             LOGGER.info(trial.user_attrs['scores'])
 
-    # Save best classification report
-    LOGGER.info(f'\n{best_cr}')
+    fig, ax = plt.subplots(1, 1)
 
-    # Make plots of results
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(16, 9))
-
-    plot_confusion_matrix(best_cm,
-                          classes=class_labels,
-                          ax=ax1)
-
-    ax1.text(-1.3, 0.5,
-             f'{best_cr}\n'
-             f'ROC: {best_score:0.2f} (epoch {best_score_epoch})    '
-             f'Best Loss: {best_loss:0.2f} (epoch {best_loss_epoch})',
-             transform=ax1.transAxes,
-             ha='right', va='center', ma='left',
-             bbox=dict(boxstyle="square", fc='w', lw=2))
-
-    ax2.plot(outputs['valid_loss'], label='valid. loss')
-    ax2.plot(outputs['train_loss'], label='training loss')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Loss')
-    ax2.set_title('Performance Metrics by Epoch')
-    ax2.legend()
-
-    ax3 = ax2.twinx()
-    ax3.plot(outputs['roc_scores'], label='ROC-AUC score', color='r')
-    ax3.set_ylabel('ROC-AUC Score')
-    ax3.legend()
+    ax.plot(valid_loss, label='Val. Loss')
+    ax.plot(train_loss, label='Training Loss')
+    ax.set_title('')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title('Performance Metrics by Epoch')
+    ax.legend()
 
     fig.suptitle(f'Summary results of {type(model).__name__}')
     plt.tight_layout()
     plt.savefig(output_dir / 'summary.png')
     plt.show()
+
 
     if args.do_analysis:
         run = Analysis(output_dir)
@@ -366,14 +317,14 @@ if __name__ == '__main__':
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
-                'n_epochs': 10,
+                'n_epochs': 20,
                 'max_elms': -1,
                 'fraction_valid': 0.25,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
                 'signal_window_size': 256,
-                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/rc_10e_sws256_fft16_dwt16'
+                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/vel_cnn_10e_sws256_'
             }
     else:
         # use command line arguments in `sys.argv`
