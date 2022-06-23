@@ -76,7 +76,7 @@ class Run:
             if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
                 loss = self.criterion(y_preds, labels.type(torch.long))
             else:
-                loss = self.criterion(y_preds.view(-1), labels.type(y_preds))
+                loss = self.criterion(y_preds, labels.type_as(y_preds))
 
             if not torch.all(torch.isfinite(loss)):
                 assert False

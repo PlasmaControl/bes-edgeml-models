@@ -13,11 +13,10 @@ from matplotlib import pyplot as plt
 
 from elm_prediction.src import utils, trainer
 from elm_prediction.analyze import Analysis
-from elm_prediction.options.train_arguments import TrainArguments
+from turbulence_regime_classification.options.train_arguments import TrainArguments
 from velocimetry.src.dataset import VelocimetryDataset
 from turbulence_regime_classification.src.sampler import RandomBatchSampler
 # from turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
-from turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
 
 # ML imports
 from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
@@ -48,6 +47,10 @@ def train_loop(input_args: dict,
                 arg_list.append(f'--{key}={value}')
         input_args = arg_list
     args = args_obj.parse(arg_list=input_args)
+
+    # make sure regression is set for error
+    args.regression = True
+    args.dataset_to_ram = True
 
     # output directory and files
     output_dir = Path(args.output_dir).resolve()
@@ -82,6 +85,7 @@ def train_loop(input_args: dict,
     device = torch.device(args.device)
     LOGGER.info(f'------>  Target device: {device}')
 
+    # Get model
     model_class = utils.create_model_class(args.model_name)
     model = model_class(args)
     model = model.to(device)
@@ -172,7 +176,7 @@ def train_loop(input_args: dict,
     outputs = {}
 
     # Create datasets
-    dataset = TurbulenceDataset(args, LOGGER)
+    dataset = VelocimetryDataset(args, LOGGER)
     train_set, valid_set = dataset.train_test_split(args.fraction_valid, seed=42)
 
     if args.dataset_to_ram:
@@ -357,9 +361,8 @@ def train_loop(input_args: dict,
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
-        args = {'model_name': 'multi_features_ds_v2',
+        args = {'model_name': 'velocimetry_cnn',
                 'input_data_dir': Path(__file__).parent / 'data',
-                'labeled_data_dir': 'labeled_datasets',
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,

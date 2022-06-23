@@ -228,11 +228,12 @@ def gcreate_data_class(data_name: str) -> Callable:
     Returns:
         Object of the data class.
     """
+    parent_package = Path(inspect.stack()[1].filename).parent.stem + '.src'
     data_filename = data_name + "_data"
     data_class_path = "..data_preprocessing." + data_filename
     data_lib = importlib.import_module(
         data_class_path,
-        package='elm_prediction.src',
+        package=parent_package,
     )
     data_class = None
     _data_name = data_name.replace("_", "") + "data"

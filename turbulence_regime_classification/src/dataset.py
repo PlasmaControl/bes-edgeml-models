@@ -39,14 +39,15 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.shot_nums, self.input_files = self._retrieve_filepaths()
         self.logger.info(f'Found {len(self.input_files)} files!')
 
-        self.f_lengths = self._get_f_lengths()
-        self.valid_indices = np.cumsum(np.concatenate((np.array([0]), self.f_lengths)))[:-1]
-
         # Some flags for operations and checks
         self.open_ = False
         self.istrain_ = False
         self.istest_ = False
         self.isvalid_ = False
+        self.frac_ = 1
+
+        self.f_lengths = self._get_f_lengths()
+        self.valid_indices = np.cumsum(np.concatenate((np.array([0]), self.f_lengths)))[:-1]
 
         self.signals = None
         self.labels = None
@@ -58,7 +59,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.hf_opened = None
 
     def __len__(self):
-        return sum(self.f_lengths)
+        return int(sum(self.f_lengths))
 
 
     def __getitem__(self, index: int):
@@ -164,7 +165,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         for f in self.input_files:
             with h5py.File(f, 'r') as ds:
                 fs.append(len(ds['labels']) - self.args.signal_window_size - self.args.batch_size)
-        return np.array(fs)
+        return np.array(fs, dtype=int)
 
     def train_test_split(self, test_frac: float, seed=None):
         """
@@ -258,8 +259,10 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.isvalid_ = False
         if state == 'train':
             self.istrain_ = True
+            self.frac_ = 1 - self.args.fraction_valid
         elif state == 'valid':
             self.isvalid_ = True
+            self.frac_ = self.args.fraction_valid
         elif state == 'test':
             self.istest_ = True
         else:
