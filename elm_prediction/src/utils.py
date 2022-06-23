@@ -12,6 +12,7 @@ import time
 import math
 import argparse
 import importlib
+import inspect
 from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
 from collections import OrderedDict
@@ -365,11 +366,12 @@ def create_model_class(
     Returns:
         Object of the model class.
     """
+    parent_package = Path(inspect.stack()[1].filename).parent.stem + '.src'
     model_filename = model_name + "_model"
     model_path = "..models." + model_filename
     model_lib = importlib.import_module(
         model_path,
-        package='elm_prediction.src',
+        package=parent_package,
     )
     model = None
     _model_name = model_name.replace("_", "") + "model"
