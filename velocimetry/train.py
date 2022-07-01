@@ -149,10 +149,7 @@ def train_loop(input_args: dict,
     criterion = torch.nn.MSELoss(reduction="none")
 
     # define variables for loss
-    best_score_epoch = None
-    best_score = -np.inf
     best_loss = np.inf
-    best_loss_epoch = None
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -175,8 +172,8 @@ def train_loop(input_args: dict,
     # Create datasets
     dataset = VelocimetryDataset(args, LOGGER)
     train_set, valid_set = dataset.train_test_split(args.fraction_valid, seed=42)
-
     if args.dataset_to_ram:
+        # Load datasets into ram
         train_set.load_datasets()
         valid_set.load_datasets()
 
@@ -261,6 +258,8 @@ def train_loop(input_args: dict,
                     )
                     LOGGER.info(f"  File size: {onnx_file.stat().st_size / 1e3:.1f} kB")
 
+                dataset.save_test_data()
+
         # optuna hook to monitor training epochs
         if trial is not None and optuna is not None:
             trial.report(avg_val_loss, epoch)
@@ -317,14 +316,14 @@ if __name__ == '__main__':
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
-                'n_epochs': 20,
+                'n_epochs': 40,
                 'max_elms': -1,
-                'fraction_valid': 0.25,
+                'fraction_valid': 0.15,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
                 'signal_window_size': 256,
-                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/vel_cnn_10e_sws256_'
+                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/vel_cnn_10e_sws256'
             }
     else:
         # use command line arguments in `sys.argv`

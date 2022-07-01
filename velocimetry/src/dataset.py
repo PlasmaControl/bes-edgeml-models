@@ -1,4 +1,5 @@
 import copy
+import pickle
 import traceback
 import h5py
 import pandas as pd
@@ -93,7 +94,7 @@ class VelocimetryDataset(TurbulenceDataset):
 
     def train_test_split(self, test_frac: float, seed=None):
         """
-        Splits full dataset into train and test sets. Will only split by input file. Returns copies of
+        Splits full dataset into train and test sets. Will only split by input file. Returns copies of self.
         :param test_frac: Fraction of dataset for test set.
         :param seed: Numpy random seed. Default None.
         :return: train_set, test_set
@@ -127,8 +128,46 @@ class VelocimetryDataset(TurbulenceDataset):
 
         return train, test
 
+    def save_test_data(self) -> None:
+        """
+        Load and save test data to pickle file at location specified in args
+        Returns: None
+
+        """
+
+        output = {}
+
+        self.open()
+        if len(self.shot_nums) == 1:
+            hf = self.hf_opened[0]
+            # Load and save test data to pickle file
+            n_indices = len(hf['vR'])
+            i_start = np.floor((1 - self.args.fraction_test) * n_indices).astype(int)
+            # Load test data
+            sx_t_data = np.s_[i_start:n_indices-1]
+            sx_s_t_data = np.s_[:, i_start:n_indices-1]
+
+            arr_len = sx_t_data.stop - sx_t_data.start
+            hf2np_s = np.empty((64, arr_len))
+            hf2np_vR = np.empty((arr_len, 8, 8))
+            hf2np_vZ = np.empty((arr_len, 8, 8))
+
+            hf['signals'].read_direct(hf2np_s, sx_s_t_data, np.s_[...])
+            hf['vR'].read_direct(hf2np_vR, sx_t_data, np.s_[...])
+            hf['vZ'].read_direct(hf2np_vZ, sx_t_data, np.s_[...])
+        else:
+            return
+
+        output['signals'] = hf2np_s.transpose().reshape((-1, 8, 8))
+        output['vZ'] = hf2np_vZ
+        output['vR'] = hf2np_vR
+        with open(Path(self.args.output_dir)/'test_data.pkl', 'w+b') as f:
+            pickle.dump(output, f)
+        return
+
     def load_datasets(self):
         """Load datasets into RAM"""
+        # Only used for displaying strings in console.
         if self.istrain_:
             s = 'Training '
         elif self.isvalid_:
@@ -140,19 +179,21 @@ class VelocimetryDataset(TurbulenceDataset):
 
         self.open()
         if len(self.shot_nums) == 1:
-            sn = self.shot_nums[0]
             hf = self.hf_opened[0]
             n_indices = len(hf['vR'])
-            if self.isvalid_:
-                idx = np.floor((1-self.frac_)*n_indices).astype(int)
-                sx = np.s_[idx:]
-                sx_s = np.s_[:, idx:]
-            else:
-                idx = np.ceil(self.frac_ * n_indices).astype(int)
-                sx = np.s_[:idx]
-                sx_s = np.s_[:, :idx]
+            # Indices for start and stop of validation and test sets
+            i_start = np.floor((1 - (self.args.fraction_test + self.args.fraction_valid)) * n_indices).astype(int)
+            i_stop = np.floor((1 - self.args.fraction_test) * n_indices).astype(int)
 
-            arr_len = np.ceil(self.frac_ * n_indices).astype(int)
+            if self.isvalid_:
+                sx = np.s_[i_start:i_stop]
+                sx_s = np.s_[:, i_start:i_stop]
+            else:
+                sx = np.s_[0:i_start]
+                sx_s = np.s_[:, 0:i_start]
+
+            # read_direct is faster and more memory efficient
+            arr_len = sx.stop - sx.start
             hf2np_s = np.empty((64, arr_len))
             hf2np_vR = np.empty((arr_len, 8, 8))
             hf2np_vZ = np.empty((arr_len, 8, 8))

@@ -259,12 +259,13 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         self.isvalid_ = False
         if state == 'train':
             self.istrain_ = True
-            self.frac_ = 1 - self.args.fraction_valid
+            self.frac_ = 1 - (self.args.fraction_valid + self.args.fraction_test)
         elif state == 'valid':
             self.isvalid_ = True
             self.frac_ = self.args.fraction_valid
         elif state == 'test':
             self.istest_ = True
+            self.frac_ = self.args.fraction_test
         else:
             pass
 
