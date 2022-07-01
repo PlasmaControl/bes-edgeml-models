@@ -12,7 +12,6 @@ import time
 import math
 import argparse
 import importlib
-import inspect
 from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
 from collections import OrderedDict
@@ -217,7 +216,7 @@ def time_since(since: int, percent: float) -> str:
     return f"{as_minutes_seconds(elapsed)} (remain {as_minutes_seconds(remaining)})"
 
 
-def gcreate_data_class(data_name: str) -> Callable:
+def create_data_class(data_name: str) -> Callable:
     """
     Helper function to import the data preprocessing module as per the command
     line argument `--data_preproc`.
@@ -228,7 +227,7 @@ def gcreate_data_class(data_name: str) -> Callable:
     Returns:
         Object of the data class.
     """
-    parent_package = Path(inspect.stack()[1].filename).parent.stem + '.src'
+    parent_package = Path(sys.argv[0]).parent.stem + '.src'
     data_filename = data_name + "_data"
     data_class_path = "..data_preprocessing." + data_filename
     data_lib = importlib.import_module(
@@ -367,7 +366,7 @@ def create_model_class(
     Returns:
         Object of the model class.
     """
-    model_type = Path(inspect.stack()[1].filename).parent.stem
+    model_type = Path(sys.argv[0]).parent.stem
     model_filename = model_name + "_model"
     model_path = "..models." + model_filename
     model_lib = importlib.import_module(

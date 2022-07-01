@@ -126,96 +126,40 @@ class Analysis(object):
 
     def _calc_inference_full(
         self,
-        threshold=None,
         max_elms=None,
     ):
         if self.test_data is None:
             self._load_test_data()
         signals = self.test_data['signals']
-        labels = self.test_data['labels']
-        window_start = self.test_data['window_start']
-        elm_indices = self.test_data['elm_indices']
-
-        if threshold is None:
-            threshold = self.args.threshold
-
-        n_elms = elm_indices.size
-        sws_plus_la = (self.args.signal_window_size - 1) + self.args.label_look_ahead
+        vZ_labels = self.test_data['vZ'][self.args.signal_window_size:]
+        vR_labels = self.test_data['vR'][self.args.signal_window_size:]
 
         print('Running inference on full test data')
-        elm_predictions = {}
         with torch.no_grad():
-            for i_elm, elm_index in enumerate(elm_indices):
-                if max_elms and i_elm >= max_elms:
-                    break
-                i_start = window_start[i_elm]
-                if i_elm < n_elms - 1:
-                    i_stop = window_start[i_elm + 1] - 1
-                else:
-                    i_stop = labels.size
-                elm_signals = signals[i_start:i_stop, ...]
-                elm_labels = labels[i_start:i_stop]
-                print(f"ELM {elm_indices[i_elm]:5d} ({i_elm+1:3d} of {n_elms})  "
-                    f"Signal size: {elm_signals.shape}")
-                predictions = []
-                effective_len = elm_labels.size - sws_plus_la
-                for j in range(effective_len):
-                    input_signals = elm_signals[j: j + self.args.signal_window_size, ...]
-                    input_signals = input_signals.reshape([1, 1, self.args.signal_window_size, 8, 8])
-                    input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
-                    input_signals = input_signals.to(self.device)
-                    outputs = self.model(input_signals)
-                    predictions.append(outputs.item())
-                predictions = np.array(predictions)
-                # micro predictions
-                if self.is_classification:
-                    predictions = torch.sigmoid(
-                        torch.as_tensor(predictions, dtype=torch.float32)
-                    ).cpu().numpy()
-                predictions = np.pad(
-                    predictions,
-                    pad_width=(sws_plus_la, 0),
-                    mode="constant",
-                    constant_values=0,
-                )
-                if self.is_classification:
-                    # macro predictions
-                    active_elm = np.where(elm_labels > 0.0)[0]
-                    active_elm_start = active_elm[0]
-                    active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
-                    active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
-                    micro_predictions_pre_active_elms = \
-                        predictions[:active_elm_lower_buffer]
-                    macro_predictions_pre_active_elms = np.array(
-                        [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
-                    )
-                    micro_predictions_active_elms = \
-                        predictions[active_elm_lower_buffer:active_elm_upper_buffer]
-                    macro_predictions_active_elms = np.array(
-                        [np.any(micro_predictions_active_elms > threshold).astype(int)]
-                    )
-                    macro_labels = np.array([0, 1], dtype="int")
-                    macro_predictions = np.concatenate(
-                        [
-                            macro_predictions_pre_active_elms,
-                            macro_predictions_active_elms,
-                        ]
-                    )
-                elif self.model.model_type == 'velocimetry':
-                    pass
-                else:
-                    macro_labels = None
-                    macro_predictions = None
+            predictions = []
+            effective_len = signals.shape[0] - self.args.signal_window_size
+            for j in tqdm(range(effective_len), desc="Processing BES velocimetry."):
+                input_signals = signals[j: j + self.args.signal_window_size, ...]
+                input_signals = input_signals.reshape([1, 1, self.args.signal_window_size, 8, 8])
+                input_signals = torch.as_tensor(input_signals, dtype=torch.float32)
+                input_signals = input_signals.to(self.device)
+                outputs = self.model(input_signals)
+                predictions.append(outputs.cpu().squeeze().numpy())
+            predictions = np.array(predictions)
+            vR_predictions = predictions[:, :64].reshape((-1, 8, 8))
+            vZ_predictions = predictions[:, 64:].reshape((-1, 8, 8))
 
-                elm_predictions[elm_index] = {
-                    "signals": elm_signals,
-                    "labels": elm_labels,
-                    "predictions": predictions,
-                    "macro_labels": macro_labels,
-                    "macro_predictions": macro_predictions,
-                }
+            vel_predictions = {
+                "signals": signals,
+                "vR_labels": vR_labels,
+                "vZ_labels": vZ_labels,
+                "vR_predictions": vR_predictions,
+                "vZ_predictions": vZ_predictions
+            }
 
-        self.elm_predictions = elm_predictions
+        self.vel_predictions = vel_predictions
+
+        return vel_predictions
 
     def plot_training_epochs(self):
         if self.training_output is None:
@@ -487,10 +431,10 @@ if __name__ == "__main__":
 
     for run_dir in [
         # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
-        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/vel_cnn_10e_sws256_',
+        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/vel_cnn_10e_sws256',
     ]:
         run = Analysis(run_dir=run_dir)
-        run._calc_inference_full()
+        vpd = run._calc_inference_full()
         # run.plot_valid_indices_analysis()
 
     plt.show()
