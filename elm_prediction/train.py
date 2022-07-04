@@ -37,8 +37,9 @@ except ImportError:
 
 def train_loop(
     input_args: Union[list,dict,None] = None,
+    select_elms: Union[list, np.ndarray] = None,
     trial = None,  # optuna `trial` object
-    _rank: Union[int, None] = None,  # process rank for data parallel dist. training; *must* be last arg
+    _rank: Union[int, None] = None, # process rank for data parallel dist. training; *must* be last arg
 ) -> dict:
     """Run a training pipeline: parse inputs, prepare data, create model, train over epochs.
 
@@ -107,7 +108,7 @@ def train_loop(
 
     # create train, valid and test data
     data_cls = utils.create_data_class(args.data_preproc)
-    data_obj = data_cls(args, LOGGER)
+    data_obj = data_cls(args, LOGGER, select_elms=select_elms)
     train_data, valid_data, test_data = data_obj.get_data(verbose=False)
 
     # dump test data into a file
