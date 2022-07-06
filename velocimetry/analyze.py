@@ -85,7 +85,7 @@ class Analysis(object):
         self.training_output = None
         self.test_data = None
         self.valid_indices_data_loader = None
-        self.elm_predictions = None
+        self.vel_predictions = None
 
     def _load_training_output(self):
         outputs_file = self.output_dir / 'output.pkl'
@@ -164,7 +164,7 @@ class Analysis(object):
     def plot_training_epochs(self):
         if self.training_output is None:
             self._load_training_output()
-        train_loss = self.training_output['train_loss']
+        train_loss = self. training_output['train_loss']
         valid_loss = self.training_output['valid_loss']
         epochs = np.arange(train_loss.size) + 1
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
@@ -285,7 +285,7 @@ class Analysis(object):
                 print(f'Saving matrix figure: {filepath.as_posix()}')
                 plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
         else:
-            r2 = metrics.r2_score(targets, predictions)
+            r2 = metrics.r2_score(targets[:, 2, 6], predictions[:, 2, 6])
             print(f"R2: {r2:.2f}")
 
     def plot_full_inference(
@@ -338,7 +338,7 @@ class Analysis(object):
         ):
         if threshold is None:
             threshold = self.args.threshold
-        if self.elm_predictions is None:
+        if self.vel_predictions is None:
             self._calc_inference_full(threshold=threshold, max_elms=max_elms)
         _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
@@ -411,7 +411,6 @@ class Analysis(object):
 
     def plot_all(self):
         self.plot_training_epochs()
-        self.plot_valid_indices_analysis()
         self.plot_full_analysis()
         self.plot_full_inference()
         self.merge_all_pdfs()
@@ -434,7 +433,18 @@ if __name__ == "__main__":
         '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/vel_cnn_10e_sws256',
     ]:
         run = Analysis(run_dir=run_dir)
-        vpd = run._calc_inference_full()
+        vpd = run.plot_all()
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.plot(vpd['vZ_labels'][:, 2, 6], label='Labels')
+        ax1.plot(vpd['vZ_predictions'][:, 2, 6], label='Predictions')
+        ax1.legend()
+        ax1.set_title('vZ')
+        ax2.plot(vpd['vR_labels'][:, 2, 6], label='Labels')
+        ax2.plot(vpd['vR_predictions'][:, 2, 6], label='Labels')
+        ax2.legend()
+        ax2.set_title('vR')
+        plt.show()
+
         # run.plot_valid_indices_analysis()
 
     plt.show()
