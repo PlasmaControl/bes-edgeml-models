@@ -188,7 +188,7 @@ class Analysis(object):
             plt.plot(epochs, roc_scores, label='ROC-AUC')
         elif self.model.model_type == 'velocimetry':
             # No additional metrics to plot for velocimetry as of 6/28/2022
-            axes[1].remove()
+            mape = self.training_output['scores']
             axes = np.array([axes[0]], dtype=object)
 
         plt.title('Validation scores')

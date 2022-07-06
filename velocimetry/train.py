@@ -19,7 +19,7 @@ from turbulence_regime_classification.src.sampler import RandomBatchSampler
 # from turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
 
 # ML imports
-from sklearn.metrics import r2_score
+from sklearn.metrics import mean_absolute_percentage_error as mape
 import torch
 import torchinfo
 from torch.utils.data import DataLoader, BatchSampler
@@ -150,6 +150,7 @@ def train_loop(input_args: dict,
 
     # define variables for loss
     best_loss = np.inf
+    best_score = np.inf
 
     # instantiate training object
     use_rnn = True if args.data_preproc == "rnn" else False
@@ -166,6 +167,7 @@ def train_loop(input_args: dict,
     # containers to hold train and validation losses
     train_loss = np.empty(0)
     valid_loss = np.empty(0)
+    scores = np.empty(0)
 
     outputs = {}
 
@@ -213,6 +215,9 @@ def train_loop(input_args: dict,
 
         valid_loss = np.append(valid_loss, avg_val_loss)
 
+        score = mape(valid_labels, preds, multioutput='uniform_average')
+        scores = np.append(scores, score)
+
         # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
@@ -224,6 +229,8 @@ def train_loop(input_args: dict,
         # update and save outputs
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
+        outputs['scores'] = scores
+        outputs['score_type'] = 'Mean Absolute Percentage Error'
 
         with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)

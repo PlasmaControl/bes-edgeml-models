@@ -274,10 +274,12 @@ def train_loop(
             # R2 score
             score = r2_score(valid_labels, preds)
             scores = np.append(scores, score)
+            score_type = 'R2'
         else:
             # F1 scoring
             score = f1_score(valid_labels, (preds > args.threshold).astype(int))
             scores = np.append(scores, score)
+            score_type = 'F1'
             # ROC scoring
             roc_score = roc_auc_score(valid_labels, preds)
             roc_scores = np.append(roc_scores, roc_score)
@@ -293,6 +295,8 @@ def train_loop(
         outputs['train_loss'] = train_loss
         outputs['valid_loss'] = valid_loss
         outputs['scores'] = scores
+        outputs['score_type'] = score_type # A helper to keep track of which score is being used. Useful in plotting.
+
         if args.regression:
             pass
         else:
