@@ -32,7 +32,7 @@ try:
 except ImportError:
     from models.bes_edgeml_models.options.train_arguments import TrainArguments
     from models.bes_edgeml_models.src import utils, trainer, dataset
-    from models.elm_prediction.analyze import Analysis
+    from models.elm_regression.analyze import Analysis
 
 
 def train_loop(
@@ -70,11 +70,10 @@ def train_loop(
     shutil.rmtree(output_dir.as_posix(), ignore_errors=True)
     output_dir.mkdir(parents=True)
 
-    if args.regression:
-        args.data_preproc = 'regression'
-        args.label_look_ahead = 0
-        args.truncate_buffer = 0
-        args.oversample_active_elm = False
+    args.data_preproc = 'regression'
+    args.label_look_ahead = 0
+    args.truncate_buffer = 0
+    args.oversample_active_elm = False
 
     if args.regression != 'log':
         args.inverse_label_weight = False
@@ -212,10 +211,7 @@ def train_loop(
     )
 
     # loss function
-    if args.regression:
-        criterion = torch.nn.MSELoss(reduction="none")
-    else:
-        criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
+    criterion = torch.nn.MSELoss(reduction="none")
 
     # define variables for ROC and loss
     best_score = -np.inf
@@ -236,10 +232,6 @@ def train_loop(
     train_loss = np.empty(0)
     valid_loss = np.empty(0)
     scores = np.empty(0)
-    if args.regression:
-        pass
-    else:
-        roc_scores = np.empty(0)
 
     outputs = {}
 
@@ -255,8 +247,7 @@ def train_loop(
             epoch, 
             print_every=args.train_print_every,
         )
-        if args.regression:
-            avg_loss = np.sqrt(avg_loss)
+        avg_loss = np.sqrt(avg_loss)
         train_loss = np.append(train_loss, avg_loss)
 
         # evaluate validation data
@@ -264,26 +255,16 @@ def train_loop(
             valid_loader, 
             print_every=args.valid_print_every
         )
-        if args.regression:
-            avg_val_loss = np.sqrt(avg_val_loss)
+        avg_val_loss = np.sqrt(avg_val_loss)
         valid_loss = np.append(valid_loss, avg_val_loss)
 
         # step the learning rate scheduler
         scheduler.step(avg_val_loss)
 
-        if args.regression:
-            # R2 score
-            score = r2_score(valid_labels, preds)
-            scores = np.append(scores, score)
-            score_type = 'R2'
-        else:
-            # F1 scoring
-            score = f1_score(valid_labels, (preds > args.threshold).astype(int))
-            scores = np.append(scores, score)
-            score_type = 'F1'
-            # ROC scoring
-            roc_score = roc_auc_score(valid_labels, preds)
-            roc_scores = np.append(roc_scores, roc_score)
+        # R2 score
+        score = r2_score(valid_labels, preds)
+        scores = np.append(scores, score)
+        score_type = 'R2'
 
         elapsed = time.time() - start_time
 
@@ -297,11 +278,6 @@ def train_loop(
         outputs['valid_loss'] = valid_loss
         outputs['scores'] = scores
         outputs['score_type'] = score_type # A helper to keep track of which score is being used. Useful in plotting.
-
-        if args.regression:
-            pass
-        else:
-            outputs['roc_scores'] = roc_scores
 
         with open(output_file.as_posix(), "w+b") as f:
             pickle.dump(outputs, f)

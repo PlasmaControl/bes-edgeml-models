@@ -1,6 +1,6 @@
 import argparse
 import torch
-from elm_prediction.models.multi_features_ds_v2_model import MultiFeaturesDsV2Model
+from models.bes_edgeml_models.models.multi_features_ds_v2_model import MultiFeaturesDsV2Model
 
 class MultiFeaturesClassificationModel(MultiFeaturesDsV2Model):
     def __init__(self, args: argparse.Namespace):

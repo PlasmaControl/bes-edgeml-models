@@ -50,7 +50,6 @@ class Analysis(object):
         with self.args_file.open('rb') as f:
             args = pickle.load(f)
         self.args = TestArguments().parse(existing_namespace=args)
-        self.is_classification = not self.args.regression
 
         if self.device is None:
             self.device = self.args.device
@@ -168,42 +167,37 @@ class Analysis(object):
                     predictions.append(outputs.item())
                 predictions = np.array(predictions)
                 # micro predictions
-                if self.is_classification:
-                    predictions = torch.sigmoid(
-                        torch.as_tensor(predictions, dtype=torch.float32)
-                    ).cpu().numpy()
+                predictions = torch.sigmoid(
+                    torch.as_tensor(predictions, dtype=torch.float32)
+                ).cpu().numpy()
                 predictions = np.pad(
                     predictions,
                     pad_width=(sws_plus_la, 0),
                     mode="constant",
                     constant_values=0,
                 )
-                if self.is_classification:
-                    # macro predictions
-                    active_elm = np.where(elm_labels > 0.0)[0]
-                    active_elm_start = active_elm[0]
-                    active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
-                    active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
-                    micro_predictions_pre_active_elms = \
-                        predictions[:active_elm_lower_buffer]
-                    macro_predictions_pre_active_elms = np.array(
-                        [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
-                    )
-                    micro_predictions_active_elms = \
-                        predictions[active_elm_lower_buffer:active_elm_upper_buffer]
-                    macro_predictions_active_elms = np.array(
-                        [np.any(micro_predictions_active_elms > threshold).astype(int)]
-                    )
-                    macro_labels = np.array([0, 1], dtype="int")
-                    macro_predictions = np.concatenate(
-                        [
-                            macro_predictions_pre_active_elms,
-                            macro_predictions_active_elms,
-                        ]
-                    )
-                else:
-                    macro_labels = None
-                    macro_predictions = None
+                # macro predictions
+                active_elm = np.where(elm_labels > 0.0)[0]
+                active_elm_start = active_elm[0]
+                active_elm_lower_buffer = active_elm_start - self.args.truncate_buffer
+                active_elm_upper_buffer = active_elm_start + self.args.truncate_buffer
+                micro_predictions_pre_active_elms = \
+                    predictions[:active_elm_lower_buffer]
+                macro_predictions_pre_active_elms = np.array(
+                    [np.any(micro_predictions_pre_active_elms > threshold).astype(int)]
+                )
+                micro_predictions_active_elms = \
+                    predictions[active_elm_lower_buffer:active_elm_upper_buffer]
+                macro_predictions_active_elms = np.array(
+                    [np.any(micro_predictions_active_elms > threshold).astype(int)]
+                )
+                macro_labels = np.array([0, 1], dtype="int")
+                macro_predictions = np.concatenate(
+                    [
+                        macro_predictions_pre_active_elms,
+                        macro_predictions_active_elms,
+                    ]
+                )
 
                 elm_predictions[elm_index] = {
                     "signals": elm_signals,

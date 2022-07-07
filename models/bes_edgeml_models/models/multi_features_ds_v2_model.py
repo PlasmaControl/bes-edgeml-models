@@ -584,7 +584,7 @@ class MultiFeaturesDsV2Model(nn.Module):
             else None
         )
 
-        input_features = 0
+        self.input_features = 0
         for model in [
             self.raw_features_model,
             self.fft_features_model,
@@ -593,10 +593,8 @@ class MultiFeaturesDsV2Model(nn.Module):
             self.cnn_features_model,
         ]:
             if model is not None:
-                input_features += model.num_filters * model.subwindow_nbins
-        self.fc1 = nn.Linear(in_features=input_features, out_features=args.fc1_size)
-        self.fc2 = nn.Linear(in_features=args.fc1_size, out_features=args.fc2_size)
-        self.fc3 = nn.Linear(in_features=args.fc2_size, out_features=1)
+                self.input_features += model.num_filters * model.subwindow_nbins
+
         self.dropout = nn.Dropout(p=self.args.mf_dropout_rate)
         self.relu = nn.LeakyReLU(negative_slope=self.args.mf_negative_slope)
 
@@ -626,9 +624,6 @@ class MultiFeaturesDsV2Model(nn.Module):
         x = torch.cat(active_features_list, dim=1)
         if torch.any(torch.isnan(x)):
             assert False
-        x = self.relu(self.dropout(self.fc1(x)))
-        x = self.relu(self.dropout(self.fc2(x)))
-        x = self.fc3(x)
         return x
 
 
