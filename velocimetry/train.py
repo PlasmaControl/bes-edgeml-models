@@ -323,7 +323,7 @@ if __name__ == '__main__':
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
-                'n_epochs': 40,
+                'n_epochs': 20,
                 'max_elms': -1,
                 'fraction_valid': 0.15,
                 'dataset_to_ram': True,

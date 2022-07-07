@@ -126,6 +126,7 @@ class Analysis(object):
 
     def _calc_inference_full(
         self,
+        threshold=None,
         max_elms=None,
     ):
         if self.test_data is None:
@@ -175,21 +176,22 @@ class Analysis(object):
         plt.title('Training/validation loss')
         plt.ylabel('Loss')
         plt.sca(axes.flat[1])
+        # if self.model.model_type == 'elm_prediction':
+        scores = self.training_output.get('scores', None)
+        roc_scores = self.training_output.get('roc_scores', None)
+
         if self.model.model_type == 'elm_prediction':
-            scores = self.training_output['scores']
-            if not self.args.regression:
-                roc_scores = self.training_output['roc_scores']
+            if self.args.regression:
+                plt.plot(epochs, scores, label=f'R2')
+            else:
                 plt.plot(epochs, roc_scores, label='ROC-AUC')
                 plt.plot(epochs, scores, label=f'F1 (thr={self.args.threshold:.2f})')
-            else:
-                plt.plot(epochs, scores, label=f'R2')
+
         elif self.model.model_type == 'turbulence_regime_classification':
-            roc_scores = self.training_output['roc_scores']
             plt.plot(epochs, roc_scores, label='ROC-AUC')
+
         elif self.model.model_type == 'velocimetry':
-            # No additional metrics to plot for velocimetry as of 6/28/2022
-            mape = self.training_output['scores']
-            axes = np.array([axes[0]], dtype=object)
+            plt.plot(epochs, scores, label='MAPE')
 
         plt.title('Validation scores')
         plt.ylabel('Score')
@@ -292,112 +294,59 @@ class Analysis(object):
             self,
             max_elms=None,
         ):
-        if not self.elm_predictions:
+        if not self.vel_predictions:
             self._calc_inference_full(max_elms=max_elms)
-        elm_indices = self.test_data['elm_indices']
-        n_elms = elm_indices.size
-        i_page = 1
-        for i_elm, elm_index in enumerate(self.elm_predictions):
-            # if i_elm >= len(self.elm_predictions):
-            #     break
-            if i_elm % 6 == 0:
-                _, axes = plt.subplots(ncols=3, nrows=2, figsize=(12, 6))
-                plt.suptitle(f"{self.run_dir_short} | Test data (full)")
-            elm_data = self.elm_predictions[elm_index]
-            signals = elm_data["signals"]
-            labels = elm_data["labels"]
-            predictions = elm_data["predictions"]
-            elm_time = np.arange(labels.size)
-            # plot signal, labels, and prediction
-            plt.sca(axes.flat[i_elm % 6])
-            plt.plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22")
-            plt.plot(elm_time, labels, label="Ground truth")
-            plt.plot(elm_time, predictions, label="Prediction")
-            plt.xlabel("Time (micro-s)")
-            plt.ylabel("Signal | label")
-            # plt.ylim([None, 1.1])
-            plt.legend(fontsize='small')
-            plt.title(f'ELM index {elm_index}')
-            if i_elm % 6 == 5 or i_elm == n_elms-1:
-                plt.tight_layout()
-                if self.save:
-                    filepath = self.analysis_dir / f'inference_{i_page:02d}.pdf'
-                    print(f'Saving inference file: {filepath.as_posix()}')
-                    plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-                    i_page += 1
-        # merge PDFs
-        if self.save:
-            pdf_files = sorted(self.analysis_dir.glob('inference_*.pdf'))
-            output = self.analysis_dir/'inference.pdf'
-            utils.merge_pdfs(pdf_files, output, delete_inputs=True)
-
-    def plot_full_analysis(
-            self,
-            threshold: Union[float, None] = None,
-            max_elms = None,
-        ):
-        if threshold is None:
-            threshold = self.args.threshold
-        if self.vel_predictions is None:
-            self._calc_inference_full(threshold=threshold, max_elms=max_elms)
-        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        _, axes = plt.subplots(ncols=1, nrows=2, figsize=(12, 6))
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
-        for mode in ['micro', 'macro']:
-            # gather micro/macro results
-            targets = []
-            predictions = []
-            for vals in self.elm_predictions.values():
-                predictions.append(vals[f"{mode}_predictions"])
-                label_key = 'labels' if mode == 'micro' else 'macro_labels'
-                targets.append(vals[label_key])
-            predictions = np.concatenate(predictions)
-            targets = np.concatenate(targets)
-            # plot ROC (micro only)
-            if mode == 'micro':
-                fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
-                plt.sca(axes.flat[0])
-                plt.plot(fpr, tpr)
-                plt.xlabel('False positive rate')
-                plt.ylabel('True positive rate')
-                plt.title('ROC')
-                roc_auc = metrics.roc_auc_score(targets, predictions)
-                plt.annotate(
-                    f'ROC-AUC = {roc_auc:.2f}',
-                    xy=(0.5, 0.03),
-                    xycoords='axes fraction',
-                )
-                plt.sca(axes.flat[1])
-                plt.plot(thresh, tpr, label='True pos. rate')
-                plt.plot(thresh, fpr, label='False pos. rate')
-                plt.title('TPR/FPR')
-                plt.xlabel('Threshold')
-                plt.ylabel('Rate')
-                plt.xlim(0,1)
-                plt.legend()
-            # confusion matrix heatmaps
-            if mode == 'micro':
-                bool_predictions = (predictions > threshold).astype(int)
-                cm = metrics.confusion_matrix(targets, bool_predictions)
-            else:
-                cm = metrics.confusion_matrix(targets, predictions)
-            # plt.figure(figsize=(4.5, 3.5))
-            # ax = plt.subplot(111)
-            axis = axes.flat[2] if mode == 'micro' else axes.flat[3]
-            plt.sca(axis)
-            sns.heatmap(
-                cm,
-                annot=True,
-                norm=LogNorm() if mode=='micro' else None,
-                xticklabels=['No ELM', 'ELM'],
-                yticklabels=['No ELM', 'ELM'],
-            )
-            plt.title(f'Conf. matrix ({mode}, thr={threshold:.2f})')
-            plt.xlabel("Predicted label")
-            plt.ylabel("True label")
+        signals = self.vel_predictions["signals"]
+        vZ_labels = self.vel_predictions["vZ_labels"]
+        vR_labels = self.vel_predictions["vR_labels"]
+        vZ_predictions = self.vel_predictions["vZ_predictions"]
+        vR_predictions = self.vel_predictions["vR_predictions"]
+
+        # Pad labels and predictions to account for signal window
+        l_diff = len(signals) - len(vZ_labels)
+        vZ_labels = np.pad(vZ_labels, ((l_diff, 0), (0, 0), (0, 0)))
+        vR_labels = np.pad(vR_labels, ((l_diff, 0), (0, 0), (0, 0)))
+        vZ_predictions = np.pad(vZ_predictions, ((l_diff, 0), (0, 0), (0, 0)))
+        vR_predictions = np.pad(vR_predictions, ((l_diff, 0), (0, 0), (0, 0)))
+
+        elm_time = np.arange(len(signals))
+        # plot signal, labels, and prediction
+        axes[0].plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22", alpha=0.5, zorder=0.0)
+        axes[0].plot(elm_time, vZ_labels.mean(axis=(1, 2)) / np.max(vZ_labels.mean(axis=(1, 2))),
+                     label="Ground truth",
+                     alpha=0.5,
+                     zorder=1.0)
+        axes[0].plot(elm_time,
+                     vZ_predictions.mean(axis=(1, 2)) / np.max(vZ_predictions.mean(axis=(1, 2))),
+                     label="Mean Prediction",
+                     alpha=0.5,
+                     zorder=2.0)
+        axes[0].set_xlabel("Time (micro-s)")
+        axes[0].set_ylabel("Signal")
+        axes[0].legend(fontsize='small')
+        axes[0].set_title(f'vZ')
+
+        axes[1].plot(elm_time, signals[:, 2, 6] / np.max(signals[:, 2, 6]), label="BES ch 22", alpha=0.5, zorder=0.0)
+        axes[1].plot(elm_time, vR_labels.mean(axis=(1, 2)) / np.max(vR_labels.mean(axis=(1, 2))),
+                     label="Ground truth",
+                     alpha=0.5,
+                     zorder=1.0)
+        axes[1].plot(elm_time,
+                     vR_predictions.mean(axis=(1, 2)) / np.max(vR_predictions.mean(axis=(1, 2))),
+                     label="Mean Prediction",
+                     alpha=0.5,
+                     zorder=2.0)
+        axes[1].set_xlabel("Time (micro-s)")
+        axes[1].set_ylabel("Signal")
+        axes[1].legend(fontsize='small')
+        axes[1].set_title(f'vR')
+
         plt.tight_layout()
         if self.save:
-            filepath = self.analysis_dir / f"full_analysis.pdf"
-            print(f'Saving full-data analysis: {filepath.as_posix()}')
+            filepath = self.analysis_dir / f'inference.pdf'
+            print(f'Saving inference file: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
 
     def merge_all_pdfs(self):
@@ -411,7 +360,6 @@ class Analysis(object):
 
     def plot_all(self):
         self.plot_training_epochs()
-        self.plot_full_analysis()
         self.plot_full_inference()
         self.merge_all_pdfs()
 
@@ -434,17 +382,3 @@ if __name__ == "__main__":
     ]:
         run = Analysis(run_dir=run_dir)
         vpd = run.plot_all()
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.plot(vpd['vZ_labels'][:, 2, 6], label='Labels')
-        ax1.plot(vpd['vZ_predictions'][:, 2, 6], label='Predictions')
-        ax1.legend()
-        ax1.set_title('vZ')
-        ax2.plot(vpd['vR_labels'][:, 2, 6], label='Labels')
-        ax2.plot(vpd['vR_predictions'][:, 2, 6], label='Labels')
-        ax2.legend()
-        ax2.set_title('vR')
-        plt.show()
-
-        # run.plot_valid_indices_analysis()
-
-    plt.show()
