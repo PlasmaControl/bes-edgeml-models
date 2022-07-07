@@ -1,10 +1,9 @@
 import pickle
-from multiprocessing import Pool, cpu_count, Array
+from multiprocessing import Pool, Array
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from fastdtw import fastdtw
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform, euclidean
@@ -12,9 +11,7 @@ from scipy.stats import skew, kurtosis
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
-from elm_prediction.analyze import Analysis
-from elm_prediction.options.test_arguments import TestArguments
-from elm_prediction.src import utils
+from bes_edgeml_models.elm_prediction.analyze import Analysis
 
 
 # %%
@@ -36,7 +33,7 @@ class Clustering:
 
     def get_elm_predictions(self):
         """
-        Returns elm_predictions from elm_prediction.analyze.calc_inference
+        Returns elm_predictions from bes_edgeml_models.analyze.calc_inference
 
         :param run_dir: Directory to save plots, source model checkpoints, etc..
         """
@@ -148,7 +145,7 @@ class Clustering:
                         ax=None,
                         save_fig: bool = False):
         """
-        Function to plot dendrogram from elm_prediction nested dict
+        Function to plot dendrogram from bes_edgeml_models nested dict
 
         :param elm_predictions: nested dict of ELMs from analyze.calc_inference
         :param thresh: (optional) threshold value for dendrogram and clustering algorithm

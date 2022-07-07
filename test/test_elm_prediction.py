@@ -2,8 +2,8 @@ import sys
 import pytest
 import shutil
 
-from elm_prediction.train import train_loop
-from elm_prediction.analyze import Analysis
+from bes_edgeml_models.elm_prediction.train import train_loop
+from bes_edgeml_models.elm_prediction.analyze import Analysis
 
 
 RUN_DIR = 'run_dir'

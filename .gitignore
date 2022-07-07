@@ -162,13 +162,13 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-/elm_prediction/visualizations/outputs/
-/elm_prediction/visualizations/PATH/
+/bes_edgeml_models/visualizations/outputs/
+/bes_edgeml_models/visualizations/PATH/
 /logs/
-/elm_prediction/visualizations/notes/
+/bes_edgeml_models/visualizations/notes/
 /src/outputs
 /outputs
-/elm_prediction/figures/
+/bes_edgeml_models/figures/
 
 *.pth
 *.pkl
