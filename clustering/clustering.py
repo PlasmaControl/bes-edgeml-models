@@ -11,7 +11,7 @@ from scipy.stats import skew, kurtosis
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
-from bes_edgeml_models.elm_prediction.analyze import Analysis
+from models.bes_edgeml_models import Analysis
 
 
 # %%
