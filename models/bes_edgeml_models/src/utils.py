@@ -369,17 +369,19 @@ def create_model_class(
     Returns:
         Object of the model class.
     """
+    model_type = Path(sys.argv[0]).parent.stem
     model_filename = model_name + "_model"
     model_path = "..models." + model_filename
     model_lib = importlib.import_module(
         model_path,
-        package='elm_prediction.src',
+        package=model_type + '.src',
     )
     model = None
     _model_name = model_name.replace("_", "") + "model"
     for name, cls in model_lib.__dict__.items():
         if name.lower() == _model_name.lower():
             model = cls
+            model.model_type = model_type  # assigning a type to a model makes it easier to share scripts between them.
 
     return model
 
