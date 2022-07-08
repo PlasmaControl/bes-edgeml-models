@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Union
 
-from models.turbulence_regime_classification.src.dataset import TurbulenceDataset
+from bes_edgeml_models.turbulence_regime_classification.src.dataset import TurbulenceDataset
 
 
 class VelocimetryDataset(TurbulenceDataset):

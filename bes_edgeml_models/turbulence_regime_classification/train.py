@@ -11,13 +11,13 @@ from typing import Union
 # Local Imports
 from matplotlib import pyplot as plt
 
-from models.bes_edgeml_models.src import utils, trainer
-from models.turbulence_regime_classification import Analysis
-from models.turbulence_regime_classification.options.train_arguments import TrainArguments
-from models.turbulence_regime_classification.src.dataset import TurbulenceDataset
-from models.turbulence_regime_classification.src.sampler import RandomBatchSampler
-from models.turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
-from models.turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
+from bes_edgeml_models.base.src import utils, trainer
+from bes_edgeml_models.turbulence_regime_classification.analyze import Analysis
+from bes_edgeml_models.turbulence_regime_classification.options.train_arguments import TrainArguments
+from bes_edgeml_models.turbulence_regime_classification.src.dataset import TurbulenceDataset
+from bes_edgeml_models.turbulence_regime_classification.src.sampler import RandomBatchSampler
+from bes_edgeml_models.turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
+from bes_edgeml_models.turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
 
 # ML imports
 from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
@@ -358,20 +358,25 @@ def train_loop(input_args: dict,
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
+        work_dir = Path(__file__).parents[3] / 'bes-edgeml-work/regime_classification'
+        n_epochs = 10
+        sws = 256
+        fft_num_filters = 16
+        dwt_num_filters = 16
         args = {'model_name': 'multi_features_ds_v2',
-                'input_data_dir': Path(__file__).parent / 'data',
+                'input_data_dir': work_dir / 'data',
                 'labeled_data_dir': 'labeled_datasets',
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
-                'n_epochs': 10,
+                'n_epochs': n_epochs,
                 'max_elms': -1,
                 'fraction_valid': 0.25,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
-                'signal_window_size': 256,
-                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/rc_10e_sws256_fft16_dwt16'
+                'signal_window_size': sws,
+                'output_dir': work_dir / f'rc_{n_epochs}e_sws{sws}_fft{fft_num_filters}_dwt{dwt_num_filters}'
             }
     else:
         # use command line arguments in `sys.argv`

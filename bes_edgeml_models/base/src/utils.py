@@ -204,8 +204,6 @@ def get_logger(
     return logger
 
 
-
-
 def time_since(since: int, percent: float) -> str:
     """Helper function to time the training and evaluation process"""
     def as_minutes_seconds(s: float) -> str:
@@ -371,10 +369,10 @@ def create_model_class(
     """
     model_type = Path(sys.argv[0]).parent.stem
     model_filename = model_name + "_model"
-    model_path = "..models." + model_filename
+    model_path = "models." + model_filename
     model_lib = importlib.import_module(
         model_path,
-        package=model_type + '.src',
+        package='bes_edgeml_models.' + model_type,
     )
     model = None
     _model_name = model_name.replace("_", "") + "model"

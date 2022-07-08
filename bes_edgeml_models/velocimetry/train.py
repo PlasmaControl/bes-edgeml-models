@@ -11,11 +11,11 @@ from typing import Union
 # Local Imports
 from matplotlib import pyplot as plt
 
-from models.bes_edgeml_models.src import utils, trainer
-from models.turbulence_regime_classification.options.train_arguments import TrainArguments
-from models.turbulence_regime_classification.src.sampler import RandomBatchSampler
-from models.velocimetry.analyze import Analysis
-from models.velocimetry.src.dataset import VelocimetryDataset
+from bes_edgeml_models.base.src import utils, trainer
+from bes_edgeml_models.turbulence_regime_classification.options.train_arguments import TrainArguments
+from bes_edgeml_models.turbulence_regime_classification.src.sampler import RandomBatchSampler
+from bes_edgeml_models.velocimetry.analyze import Analysis
+from bes_edgeml_models.velocimetry.src.dataset import VelocimetryDataset
 # from turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
 
 # ML imports
@@ -318,8 +318,9 @@ def train_loop(input_args: dict,
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
+        work_dir = Path(__file__).parents[3] / 'bes-edgeml-work/velocimetry/'
         args = {'model_name': 'velocimetry_cnn',
-                'input_data_dir': Path(__file__).parent / 'data',
+                'input_data_dir': work_dir / 'data',
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
@@ -330,7 +331,7 @@ if __name__ == '__main__':
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
                 'signal_window_size': 256,
-                'output_dir': Path(__file__).parents[2] / 'bes-edgeml-work/vel_cnn_10e_sws256'
+                'output_dir': work_dir / 'cnn_10e_sws256'
             }
     else:
         # use command line arguments in `sys.argv`

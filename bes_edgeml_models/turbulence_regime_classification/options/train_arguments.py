@@ -1,6 +1,6 @@
 from typing import Union
 
-from elm_prediction.options.train_arguments import TrainArguments as PredictionArguments
+from bes_edgeml_models.base.options.train_arguments import TrainArguments as PredictionArguments
 
 import argparse
 from pathlib import Path

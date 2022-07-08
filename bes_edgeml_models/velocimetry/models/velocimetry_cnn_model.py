@@ -1,6 +1,6 @@
 import argparse
 import torch
-from models.bes_edgeml_models.models import CNNModel
+from bes_edgeml_models.base.models.cnn_model import CNNModel
 
 class VelocimetryCNNModel(CNNModel):
     def __init__(self, args: argparse.Namespace):
