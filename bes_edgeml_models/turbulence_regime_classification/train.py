@@ -359,7 +359,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         work_dir = Path(__file__).parents[3] / 'bes-edgeml-work/regime_classification'
-        n_epochs = 10
+        n_epochs = 1
         sws = 256
         fft_num_filters = 16
         dwt_num_filters = 16

@@ -62,7 +62,7 @@ class VelocimetryDataset(TurbulenceDataset):
         if input_dir:
             self.args.input_data_dir = input_dir
         dir = Path(self.args.input_data_dir)
-        assert dir.exists(), f'Directory {dir} does not exist. Have you made labeled datasets?'
+        assert dir.exists(), f'Directory {dir} does not exist. Have you made datasets?'
         shots = {}
         for file in (dir.iterdir()):
             try:
