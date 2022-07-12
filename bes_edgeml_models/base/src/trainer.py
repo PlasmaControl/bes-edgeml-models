@@ -1,4 +1,6 @@
+import sys
 import time
+from pathlib import Path
 from typing import Tuple, Union, Callable
 
 import numpy as np
@@ -72,10 +74,10 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
+            if Path(sys.argv[0]).parent.stem == 'turbulence_regime_classification':
                 loss = self.criterion(y_preds, labels.type(torch.long))
             else:
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
+                loss = self.criterion(y_preds.squeeze(), labels.type_as(y_preds))
 
             if not torch.all(torch.isfinite(loss)):
                 assert False
@@ -153,11 +155,10 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
+            if Path(sys.argv[0]).parent.stem == 'turbulence_regime_classification':
                 loss = self.criterion(y_preds, labels.type(torch.long))
             else:
-                loss = self.criterion(y_preds, labels.type_as(y_preds))
-
+                loss = self.criterion(y_preds.squeeze(), labels.type_as(y_preds))
 
             if self.use_focal_loss:
                 loss = self._focal_loss(labels, y_preds, loss)

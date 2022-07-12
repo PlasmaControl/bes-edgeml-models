@@ -11,7 +11,7 @@ class MultiFeaturesRegressionModel(MultiFeaturesDsV2Model):
         self.fc3 = nn.Linear(in_features=args.fc2_size, out_features=1)
 
     def forward(self, x):
-        x = super(x)
+        x = super(MultiFeaturesRegressionModel, self).forward(x)
         x = self.relu(self.dropout(self.fc1(x)))
         x = self.relu(self.dropout(self.fc2(x)))
         x = self.fc3(x)

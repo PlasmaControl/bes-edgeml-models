@@ -17,7 +17,7 @@ from bes_edgeml_models.turbulence_regime_classification.options.train_arguments 
 from bes_edgeml_models.turbulence_regime_classification.src.dataset import TurbulenceDataset
 from bes_edgeml_models.turbulence_regime_classification.src.sampler import RandomBatchSampler
 from bes_edgeml_models.turbulence_regime_classification.src.utils import make_labels, plot_confusion_matrix
-from bes_edgeml_models.turbulence_regime_classification.models.multi_features_model import MultiFeaturesClassificationModel
+from bes_edgeml_models.turbulence_regime_classification.models.multi_features_classification_model import MultiFeaturesClassificationModel
 
 # ML imports
 from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score

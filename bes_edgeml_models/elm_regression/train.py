@@ -26,13 +26,13 @@ except ImportError:
     optuna = None
 
 try:
-    from models.bes_edgeml_models.options.train_arguments import TrainArguments
-    from models.bes_edgeml_models.src import utils, trainer, dataset
-    from models.elm_prediction.analyze import Analysis
+    from ..base.options.train_arguments import TrainArguments
+    from ..base.src import utils, trainer, dataset
+    from ..base.analyze import Analysis
 except ImportError:
-    from models.bes_edgeml_models.options.train_arguments import TrainArguments
-    from models.bes_edgeml_models.src import utils, trainer, dataset
-    from models.elm_regression.analyze import Analysis
+    from bes_edgeml_models.base.options.train_arguments import TrainArguments
+    from bes_edgeml_models.base.src import utils, trainer, dataset
+    from bes_edgeml_models.elm_regression.analyze import Analysis
 
 
 def train_loop(
@@ -346,6 +346,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
+            'model_name': 'multi_features_regression',
             'max_elms':10,
             'n_epochs':2,
             'fraction_valid':0.2,
