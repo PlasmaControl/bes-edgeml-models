@@ -23,11 +23,11 @@ from sklearn import metrics
 from tqdm import tqdm
 
 try:
-    from models.bes_edgeml_models.src import utils, dataset
-    from models.bes_edgeml_models.options.test_arguments import TestArguments
+    from ..base.src import utils, dataset
+    from ..base.options.test_arguments import TestArguments
 except ImportError:
-    from models.bes_edgeml_models.src import utils, dataset
-    from models.bes_edgeml_models.options.test_arguments import TestArguments
+    from bes_edgeml_models.base.src import utils, dataset
+    from bes_edgeml_models.base.options.test_arguments import TestArguments
 
 class Analysis(object):
 

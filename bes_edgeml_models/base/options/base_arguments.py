@@ -4,7 +4,7 @@ from typing import Union
 try:
     from .. import sample_labeled_elm_data_file
 except ImportError:
-    from models.bes_edgeml_models import sample_labeled_elm_data_file
+    from bes_edgeml_models.base import sample_labeled_elm_data_file
 
 
 class BaseArguments:

@@ -1,6 +1,6 @@
 import argparse
 from torch import nn
-from models.bes_edgeml_models.models.multi_features_ds_v2_model import MultiFeaturesDsV2Model
+from bes_edgeml_models.base.models.multi_features_ds_v2_model import MultiFeaturesDsV2Model
 
 class MultiFeaturesClassificationModel(MultiFeaturesDsV2Model):
 

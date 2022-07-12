@@ -331,15 +331,13 @@ if __name__ == '__main__':
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
                 'signal_window_size': 256,
+                'fc1_size': 1024,
+                'fc2_size': 512,
                 'output_dir': work_dir / 'cnn_10e_sws256'
             }
     else:
         # use command line arguments in `sys.argv`
         args = None
 
-    print('From ram')
-    args['dataset_to_ram'] = True
-    start = time.time()
     train_loop(input_args=args)
-    print("Time loaded from ram: ", time.time() - start)
 

@@ -233,7 +233,7 @@ def create_data_class(data_name: str) -> Callable:
     data_class_path = "..data_preprocessing." + data_filename
     data_lib = importlib.import_module(
         data_class_path,
-        package='elm_prediction.src',
+        package='bes_edgeml_models.base.src',
     )
     data_class = None
     _data_name = data_name.replace("_", "") + "data"
@@ -368,6 +368,7 @@ def create_model_class(
         Object of the model class.
     """
     model_type = Path(sys.argv[0]).parent.stem
+    print(sys.argv[0])
     model_filename = model_name + "_model"
     model_path = "models." + model_filename
     model_lib = importlib.import_module(
