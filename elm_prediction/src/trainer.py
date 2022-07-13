@@ -60,8 +60,8 @@ class Run:
             self.optimizer.zero_grad()
 
             # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            images = images.to(self.device, dtype=torch.float)
+            labels = labels.to(self.device, dtype=torch.float)
 
             batch_size = images.size(0)
 
@@ -72,7 +72,10 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            loss = self.criterion(y_preds.view(-1), labels.type_as(y_preds))
+            if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
+                loss = self.criterion(y_preds, labels.type(torch.long))
+            else:
+                loss = self.criterion(y_preds, labels.type_as(y_preds))
 
             if not torch.all(torch.isfinite(loss)):
                 assert False
@@ -138,8 +141,8 @@ class Run:
             data_time.update(time.time() - end)
 
             # send the data to device
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+            images = images.to(self.device, dtype=torch.float)
+            labels = labels.to(self.device, dtype=torch.float)
 
             batch_size = images.size(0)
 
@@ -150,8 +153,11 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            y_preds = y_preds.view(-1)
-            loss = self.criterion(y_preds, labels.type_as(y_preds))
+            if type(self.model).__name__ == 'MultiFeaturesClassificationModel':
+                loss = self.criterion(y_preds, labels.type(torch.long))
+            else:
+                loss = self.criterion(y_preds, labels.type_as(y_preds))
+
 
             if self.use_focal_loss:
                 loss = self._focal_loss(labels, y_preds, loss)
@@ -167,6 +173,8 @@ class Run:
             # record accuracy
             if type(self.criterion).__name__ == 'MSELoss':
                 preds.append(y_preds.cpu().numpy())
+            elif type(self.criterion).__name__ == 'CrossEntropyLoss':
+                preds.append((torch.nn.Softmax(dim=1)(y_preds).cpu().numpy()))
             else:
                 preds.append(y_preds.sigmoid().cpu().numpy())
             valid_labels.append(labels.cpu().numpy())
