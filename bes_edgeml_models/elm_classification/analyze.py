@@ -198,12 +198,6 @@ class Analysis(object):
                         macro_predictions_active_elms,
                     ]
                 )
-                micro_predictions = np.concatenate(
-                    [
-                        micro_predictions_pre_active_elms,
-                        micro_predictions_active_elms
-                    ]
-                )
 
                 elm_predictions[elm_index] = {
                     "signals": elm_signals,
@@ -211,7 +205,6 @@ class Analysis(object):
                     "predictions": predictions,
                     "macro_labels": macro_labels,
                     "macro_predictions": macro_predictions,
-                    "micro_predictions": micro_predictions
                 }
 
         self.elm_predictions = elm_predictions
