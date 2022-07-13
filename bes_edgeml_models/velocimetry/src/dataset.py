@@ -87,6 +87,7 @@ class VelocimetryDataset(TurbulenceDataset):
         for f in self.input_files:
             with h5py.File(f, 'r') as ds:
                 fs.append(np.around(len(ds['vR']) * self.frac_) - self.args.signal_window_size - self.args.batch_size)
+        assert all([l >= 0 for l in fs]), "There are not enough data points to make dataset."
         return np.array(fs)
 
     def train_test_split(self, test_frac: float, seed=None):

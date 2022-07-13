@@ -1,8 +1,8 @@
 import argparse
 from torch import nn
-from bes_edgeml_models.base.models.cnn_model import CNNModel
+from bes_edgeml_models.base.models.multi_features_ds_v2_model import MultiFeaturesDsV2Model
 
-class VelocimetryCNNModel(CNNModel):
+class VelocimetryCNNModel(MultiFeaturesDsV2Model):
     def __init__(self, args: argparse.Namespace):
         super().__init__(args)
 

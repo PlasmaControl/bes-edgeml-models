@@ -198,6 +198,12 @@ class Analysis(object):
                         macro_predictions_active_elms,
                     ]
                 )
+                micro_predictions = np.concatenate(
+                    [
+                        micro_predictions_pre_active_elms,
+                        micro_predictions_active_elms
+                    ]
+                )
 
                 elm_predictions[elm_index] = {
                     "signals": elm_signals,
@@ -205,6 +211,7 @@ class Analysis(object):
                     "predictions": predictions,
                     "macro_labels": macro_labels,
                     "macro_predictions": macro_predictions,
+                    "micro_predictions": micro_predictions
                 }
 
         self.elm_predictions = elm_predictions
@@ -470,7 +477,7 @@ if __name__ == "__main__":
 
     for run_dir in [
         # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
-        '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006',
+        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_classification/dsv2_class',
     ]:
         run = Analysis(run_dir=run_dir)
         run.plot_training_epochs()

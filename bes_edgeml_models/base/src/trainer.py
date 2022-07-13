@@ -1,3 +1,4 @@
+import inspect
 import sys
 import time
 from pathlib import Path
@@ -74,8 +75,11 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            if Path(sys.argv[0]).parent.stem == 'turbulence_regime_classification':
+            caller = Path(inspect.stack()[1].filename).parent.stem
+            if caller == 'turbulence_regime_classification':
                 loss = self.criterion(y_preds, labels.type(torch.long))
+            elif caller == 'velocimetry':
+                loss = self.criterion(y_preds, labels.type_as(y_preds))
             else:
                 loss = self.criterion(y_preds.squeeze(), labels.type_as(y_preds))
 
@@ -155,8 +159,11 @@ class Run:
             if self.use_rnn:
                 y_preds = y_preds.squeeze()[:, -1]
 
-            if Path(sys.argv[0]).parent.stem == 'turbulence_regime_classification':
+            caller = Path(inspect.stack()[1].filename).parent.stem
+            if caller == 'turbulence_regime_classification':
                 loss = self.criterion(y_preds, labels.type(torch.long))
+            elif caller == 'velocimetry':
+                loss = self.criterion(y_preds, labels.type_as(y_preds))
             else:
                 loss = self.criterion(y_preds.squeeze(), labels.type_as(y_preds))
 

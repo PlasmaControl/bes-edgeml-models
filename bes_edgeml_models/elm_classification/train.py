@@ -344,6 +344,7 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'model_name': 'multi_features_classification',
+            'output_dir': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_classification/dsv2_class',
             'max_elms':10,
             'n_epochs':2,
             'fraction_valid':0.2,

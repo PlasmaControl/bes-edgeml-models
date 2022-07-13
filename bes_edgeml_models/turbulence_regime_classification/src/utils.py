@@ -22,8 +22,8 @@ def make_labels(base_dir: Union[str, Path],
     Resulting labeled datasets are stored as HDF5 files in base_dir / data / labeled_datasets.
     :param base_dir: Home directory of project. Should contain 'confinement_database.xlsx' and 'data/'
     :param df_name: Name of the confinement regime database.
-    :param data_dir: Path to datasets (rel. to base_dir if str, else specify whole path as Path type.)
-    :param labeled_dir: Path to labeled datasets (rel. to data_dir if str, else specify whole path as Path type.)
+    :param data_dir: Path to datasets (rel. to base_dir if str, else specify whole path.)
+    :param labeled_dir: Path to labeled datasets (rel. to data_dir if str, else specify whole path.)
     :return: None
     """
 

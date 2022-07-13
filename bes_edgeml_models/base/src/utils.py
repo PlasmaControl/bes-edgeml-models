@@ -1,8 +1,5 @@
 """Various utility functions used for data preprocessing, training and validation.
 """
-
-import re
-import os
 import shutil
 import subprocess
 import pickle
@@ -14,8 +11,8 @@ import argparse
 import importlib
 from typing import Union, Tuple, Sequence, Callable
 from pathlib import Path
-from collections import OrderedDict
 from traceback import print_tb
+import inspect
 
 import numpy as np
 import torch
@@ -23,12 +20,10 @@ from torchinfo import summary
 
 try:
     from .. import package_dir
-    from . import utils, dataset
-    from ..models import multi_features_ds_v2_model
+    from . import dataset
 except ImportError:
-    from models.bes_edgeml_models import package_dir
-    from models.bes_edgeml_models.src import utils, dataset
-    from models.bes_edgeml_models.models import multi_features_ds_v2_model
+    from bes_edgeml_models import package_dir
+    from bes_edgeml_models.base.src import dataset
 
 
 class MetricMonitor:
@@ -355,7 +350,8 @@ def merge_pdfs(
 
 
 def create_model_class(
-        model_name: str
+        model_name: str,
+        caller = None
     ) -> torch.nn.Module:
     """
     Helper function to import the module for the model being used as per the
@@ -363,14 +359,17 @@ def create_model_class(
 
     Args:
         model_name (str): `--model_name` argument.
+        caller (path | str): which file the function is called from.
 
     Returns:
         Object of the model class.
     """
-    model_type = Path(sys.argv[0]).parent.stem
-    print(sys.argv[0])
+    if caller is None:
+        model_type = str(Path(inspect.stack()[1].filename).parent.stem)
+    else:
+        model_type = str(caller)
     model_filename = model_name + "_model"
-    model_path = "models." + model_filename
+    model_path = ".models." + model_filename
     model_lib = importlib.import_module(
         model_path,
         package='bes_edgeml_models.' + model_type,
@@ -383,34 +382,3 @@ def create_model_class(
             model.model_type = model_type  # assigning a type to a model makes it easier to share scripts between them.
 
     return model
-
-def get_model(args: argparse.Namespace,
-              logger: logging.Logger):
-    _, model_cpt_path = utils.create_output_paths(args)
-    gen_type_suffix = '_' + re.split('[_.]', args.input_file)[-2] if args.generated else ''
-    model_name = args.model_name + gen_type_suffix
-    accepted_preproc = ['wavelet', 'unprocessed']
-
-    model_cpt_file = os.path.join(model_cpt_path, f'{args.model_name}_lookahead_{args.label_look_ahead}'
-                                                  f'{gen_type_suffix}'
-                                                  f'{"_" + args.data_preproc if args.data_preproc in accepted_preproc else ""}'
-                                                  f'{"_" + args.balance_data if args.balance_data else ""}.pth')
-
-    raw_model = (multi_features_ds_v2_model.RawFeatureModel(args) if args.raw_num_filters > 0 else None)
-    fft_model = (multi_features_ds_v2_model.FFTFeatureModel(args) if args.fft_num_filters > 0 else None)
-    cwt_model = (multi_features_ds_v2_model.DWTFeatureModel(args) if args.wt_num_filters > 0 else None)
-    features = [type(f).__name__ for f in [raw_model, fft_model, cwt_model] if f]
-
-    logger.info(f'Found {model_name} state dict at {model_cpt_file}.')
-    model_cls = utils.create_model(args.model_name)
-    if 'MULTI' in args.model_name.upper():
-        model = model_cls(args, raw_model, fft_model, cwt_model)
-    else:
-        model = model_cls(args)
-    state_dict = torch.load(model_cpt_file, map_location=torch.device(args.device))['model']
-    model.load_state_dict(state_dict)
-    logger.info(f'Loaded {model_name} state dict.')
-
-    model.layers = OrderedDict([child for child in model.named_modules() if hasattr(child[1], 'weight')])
-
-    return model.to(args.device)

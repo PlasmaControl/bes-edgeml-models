@@ -84,8 +84,7 @@ def train_loop(input_args: dict,
 
     LOGGER.info(f'Checking for labeled datasets.')
     make_labels(Path(__file__).parent, LOGGER,
-                data_dir=args.input_data_dir,
-                labeled_dir=args.labeled_data_dir)
+                data_dir=args.input_data_dir)
     model = MultiFeaturesClassificationModel(args).to(device)
     # distribute model for data-parallel training
     if _rank is not None:
@@ -364,19 +363,17 @@ if __name__ == '__main__':
         fft_num_filters = 16
         dwt_num_filters = 16
         args = {'model_name': 'multi_features_ds_v2',
-                'input_data_dir': work_dir / 'data',
-                'labeled_data_dir': 'labeled_datasets',
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
                 'n_epochs': n_epochs,
-                'max_elms': -1,
+                'max_elms': 10,
                 'fraction_valid': 0.25,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
                 'signal_window_size': sws,
-                'output_dir': work_dir / f'rc_{n_epochs}e_sws{sws}_fft{fft_num_filters}_dwt{dwt_num_filters}'
+                'output_dir': work_dir / f'testdata_rc_{n_epochs}e_sws{sws}_fft{fft_num_filters}_dwt{dwt_num_filters}'
             }
     else:
         # use command line arguments in `sys.argv`

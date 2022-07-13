@@ -1,15 +1,14 @@
-import copy
-import traceback
-import h5py
-import pandas as pd
-import torch
 import argparse
+import copy
 import logging
-import numpy as np
 import re
+import traceback
 from pathlib import Path
 from typing import Union
-from sklearn.model_selection import train_test_split
+
+import h5py
+import numpy as np
+import torch
 
 
 class TurbulenceDataset(torch.utils.data.Dataset):
@@ -178,7 +177,7 @@ class TurbulenceDataset(torch.utils.data.Dataset):
         np.random.seed(seed)
         shots_files = np.array(list(zip(self.shot_nums, self.input_files)))
         sf_idx = np.arange(len(shots_files), dtype=np.int32)
-        n_test = int(np.floor(len(shots_files) * test_frac))
+        n_test = int(np.ceil(len(shots_files) * test_frac))
         test_idx = np.random.choice(sf_idx, n_test, replace=False)
         train_idx = np.array([i for i in sf_idx if i not in test_idx], dtype=np.int32)
 
