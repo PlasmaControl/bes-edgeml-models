@@ -231,11 +231,12 @@ def create_data_class(data_name: str) -> Callable:
     Returns:
         Object of the data class.
     """
+    parent_package = Path(sys.argv[0]).parent.stem + '.src'
     data_filename = data_name + "_data"
     data_class_path = "..data_preprocessing." + data_filename
     data_lib = importlib.import_module(
         data_class_path,
-        package='elm_prediction.src',
+        package=parent_package,
     )
     data_class = None
     _data_name = data_name.replace("_", "") + "data"
@@ -369,17 +370,19 @@ def create_model_class(
     Returns:
         Object of the model class.
     """
+    model_type = Path(sys.argv[0]).parent.stem
     model_filename = model_name + "_model"
     model_path = "..models." + model_filename
     model_lib = importlib.import_module(
         model_path,
-        package='elm_prediction.src',
+        package=model_type + '.src',
     )
     model = None
     _model_name = model_name.replace("_", "") + "model"
     for name, cls in model_lib.__dict__.items():
         if name.lower() == _model_name.lower():
             model = cls
+            model.model_type = model_type  # assigning a type to a model makes it easier to share scripts between them.
 
     return model
 
