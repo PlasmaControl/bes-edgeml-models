@@ -1,18 +1,17 @@
-import copy
-import pickle
-import h5py
-import torch
 import argparse
 import logging
-import numpy as np
+import pickle
 import re
 from pathlib import Path
 from typing import Union
 
-from bes_edgeml_models.turbulence_regime_classification.src.dataset import TurbulenceDataset
+import h5py
+import numpy as np
+
+from bes_edgeml_models.base.src.dataset import MultiSourceDataset
 
 
-class VelocimetryDataset(TurbulenceDataset):
+class VelocimetryDataset(MultiSourceDataset):
     def __init__(self,
                  args: argparse.Namespace,
                  logger: Union[logging.Logger, None] = None,
@@ -28,26 +27,13 @@ class VelocimetryDataset(TurbulenceDataset):
         :param logger: Logger object to log the dataset creation process.
         :type logger: logging.getLogger
         """
+
         super().__init__(args, logger)
         if not self.args.dataset_to_ram:
             # used for __getitem__ when reading from HDF5
             self.hf2np_signals = np.empty((64, self.args.batch_size + self.args.signal_window_size - 1))
             self.hf2np_vZ = np.empty((self.args.batch_size, 8, 8))
             self.hf2np_vR = np.empty((self.args.batch_size, 8, 8))
-
-    def _get_from_ram(self, index):
-
-        hf = self.signals[np.nonzero(self.valid_indices <= index[0])[0][-1]]
-        hf_labels = self.labels[np.nonzero(self.valid_indices <= index[0])[0][-1]]
-
-        idx_offset = self.valid_indices[(self.valid_indices <= index[0])][-1].astype(int)  # Adjust index relative to specific HDF5
-        hf_index = [i - idx_offset + self.args.signal_window_size for i in index]
-        hf_index = list(range(hf_index[0] - self.args.signal_window_size + 1, hf_index[0])) + hf_index
-
-        signal_windows = self._roll_window(hf[hf_index], self.args.signal_window_size, self.args.batch_size)
-        labels = hf_labels[hf_index[-self.args.batch_size:]]
-
-        return torch.tensor(signal_windows).unsqueeze(1), torch.tensor(labels)
 
     def _get_from_hdf5(self, index):
         return NotImplementedError('Can not get from hdf5.')
@@ -89,42 +75,6 @@ class VelocimetryDataset(TurbulenceDataset):
                 fs.append(np.around(len(ds['vR']) * self.frac_) - self.args.signal_window_size - self.args.batch_size)
         assert all([l >= 0 for l in fs]), "There are not enough data points to make dataset."
         return np.array(fs)
-
-    def train_test_split(self, test_frac: float, seed=None):
-        """
-        Splits full dataset into train and test sets. Will only split by input file. Returns copies of self.
-        :param test_frac: Fraction of dataset for test set.
-        :param seed: Numpy random seed. Default None.
-        :return: train_set, test_set
-        :rtype: tuple(TurbulenceDataset, TurbulenceDataset)
-        """
-        np.random.seed(seed)
-        shots_files = np.array(list(zip(self.shot_nums, self.input_files)))
-        test_idx, train_idx = [0], [0]
-        if len(shots_files) != 1:
-            sf_idx = np.arange(len(shots_files), dtype=np.int32)
-            n_test = int(np.floor(len(shots_files) * test_frac))
-            test_idx = np.random.choice(sf_idx, n_test, replace=False)
-            train_idx = np.array([i for i in sf_idx if i not in test_idx], dtype=np.int32)
-
-        test_set = shots_files[test_idx]
-        train_set = shots_files[train_idx]
-
-        train = copy.deepcopy(self)
-        train.set_state_('train')
-        train.shot_nums = [i[0] for i in train_set]
-        train.input_files = [i[1] for i in train_set]
-        train.f_lengths = train._get_f_lengths()
-        train.valid_indices = np.cumsum(np.concatenate((np.array([0]), train.f_lengths)))[:-1]
-
-        test = copy.deepcopy(self)
-        test.set_state_('valid')
-        test.shot_nums = [i[0] for i in test_set]
-        test.input_files = [i[1] for i in test_set]
-        test.f_lengths = test._get_f_lengths()
-        test.valid_indices = np.cumsum(np.concatenate((np.array([0]), test.f_lengths)))[:-1]
-
-        return train, test
 
     def save_test_data(self) -> None:
         """

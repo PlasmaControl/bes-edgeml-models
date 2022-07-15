@@ -386,7 +386,8 @@ class Analysis(object):
             targets = []
             predictions = []
             for vals in self.elm_predictions.values():
-                predictions.append(vals[f"{mode}_predictions"])
+                prediction_key = 'predictions' if mode == 'micro' else 'macro_predictions'
+                predictions.append(vals[prediction_key])
                 label_key = 'labels' if mode == 'micro' else 'macro_labels'
                 targets.append(vals[label_key])
             predictions = np.concatenate(predictions)
