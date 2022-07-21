@@ -379,7 +379,7 @@ class Analysis(object):
             threshold = self.args.threshold
         if self.elm_predictions is None:
             self._calc_inference_full(threshold=threshold, max_elms=max_elms)
-        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
+        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8, 6))
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
         for mode in ['micro', 'macro']:
             # gather micro/macro results

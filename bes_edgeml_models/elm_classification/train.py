@@ -345,8 +345,9 @@ if __name__ == "__main__":
         input_args = {
             'model_name': 'multi_features_classification',
             'output_dir': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_classification/dsv2_class',
-            'max_elms':10,
-            'n_epochs':2,
+change            'input_data_file': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-models/data/labeled_elm_events_long_windows_20220602.hdf5',
+            'max_elms':-1,
+            'n_epochs':20,
             'fraction_valid':0.2,
             'fraction_test':0.2,
             'signal_window_size':64,
