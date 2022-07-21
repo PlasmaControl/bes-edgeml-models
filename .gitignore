@@ -179,4 +179,4 @@ cython_debug/
 
 
 # exclusions
-!sample-labeled*.hdf5
+!bes_models_2/sample_data/*
