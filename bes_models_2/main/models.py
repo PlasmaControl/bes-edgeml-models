@@ -11,7 +11,7 @@ from pytorch_wavelets.dwt.transform1d import DWT1DForward
 try:
     from . import dct
 except ImportError:
-    from bes_models_2.source import dct
+    from bes_models_2.main import dct
 
 class _Base_Features(nn.Module):
 
@@ -618,7 +618,7 @@ class DWT_Features(_Base_Features):
         return output_features
 
 
-class Multi_Features(nn.Module):
+class Multi_Features_Model(nn.Module):
     def __init__(
         self,
         dense_num_kernels: int = 8,
@@ -756,4 +756,4 @@ class Multi_Features(nn.Module):
         return x
 
 if __name__=='__main__':
-    m = Multi_Features()
+    m = Multi_Features_Model()

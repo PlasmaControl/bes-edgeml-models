@@ -10,11 +10,11 @@ import torchinfo
 from sklearn import metrics
 
 try:
-    from ..source.train_base import _Model_Trainer
-    from ..source.models import Multi_Features
+    from ..main.train_base import _Trainer
+    from ..main.models import Multi_Features_Model
 except ImportError:
-    from bes_models_2.source.train_base import _Model_Trainer
-    from bes_models_2.source.models import Multi_Features
+    from bes_models_2.main.train_base import _Trainer
+    from bes_models_2.main.models import Multi_Features_Model
 
 
 class ELM_Dataset(torch.utils.data.Dataset):
@@ -59,7 +59,7 @@ class ELM_Dataset(torch.utils.data.Dataset):
 
 
 
-class ELM_Classification_Model(_Model_Trainer):
+class ELM_Classification_Trainer(_Trainer):
 
     def __init__(
         self,
@@ -69,6 +69,8 @@ class ELM_Classification_Model(_Model_Trainer):
         minibatch_interval: int = 2000,  # print minibatch info
         **kwargs,
     ) -> None:
+
+        t_start_init = time.time()
 
         # subclass attributes
         self.label_look_ahead = label_look_ahead
@@ -96,7 +98,7 @@ class ELM_Classification_Model(_Model_Trainer):
         self._make_data_loaders()
 
         self.model = None
-        self._make_features()
+        self._make_model()
 
         self.optimizer = None
         self.scheduler = None
@@ -104,6 +106,8 @@ class ELM_Classification_Model(_Model_Trainer):
         self._make_optimizer_scheduler_loss()
 
         self.results = None
+
+        self.logger.info(f"Initialization time {time.time()-t_start_init:.3f} s")
 
     def train(self):
         best_score = -np.inf  # best F1 score
@@ -117,16 +121,15 @@ class ELM_Classification_Model(_Model_Trainer):
         # send model to device
         self.model = self.model.to(self.device)
 
-        # batches_per_epoch = len(self.train_data_loader) // self.batch_size
-        # print(len(self.train_data_loader), self.batch_size)
-        self.logger.info(f"Batches per epoch {len(self.train_data_loader)}")
 
-        t_start_training = time.time()
         self.logger.info(f"\nBegin training loop with {self.n_epochs} epochs")
-
+        self.logger.info(f"Batches per epoch {len(self.train_data_loader)}")
+        t_start_training = time.time()
         # loop over epochs
         for epoch in range(self.n_epochs):
             t_start_epoch = time.time()
+
+            self.logger.info(f"\nEp {epoch+1:03d} begin")
             
             train_loss = self._train_epoch()
 
@@ -165,35 +168,34 @@ class ELM_Classification_Model(_Model_Trainer):
                 roc_score,
             )
 
-            t_end_epoch = time.time()
+            # best F1 score and save model
+            if f1_score > best_score:
+                best_score = f1_score
+                self.logger.info(f"Best F1 {best_score:.3f}, saving model...")
+                # save pytorch checkpoint ...
+                # save onnx format ...
 
             tmp =  f"Ep {epoch+1:03d}  "
             tmp += f"train loss {train_loss:.3f}  "
             tmp += f"val loss {valid_loss:.3f}  "
             tmp += f"f1 {f1_score:.3f}  "
             tmp += f"roc {roc_score:.3f}  "
-            tmp += f"ep time {t_end_epoch-t_start_epoch:.1f} s "
-            tmp += f"(total time {t_end_epoch-t_start_training:.1f} s)"
+            tmp += f"ep time {time.time()-t_start_epoch:.1f} s "
+            tmp += f"(total time {time.time()-t_start_training:.1f} s)"
             self.logger.info(tmp)
 
-            # best F1 score and save model
-            if f1_score > best_score:
-                best_score = f1_score
-                self.logger.info(f"  Best F1 {best_score:.3f}, saving model...")
-                # save pytorch checkpoint ...
-                # save onnx format ...
-
-        t_end_training = time.time()
-        self.logger.info(f"\nEnd training loop, elapsed time {t_end_training-t_start_training:.1f} s")
+        self.logger.info(f"\nEnd training loop")
+        self.logger.info(f"Elapsed time {time.time()-t_start_training:.1f} s")
 
     def _train_epoch(self):
         # train mode
         self.model.train()
-        # loop over batches
-        t_start = time.time()
         # accumulate batch-wise losses
         losses = np.array(0)
+        # loop over batches
         for i_batch, (signal_windows, labels) in enumerate(self.train_data_loader):
+            if (i_batch+1)%self.minibatch_interval == 0:
+                t_start_minibatch = time.time()
             # reset gradients
             self.optimizer.zero_grad()
             # send data to device
@@ -207,28 +209,28 @@ class ELM_Classification_Model(_Model_Trainer):
                 labels.type_as(predictions),
             )
             # reduce losses
-            loss = loss.mean()
-            losses = np.append(losses, loss.detach().numpy())
+            loss = loss.mean()  # batch loss
+            losses = np.append(losses, loss.detach().numpy())  # track batch losses
             # backpropagate
             loss.backward()
             # update model with optimization step
             self.optimizer.step()
             if (i_batch+1)%self.minibatch_interval == 0:
-                t_minibatch = time.time()
-                tmp =  f"  Train batch {i_batch+1:06d}/{len(self.train_data_loader)}  "
-                tmp += f"loss {loss:.3f} (avg loss {losses.mean():.3f})  "
-                tmp += f"epoch time {t_minibatch-t_start:.1f} s"
+                tmp =  f"  Train batch {i_batch+1:05d}/{len(self.train_data_loader)}  "
+                tmp += f"batch loss {loss:.3f} (avg loss {losses.mean():.3f})  "
+                tmp += f"minibatch time {time.time()-t_start_minibatch:.3f} s"
                 self.logger.info(tmp)
         return losses.mean()  # return avg. batch loss
 
     def evaluate(self):
         # evaluate mode
-        self.model.eval()
         t_start = time.time()
         losses = np.array(0)
         all_predictions = []
         all_labels = []
         for i_batch, (signal_windows, labels) in enumerate(self.validation_data_loader):
+            if (i_batch+1)%self.minibatch_interval == 0:
+                t_start_minibatch = time.time()
             signal_windows = signal_windows.to(self.device)
             labels = labels.to(self.device)
             with torch.no_grad():
@@ -242,10 +244,9 @@ class ELM_Classification_Model(_Model_Trainer):
             all_labels.append(labels.cpu().numpy())
             all_predictions.append(predictions.sigmoid().cpu().numpy())
             if (i_batch+1)%self.minibatch_interval==0:
-                t_minibatch = time.time()
-                tmp =  f"  Valid. batch {i_batch+1:06d}/{len(self.validation_data_loader)}  "
-                tmp += f"loss {loss:.3f} (avg loss {losses.mean():.3f})  "
-                tmp += f"epoch time {t_minibatch-t_start:.1f} s"
+                tmp =  f"  Valid batch {i_batch+1:05d}/{len(self.validation_data_loader)}  "
+                tmp += f"batch loss {loss:.3f} (avg loss {losses.mean():.3f})  "
+                tmp += f"minibatch time {time.time()-t_start_minibatch:.3f} s"
                 self.logger.info(tmp)
         all_labels = np.concatenate(all_labels)
         all_predictions = np.concatenate(all_predictions)
@@ -276,8 +277,8 @@ class ELM_Classification_Model(_Model_Trainer):
         )
         self.loss_function = torch.nn.BCEWithLogitsLoss(reduction="none")
 
-    def _make_features(self):
-        self.model = Multi_Features(logger=self.logger)
+    def _make_model(self):
+        self.model = Multi_Features_Model(logger=self.logger)
         self.model = self.model.to(self.device)
 
         self.logger.info("MODEL SUMMARY")
@@ -535,5 +536,5 @@ class ELM_Classification_Model(_Model_Trainer):
 
 
 if __name__=='__main__':
-    m = ELM_Classification_Model(n_epochs=5, minibatch_interval=25)
+    m = ELM_Classification_Trainer(batch_size=32, minibatch_interval=50, fraction_validation=0.2)
     m.train()

@@ -6,16 +6,16 @@ from typing import Union
 import torch
 
 try:
-    from .. import source
+    from .. import main
     from .. import sample_data_dir
 except ImportError:
-    from bes_models_2 import source
+    from bes_models_2 import main
     from bes_models_2 import sample_data_dir
 
 
-default_data_file = sample_data_dir / 'sample-labeled-elm-events.hdf5'
+default_data_file = sample_data_dir / 'sample_elm_events.hdf5'
 
-class _Model_Trainer(object):
+class _Trainer(object):
 
     @classmethod
     def _get_init_kwargs_and_defaults(cls) -> dict:
@@ -85,8 +85,8 @@ class _Model_Trainer(object):
 
     def _print_kwargs(self):
         # print kwargs for parent class
-        self.logger.info(f"Parent class `{_Model_Trainer.__name__}` keyword arguments:")
-        parent_kwargs = _Model_Trainer._get_init_kwargs_and_defaults()
+        self.logger.info(f"Parent class `{_Trainer.__name__}` keyword arguments:")
+        parent_kwargs = _Trainer._get_init_kwargs_and_defaults()
         for key, default_value in parent_kwargs.items():
             value = getattr(self, key)
             if value == default_value:
@@ -94,7 +94,7 @@ class _Model_Trainer(object):
             else:
                 self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
         # print kwargs for subclass, if any
-        if self.__class__ is not _Model_Trainer:
+        if self.__class__ is not _Trainer:
             self.logger.info(f"Subclass class `{self.__class__.__name__}` keyword arguments:")
             subclass_kwargs = self.__class__._get_init_kwargs_and_defaults()
             for key, default_value in subclass_kwargs.items():
@@ -137,4 +137,4 @@ class _Model_Trainer(object):
 
 
 if __name__=='__main__':
-    m = _Model_Trainer()
+    m = _Trainer()

@@ -1,10 +1,10 @@
 try:
-    from ..source.train_base import _Model_Trainer
+    from ..main.train_base import _Trainer
 except ImportError:
-    from bes_models_2.source.train_base import _Model
+    from bes_models_2.main.train_base import _Model
 
 
-class Confinement_Classification_Model(_Model_Trainer):
+class Confinement_Classification_Model(_Trainer):
 
     def __init__(self) -> None:
         pass
