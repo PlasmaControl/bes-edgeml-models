@@ -12,52 +12,11 @@ from sklearn import metrics
 try:
     from ..main.train_base import _Trainer
     from ..main.models import Multi_Features_Model
+    from ..main.data import ELM_Dataset
 except ImportError:
     from bes_models_2.main.train_base import _Trainer
     from bes_models_2.main.models import Multi_Features_Model
-
-
-class ELM_Dataset(torch.utils.data.Dataset):
-
-    def __init__(
-        self,
-        signals: np.ndarray, 
-        labels: np.ndarray, 
-        sample_indices: np.ndarray, 
-        window_start: np.ndarray,
-        signal_window_size: int,
-        label_look_ahead: int,
-    ) -> None:
-        self.signals = signals
-        self.labels = labels
-        self.sample_indices = sample_indices
-        self.window_start = window_start
-        self.signal_window_size = signal_window_size
-        self.label_look_ahead = label_look_ahead
-
-    def __len__(self):
-        return self.sample_indices.size
-
-    def __getitem__(self, idx: int):
-        time_idx = self.sample_indices[idx]
-        # BES signal window data
-        signal_window = self.signals[
-            time_idx : time_idx + self.signal_window_size
-        ]
-        signal_window = signal_window[np.newaxis, ...]
-        signal_window = torch.as_tensor(signal_window, dtype=torch.float32)
-        # label for signal window
-        label = self.labels[
-            time_idx
-            + self.signal_window_size
-            + self.label_look_ahead
-            - 1
-        ]
-        label = torch.as_tensor(label)
-
-        return signal_window, label
-
-
+    from bes_models_2.main.data import ELM_Dataset
 
 class ELM_Classification_Trainer(_Trainer):
 
@@ -66,20 +25,30 @@ class ELM_Classification_Trainer(_Trainer):
         label_look_ahead: int = 200,  # prediction horizon in samples
         threshold: float = 0.5,  # threshold for binary classification
         max_elms: int = None,  # limit ELMs
-        minibatch_interval: int = 2000,  # print minibatch info
+        oversample_active_elm: bool = True,  # if True, oversample active ELMs to balance data
         **kwargs,
     ) -> None:
 
         t_start_init = time.time()
 
+        # init parent class
+        super().__init__(**kwargs)
+
+        self._print_kwargs(self.__class__, locals().copy())
+
         # subclass attributes
         self.label_look_ahead = label_look_ahead
         self.threshold = threshold
         self.max_elms = max_elms
-        self.minibatch_interval = minibatch_interval
+        self.oversample_active_elm = oversample_active_elm
 
-        # init parent class
-        super().__init__(**kwargs)
+        self.regression = False
+        if self.regression:
+            self.loss_function = torch.nn.MSELoss(reduction="none")
+            self.score_function = metrics.r2_score
+        else:
+            self.loss_function = torch.nn.BCEWithLogitsLoss(reduction="none")
+            self.score_function = metrics.f1_score
 
         self.train_data = None
         self.validation_data = None
@@ -102,7 +71,6 @@ class ELM_Classification_Trainer(_Trainer):
 
         self.optimizer = None
         self.scheduler = None
-        self.loss_function = None
         self._make_optimizer_scheduler_loss()
 
         self.results = None
@@ -110,28 +78,31 @@ class ELM_Classification_Trainer(_Trainer):
         self.logger.info(f"Initialization time {time.time()-t_start_init:.3f} s")
 
     def train(self):
-        best_score = -np.inf  # best F1 score
+        best_score = -np.inf
         self.results = {
             'train_loss': np.empty(0),
             'valid_loss': np.empty(0),
-            'scores': np.empty(0),  # F1 scores
-            'roc_scores': np.empty(0),  # ROC-AUC
+            'scores': np.empty(0),
         }
+
+        if not self.regression:
+            self.results['roc_scores'] = np.empty(0)
 
         # send model to device
         self.model = self.model.to(self.device)
-
 
         self.logger.info(f"\nBegin training loop with {self.n_epochs} epochs")
         self.logger.info(f"Batches per epoch {len(self.train_data_loader)}")
         t_start_training = time.time()
         # loop over epochs
-        for epoch in range(self.n_epochs):
+        for i_epoch in range(self.n_epochs):
             t_start_epoch = time.time()
 
-            self.logger.info(f"\nEp {epoch+1:03d} begin")
+            self.logger.info(f"\nEp {i_epoch+1:03d}: begin")
             
             train_loss = self._train_epoch()
+            if self.regression:
+                train_loss = np.sqrt(train_loss)
 
             self.results['train_loss'] = np.append(
                 self.results['train_loss'],
@@ -139,6 +110,8 @@ class ELM_Classification_Trainer(_Trainer):
             )
 
             valid_loss, predictions, true_labels = self.evaluate()
+            if self.regression:
+                valid_loss = np.sqrt(valid_loss)
 
             self.results['valid_loss'] = np.append(
                 self.results['valid_loss'],
@@ -148,38 +121,39 @@ class ELM_Classification_Trainer(_Trainer):
             # apply learning rate scheduler
             self.scheduler.step(valid_loss)
 
-            # F1 score
-            f1_score = metrics.f1_score(
+            score = self.score_function(
                 true_labels,
                 (predictions > self.threshold).astype(int),
             )
             self.results['scores'] = np.append(
                 self.results['scores'],
-                f1_score,
+                score,
             )
 
-            # ROC-AUC score
-            roc_score = metrics.roc_auc_score(
-                true_labels,
-                predictions,
-            )
-            self.results['roc_scores'] = np.append(
-                self.results['roc_scores'],
-                roc_score,
-            )
+            if not self.regression:
+                # ROC-AUC score
+                roc_score = metrics.roc_auc_score(
+                    true_labels,
+                    predictions,
+                )
+                self.results['roc_scores'] = np.append(
+                    self.results['roc_scores'],
+                    roc_score,
+                )
 
-            # best F1 score and save model
-            if f1_score > best_score:
-                best_score = f1_score
-                self.logger.info(f"Best F1 {best_score:.3f}, saving model...")
+            # best score and save model
+            if score > best_score:
+                best_score = score
+                self.logger.info(f"Ep {i_epoch+1:03d}: Best score {best_score:.3f}, saving model...")
                 # save pytorch checkpoint ...
                 # save onnx format ...
 
-            tmp =  f"Ep {epoch+1:03d}  "
+            tmp =  f"Ep {i_epoch+1:03d}: "
             tmp += f"train loss {train_loss:.3f}  "
             tmp += f"val loss {valid_loss:.3f}  "
-            tmp += f"f1 {f1_score:.3f}  "
-            tmp += f"roc {roc_score:.3f}  "
+            tmp += f"score {score:.3f}  "
+            if not self.regression:
+                tmp += f"roc {roc_score:.3f}  "
             tmp += f"ep time {time.time()-t_start_epoch:.1f} s "
             tmp += f"(total time {time.time()-t_start_training:.1f} s)"
             self.logger.info(tmp)
@@ -235,6 +209,8 @@ class ELM_Classification_Trainer(_Trainer):
             labels = labels.to(self.device)
             with torch.no_grad():
                 predictions = self.model(signal_windows)
+            if not self.regression:
+                predictions = predictions.sigmoid()
             loss = self.loss_function(
                 predictions.squeeze(),
                 labels.type_as(predictions),
@@ -242,7 +218,7 @@ class ELM_Classification_Trainer(_Trainer):
             loss = loss.mean()
             losses = np.append(losses, loss.detach().numpy())
             all_labels.append(labels.cpu().numpy())
-            all_predictions.append(predictions.sigmoid().cpu().numpy())
+            all_predictions.append(predictions.cpu().numpy())
             if (i_batch+1)%self.minibatch_interval==0:
                 tmp =  f"  Valid batch {i_batch+1:05d}/{len(self.validation_data_loader)}  "
                 tmp += f"batch loss {loss:.3f} (avg loss {losses.mean():.3f})  "
@@ -275,7 +251,6 @@ class ELM_Classification_Trainer(_Trainer):
             patience=2,
             verbose=True,
         )
-        self.loss_function = torch.nn.BCEWithLogitsLoss(reduction="none")
 
     def _make_model(self):
         self.model = Multi_Features_Model(logger=self.logger)
@@ -382,7 +357,7 @@ class ELM_Classification_Trainer(_Trainer):
         self.train_data = self._preprocess_data(
             training_elms,
             shuffle_indices=True,
-            oversample_active_elm=True,
+            oversample_active_elm=self.oversample_active_elm,
         )
 
         self.logger.info(f"Validation ELM events: {validation_elms.size}")
@@ -399,72 +374,47 @@ class ELM_Classification_Trainer(_Trainer):
             oversample_active_elm=False,
         )
 
-    def _preprocess_data(
+    def _get_valid_indices(
         self,
-        elm_indices,
+        labels = None,
+        signals = None,
+    ):
+        #### Begin _get_valid_indices ####
+        # indices for active elm times in each elm event
+        active_elm_indices = np.nonzero(labels == 1)[0]
+        active_elm_start_index = active_elm_indices[0]
+        # `t0` is first index (or earliest time, or trailing time point) for signal window
+        # `valid_t0` denotes valid `t0` time points for signal window
+        # initialize to zeros
+        valid_t0 = np.zeros(labels.shape, dtype=np.int32)
+        # largest `t0` index with signal window in pre-ELM period
+        largest_t0_index_for_pre_elm_period = active_elm_start_index - self.signal_window_size
+        if largest_t0_index_for_pre_elm_period < 0:
+            # insufficient pre-elm period for signal window size
+            return None
+        assert labels[largest_t0_index_for_pre_elm_period + (self.signal_window_size-1)    ] == 0
+        assert labels[largest_t0_index_for_pre_elm_period + (self.signal_window_size-1) + 1] == 1
+        # `t0` time points up to `largest_t0` are valid
+        valid_t0[0:largest_t0_index_for_pre_elm_period+1] = 1
+        assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
+        assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
+        # labels after ELM onset should be active ELM, even if in post-ELM period
+        last_label_for_active_elm_in_pre_elm_signal = (
+            largest_t0_index_for_pre_elm_period
+            + (self.signal_window_size - 1)
+            + self.label_look_ahead
+        )
+        labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
+        assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
+        #### End _get_valid_indices ####
+        return labels, signals, valid_t0
+
+    def _check_active_elm_indices(
+        self, 
+        packaged_labels = None,
+        packaged_valid_t0_indices = None,
         oversample_active_elm: bool = False,
-        shuffle_indices: bool = False,
-    ) -> None:
-        packaged_signals = None
-        packaged_window_start = None
-        packaged_valid_t0 = []
-        packaged_labels = []
-        with h5py.File(self.input_data_file, 'r') as h5_file:
-            for elm_index in elm_indices:
-                elm_key = f"{elm_index:05d}"
-                elm_event = h5_file[elm_key]
-                signals = np.array(elm_event["signals"], dtype=np.float32)
-                # transpose so time dim. first
-                signals = np.transpose(signals, (1, 0)).reshape(-1, 8, 8)
-                try:
-                    labels = np.array(elm_event["labels"], dtype=np.float32)
-                except KeyError:
-                    labels = np.array(elm_event["manual_labels"], dtype=np.float32)
-                # indices for active elm times in each elm event
-                active_elm_indices = np.nonzero(labels == 1)[0]
-                active_elm_start_index = active_elm_indices[0]
-                # `t0` is first index (or earliest time, or trailing time point) for signal window
-                # `valid_t0` denotes valid `t0` time points for signal window
-                # initialize to zeros
-                valid_t0 = np.zeros(labels.shape, dtype=np.int32)
-                # largest `t0` index with signal window in pre-ELM period
-                largest_t0_index_for_pre_elm_period = active_elm_start_index - self.signal_window_size
-                if largest_t0_index_for_pre_elm_period < 0:
-                    # insufficient pre-elm period for signal window size
-                    return None
-                assert labels[largest_t0_index_for_pre_elm_period + (self.signal_window_size-1)    ] == 0
-                assert labels[largest_t0_index_for_pre_elm_period + (self.signal_window_size-1) + 1] == 1
-                # `t0` time points up to `largest_t0` are valid
-                valid_t0[0:largest_t0_index_for_pre_elm_period+1] = 1
-                assert valid_t0[largest_t0_index_for_pre_elm_period    ] == 1
-                assert valid_t0[largest_t0_index_for_pre_elm_period + 1] == 0
-                # labels after ELM onset should be active ELM, even if in post-ELM period
-                last_label_for_active_elm_in_pre_elm_signal = (
-                    largest_t0_index_for_pre_elm_period
-                    + (self.signal_window_size - 1)
-                    + self.label_look_ahead
-                )
-                labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
-                assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
-                if packaged_signals is None:
-                    packaged_window_start = np.array([0])
-                    packaged_valid_t0 = valid_t0
-                    packaged_signals = signals
-                    packaged_labels = labels
-                else:
-                    last_index = packaged_labels.size - 1
-                    packaged_window_start = np.append(
-                        packaged_window_start, 
-                        last_index + 1
-                    )
-                    packaged_valid_t0 = np.concatenate([packaged_valid_t0, valid_t0])
-                    packaged_signals = np.concatenate([packaged_signals, signals], axis=0)
-                    packaged_labels = np.concatenate([packaged_labels, labels], axis=0)                
-
-        # valid indices for data sampling
-        packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
-        packaged_valid_t0_indices = packaged_valid_t0_indices[packaged_valid_t0 == 1]
-
+    ):
         packaged_label_indices_for_valid_t0 = (
             packaged_valid_t0_indices 
             + (self.signal_window_size-1)
@@ -501,13 +451,61 @@ class ELM_Classification_Trainer(_Trainer):
                 + (self.signal_window_size-1)
                 + self.label_look_ahead
                 )
-            packaged_labels_for_valid_t0 = packaged_labels[ packaged_label_indices_for_valid_t0 ]
+            packaged_labels_for_valid_t0 = packaged_labels[packaged_label_indices_for_valid_t0]
             n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
             n_inactive_elm = np.count_nonzero(packaged_labels_for_valid_t0-1)
             active_elm_fraction = n_active_elm/(n_active_elm+n_inactive_elm)
             self.logger.info(f"  New count of inactive ELM labels: {n_inactive_elm}")
             self.logger.info(f"  New count of active ELM labels: {n_active_elm}")
             self.logger.info(f"  New % active: {active_elm_fraction*1e2:.1f} %")
+        return packaged_valid_t0_indices
+
+    def _preprocess_data(
+        self,
+        elm_indices,
+        shuffle_indices: bool = False,
+        oversample_active_elm: bool = False,
+    ) -> None:
+        packaged_signals = None
+        packaged_window_start = None
+        packaged_valid_t0 = []
+        packaged_labels = []
+        with h5py.File(self.input_data_file, 'r') as h5_file:
+            for elm_index in elm_indices:
+                elm_key = f"{elm_index:05d}"
+                elm_event = h5_file[elm_key]
+                signals = np.array(elm_event["signals"], dtype=np.float32)
+                # transpose so time dim. first
+                signals = np.transpose(signals, (1, 0)).reshape(-1, 8, 8)
+                try:
+                    labels = np.array(elm_event["labels"], dtype=np.float32)
+                except KeyError:
+                    labels = np.array(elm_event["manual_labels"], dtype=np.float32)
+                labels, signals, valid_t0 = self._get_valid_indices(labels, signals)
+                if packaged_signals is None:
+                    packaged_window_start = np.array([0])
+                    packaged_valid_t0 = valid_t0
+                    packaged_signals = signals
+                    packaged_labels = labels
+                else:
+                    last_index = packaged_labels.size - 1
+                    packaged_window_start = np.append(
+                        packaged_window_start, 
+                        last_index + 1
+                    )
+                    packaged_valid_t0 = np.concatenate([packaged_valid_t0, valid_t0])
+                    packaged_signals = np.concatenate([packaged_signals, signals], axis=0)
+                    packaged_labels = np.concatenate([packaged_labels, labels], axis=0)                
+
+        # valid indices for data sampling
+        packaged_valid_t0_indices = np.arange(packaged_valid_t0.size, dtype="int")
+        packaged_valid_t0_indices = packaged_valid_t0_indices[packaged_valid_t0 == 1]
+
+        packaged_valid_t0_indices = self._check_active_elm_indices(
+            packaged_labels=packaged_labels,
+            packaged_valid_t0_indices=packaged_valid_t0_indices,
+            oversample_active_elm=oversample_active_elm,
+        )
 
         if shuffle_indices:
             np.random.shuffle(packaged_valid_t0_indices)
@@ -536,5 +534,9 @@ class ELM_Classification_Trainer(_Trainer):
 
 
 if __name__=='__main__':
-    m = ELM_Classification_Trainer(batch_size=32, minibatch_interval=50, fraction_validation=0.2)
+    m = ELM_Classification_Trainer(
+        batch_size=32, 
+        minibatch_interval=50, 
+        fraction_validation=0.2,
+    )
     m.train()

@@ -17,13 +17,6 @@ default_data_file = sample_data_dir / 'sample_elm_events.hdf5'
 
 class _Trainer(object):
 
-    @classmethod
-    def _get_init_kwargs_and_defaults(cls) -> dict:
-        init_signature = inspect.signature(cls)
-        init_kwargs_and_defaults = {parameter.name: parameter.default 
-            for parameter in init_signature.parameters.values()}
-        return init_kwargs_and_defaults
-
     def __init__(
         self,
         input_data_file: Union[str,Path] = default_data_file,  # path to data file
@@ -38,6 +31,7 @@ class _Trainer(object):
         num_workers: int = 1,  # number of subprocess workers for pytorch dataloader
         n_epochs: int = 2,  # training epochs
         batch_size: int = 64,  # power of 2, like 16-128
+        minibatch_interval: int = 2000,  # print minibatch info
         signal_window_size: int = 128,  # power of 2, like 32-512
         fraction_validation: float = 0.1,  # fraction of dataset for validation
         fraction_test: float = 0.15,  # fraction of dataset for testing
@@ -66,6 +60,7 @@ class _Trainer(object):
         self.num_workers = num_workers
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.minibatch_interval = minibatch_interval
         self.signal_window_size = signal_window_size
         self.fraction_validation = fraction_validation
         self.fraction_test = fraction_test
@@ -80,30 +75,31 @@ class _Trainer(object):
         self.logger = None
         self._create_logger()
 
-        self._print_kwargs()
+        self._print_kwargs(_Trainer, locals().copy())
         self._setup_device()
 
-    def _print_kwargs(self):
-        # print kwargs for parent class
-        self.logger.info(f"Parent class `{_Trainer.__name__}` keyword arguments:")
-        parent_kwargs = _Trainer._get_init_kwargs_and_defaults()
+    @classmethod
+    def _get_init_kwargs_and_defaults(cls) -> dict:
+        init_signature = inspect.signature(cls)
+        init_kwargs_and_defaults = {parameter.name: parameter.default 
+            for parameter in init_signature.parameters.values()}
+        return init_kwargs_and_defaults
+
+    def _print_kwargs(
+        self,
+        cls,
+        locals_copy,
+    ):
+        # print kwargs from __init__
+        self.logger.info(f"Parent class `{cls.__name__}` keyword arguments:")
+        parent_kwargs = cls._get_init_kwargs_and_defaults()
         for key, default_value in parent_kwargs.items():
-            value = getattr(self, key)
+            if key == 'kwargs': continue
+            value = locals_copy[key]
             if value == default_value:
                 self.logger.info(f"  {key:22s}:  {value}")
             else:
                 self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
-        # print kwargs for subclass, if any
-        if self.__class__ is not _Trainer:
-            self.logger.info(f"Subclass class `{self.__class__.__name__}` keyword arguments:")
-            subclass_kwargs = self.__class__._get_init_kwargs_and_defaults()
-            for key, default_value in subclass_kwargs.items():
-                if key == 'kwargs': continue
-                value = getattr(self, key)
-                if value == default_value:
-                    self.logger.info(f"  {key:22s}:  {value}")
-                else:
-                    self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
 
     def _setup_device(self):
 

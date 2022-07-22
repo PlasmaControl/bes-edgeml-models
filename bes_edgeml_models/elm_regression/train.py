@@ -347,6 +347,7 @@ if __name__ == "__main__":
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'model_name': 'multi_features_regression',
+            'input_data_file': '/Users/drsmith/Documents/repos/edgeml-models/bes_models_2/sample_data/sample_elm_events.hdf5',
             'max_elms':10,
             'n_epochs':2,
             'fraction_valid':0.2,
