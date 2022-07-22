@@ -23,14 +23,13 @@ except ImportError:
     from bes_ml.main.models import Multi_Features_Model
     from bes_ml.main.data import ELM_Dataset
 
-
-default_data_file = sample_data_dir / 'sample_elm_events.hdf5'
+from bes_data.sample_data import sample_elm_data_file
 
 class _Trainer(object):
 
     def __init__(
         self,
-        input_data_file: Union[str,Path] = default_data_file,  # path to data file
+        input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
         output_dir: Union[str,Path] = Path('run_dir'),  # path to output dir.
         results_file: str = 'results.pkl',  # output training results
         log_file: str = 'log.txt',  # output log file
