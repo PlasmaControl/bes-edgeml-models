@@ -17,11 +17,9 @@ import torchinfo
 
 # repo import
 try:
-    from .. import sample_data_dir
     from ..main.models import Multi_Features_Model
     from ..main.data import ELM_Dataset
 except ImportError:
-    from bes_ml import sample_data_dir
     from bes_ml.main.models import Multi_Features_Model
     from bes_ml.main.data import ELM_Dataset
 

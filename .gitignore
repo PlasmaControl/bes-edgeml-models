@@ -173,10 +173,10 @@ cython_debug/
 
 *.pth
 *.pkl
-# *.hdf5
+*.hdf5
 *.png
 *.pkl
 
 
 # exclusions
-# !bes_models_2/sample_data/*
+!bes_data/sample_data/*
