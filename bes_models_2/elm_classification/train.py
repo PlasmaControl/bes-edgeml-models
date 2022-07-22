@@ -119,9 +119,10 @@ class ELM_Classification_Trainer(_Trainer):
 
 
 if __name__=='__main__':
-    m = ELM_Classification_Trainer(
+    model = ELM_Classification_Trainer(
         batch_size=32, 
         minibatch_interval=50, 
-        fraction_validation=0.2,
+        fraction_validation=0.4,
+        fraction_test=0.0,
     )
-    m.train()
+    model.train()

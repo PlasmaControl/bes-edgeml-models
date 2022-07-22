@@ -34,7 +34,7 @@ class _Base_Features(nn.Module):
             self.logger.setLevel(logging.INFO)
             self.logger.addHandler(logging.StreamHandler())
 
-        self._print_base_kwargs(copy_locals=locals().copy())
+        self._print_kwargs(cls=_Base_Features, copy_locals=locals().copy())
 
         # spatial maxpool
         self.spatial_maxpool_size = spatial_maxpool_size
@@ -77,24 +77,16 @@ class _Base_Features(nn.Module):
             for parameter in init_signature.parameters.values()}
         return init_kwargs_and_defaults
 
-    def _print_base_kwargs(self, copy_locals: dict = None):
+    def _print_kwargs(
+        self, 
+        cls = None, 
+        copy_locals: dict = None,
+    ):
         # print input keyword arguments
-        self.logger.info(f"Parent class `{_Base_Features.__name__}` keyword arguments:")
-        parent_kwargs = _Base_Features._get_init_kwargs_and_defaults()
+        self.logger.info(f"Class `{cls.__name__}` keyword arguments:")
+        parent_kwargs = cls._get_init_kwargs_and_defaults()
         for key, default_value in parent_kwargs.items():
             if key in ['kwargs', 'logger']: continue
-            value = copy_locals[key]
-            if value == default_value:
-                self.logger.info(f"  {key:22s}:  {value}")
-            else:
-                self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
-
-    def _print_self_kwargs(self, copy_locals: dict = None):
-        # print input keyword arguments
-        self.logger.info(f"Parent class `{self.__class__.__name__}` keyword arguments:")
-        parent_kwargs = self.__class__._get_init_kwargs_and_defaults()
-        for key, default_value in parent_kwargs.items():
-            if key == 'kwargs': continue
             value = copy_locals[key]
             if value == default_value:
                 self.logger.info(f"  {key:22s}:  {value}")
@@ -110,6 +102,80 @@ class _Base_Features(nn.Module):
 
     def _dropout_relu_flatten(self, x: torch.Tensor) -> torch.Tensor:
         return torch.flatten(self.relu(self.dropout(x)), 1)
+
+
+class Dense_Features(_Base_Features):
+    def __init__(
+        self,
+        dense_num_kernels: int = 8,
+        **kwargs,
+    ):
+        """
+        Use the raw BES channels values as features. This function takes in a 5-dimensional
+        tensor of size: `(N, 1, signal_window_size, 8, 8)`, N=batch_size and
+        performs maxpooling to downsample the spatial dimension by half, perform a
+        3-d convolution with a filter size identical to the spatial dimensions of the
+        input to avoid the sliding of the kernel over the input. Finally, a feature map
+        is generated that can be concatenated with other features.
+
+        Args:
+        -----
+            args (argparse.Namespace): Command line arguments containing the information
+                about signal_window.
+            dropout_rate (float, optional): Fraction of total hidden units that will
+                be turned off for drop out. Defaults to 0.2.
+            negative_slope (float, optional): Slope of LeakyReLU activation for negative
+                `x`. Defaults to 0.02.
+            maxpool_size (int, optional): Size of the kernel used for maxpooling. Use
+                0 to skip maxpooling. Defaults to 2.
+            num_kernels (int, optional): Dimensionality of the output space.
+                Essentially, it gives the number of output kernels after convolution.
+                Defaults to 10.
+        """
+        super().__init__(**kwargs)
+
+        self._print_kwargs(cls=self.__class__, copy_locals=locals().copy())
+
+        # filters per subwindow
+        self.num_kernels = dense_num_kernels
+
+        filter_size = (
+            self.subwindow_size,
+            8 // self.spatial_maxpool_size,
+            8 // self.spatial_maxpool_size,
+        )
+
+        # list of conv. filter banks (each with self.num_kernels) with size self.subwindow_bins
+        self.conv = nn.ModuleList(
+            [
+                nn.Conv3d(
+                    in_channels=1,
+                    out_channels=self.num_kernels,
+                    kernel_size=filter_size,
+                ) for i_subwindow in range(self.subwindow_nbins)
+            ]
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self._time_interval_and_maxpool(x)
+        x_new_size = [
+            x.shape[0],
+            self.num_kernels,
+            self.subwindow_nbins,
+            1,
+            1,
+        ]
+        x_new = torch.empty(size=x_new_size, dtype=x.dtype, device=x.device)
+        for i_bin in range(self.subwindow_nbins):
+            i_start = i_bin * self.subwindow_size
+            i_stop = (i_bin+1) * self.subwindow_size
+            if torch.any(torch.isnan(self.conv[i_bin].weight)) or torch.any(torch.isnan(self.conv[i_bin].bias)):
+                assert False
+            x_new[:, :, i_bin:i_bin+1, :, :] = self.conv[i_bin](
+                x[:, :, i_start:i_stop, :, :]
+            )
+        x = self._dropout_relu_flatten(x_new)
+        return x
 
 
 class CNN_Features(_Base_Features):
@@ -235,80 +301,6 @@ class CNN_Features(_Base_Features):
         x = self.layer2_maxpool(x)
         return torch.flatten(x, 1)
 
-
-
-class Dense_Features(_Base_Features):
-    def __init__(
-        self,
-        dense_num_kernels: int = 8,
-        **kwargs,
-    ):
-        """
-        Use the raw BES channels values as features. This function takes in a 5-dimensional
-        tensor of size: `(N, 1, signal_window_size, 8, 8)`, N=batch_size and
-        performs maxpooling to downsample the spatial dimension by half, perform a
-        3-d convolution with a filter size identical to the spatial dimensions of the
-        input to avoid the sliding of the kernel over the input. Finally, a feature map
-        is generated that can be concatenated with other features.
-
-        Args:
-        -----
-            args (argparse.Namespace): Command line arguments containing the information
-                about signal_window.
-            dropout_rate (float, optional): Fraction of total hidden units that will
-                be turned off for drop out. Defaults to 0.2.
-            negative_slope (float, optional): Slope of LeakyReLU activation for negative
-                `x`. Defaults to 0.02.
-            maxpool_size (int, optional): Size of the kernel used for maxpooling. Use
-                0 to skip maxpooling. Defaults to 2.
-            num_kernels (int, optional): Dimensionality of the output space.
-                Essentially, it gives the number of output kernels after convolution.
-                Defaults to 10.
-        """
-        super().__init__(**kwargs)
-
-        self._print_self_kwargs(copy_locals=locals().copy())
-
-        # filters per subwindow
-        self.num_kernels = dense_num_kernels
-
-        filter_size = (
-            self.subwindow_size,
-            8 // self.spatial_maxpool_size,
-            8 // self.spatial_maxpool_size,
-        )
-
-        # list of conv. filter banks (each with self.num_kernels) with size self.subwindow_bins
-        self.conv = nn.ModuleList(
-            [
-                nn.Conv3d(
-                    in_channels=1,
-                    out_channels=self.num_kernels,
-                    kernel_size=filter_size,
-                ) for i_subwindow in range(self.subwindow_nbins)
-            ]
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self._time_interval_and_maxpool(x)
-        x_new_size = [
-            x.shape[0],
-            self.num_kernels,
-            self.subwindow_nbins,
-            1,
-            1,
-        ]
-        x_new = torch.empty(size=x_new_size, dtype=x.dtype, device=x.device)
-        for i_bin in range(self.subwindow_nbins):
-            i_start = i_bin * self.subwindow_size
-            i_stop = (i_bin+1) * self.subwindow_size
-            if torch.any(torch.isnan(self.conv[i_bin].weight)) or torch.any(torch.isnan(self.conv[i_bin].bias)):
-                assert False
-            x_new[:, :, i_bin:i_bin+1, :, :] = self.conv[i_bin](
-                x[:, :, i_start:i_stop, :, :]
-            )
-        x = self._dropout_relu_flatten(x_new)
-        return x
 
 
 class FFT_Features(_Base_Features):

@@ -55,13 +55,13 @@ class ELM_Regression_Trainer(_Trainer):
         pass
 
 
-
 if __name__=='__main__':
-    m = ELM_Regression_Trainer(
+    model = ELM_Regression_Trainer(
         batch_size=32, 
         minibatch_interval=50, 
-        fraction_validation=0.2,
         log_time=True,
         inverse_weight_label=True,
+        fraction_validation=0.4,
+        fraction_test=0.0,
     )
-    m.train()
+    model.train()

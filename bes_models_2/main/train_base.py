@@ -89,7 +89,6 @@ class _Trainer(object):
         self._create_logger()
 
         self._print_kwargs(_Trainer, locals().copy())
-        self._setup_device()
 
     def _finish_initialization(self):
 
@@ -102,12 +101,14 @@ class _Trainer(object):
         self.test_data = None
         self._get_data()
 
-        if self.test_data_file:
+        if self.test_data_file and self.fraction_test>0.0:
             self._save_test_data()
         
         self.train_dataset = None
         self.validation_dataset = None
         self._make_datasets()
+
+        self._setup_device()
 
         self.train_data_loader = None
         self.validation_data_loader = None
@@ -433,8 +434,10 @@ class _Trainer(object):
         if self.max_elms:
             elm_indices = elm_indices[:self.max_elms]
             self.logger.info(f"Limiting data to {self.max_elms} ELM events")
-        n_test_elms = int(self.fraction_test * elm_indices.size)
+
         n_validation_elms = int(self.fraction_validation * elm_indices.size)
+        n_test_elms = int(self.fraction_test * elm_indices.size)
+
         test_elms, validation_elms, training_elms = np.split(
             elm_indices,
             [n_test_elms, n_test_elms+n_validation_elms]
@@ -454,12 +457,16 @@ class _Trainer(object):
             oversample_active_elm=False,
         )
 
-        self.logger.info(f"Test ELM events: {test_elms.size}")
-        self.test_data = self._preprocess_data(
-            test_elms,
-            shuffle_indices=False,
-            oversample_active_elm=False,
-        )
+        if self.fraction_test > 0.0:
+            self.logger.info(f"Test ELM events: {test_elms.size}")
+            self.test_data = self._preprocess_data(
+                test_elms,
+                shuffle_indices=False,
+                oversample_active_elm=False,
+            )
+        else:
+            self.logger.info("Skipping test data")
+            self.test_data = None
 
     def _preprocess_data(
         self,
@@ -539,7 +546,7 @@ class _Trainer(object):
         locals_copy,
     ):
         # print kwargs from __init__
-        self.logger.info(f"Parent class `{cls.__name__}` keyword arguments:")
+        self.logger.info(f"Class `{cls.__name__}` keyword arguments:")
         parent_kwargs = cls._get_init_kwargs_and_defaults()
         for key, default_value in parent_kwargs.items():
             if key == 'kwargs': continue
