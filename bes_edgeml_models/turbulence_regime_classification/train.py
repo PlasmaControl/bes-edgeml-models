@@ -358,16 +358,17 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         work_dir = Path(__file__).parents[3] / 'bes-edgeml-work/regime_classification'
-        n_epochs = 1
+        n_epochs = 10
         sws = 256
         fft_num_filters = 16
         dwt_num_filters = 16
         args = {'model_name': 'multi_features_ds_v2',
+                'input_data_dir': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/regime_classification/data',
                 'device': 'cuda',
                 'dry_run': False,
                 'batch_size': 64,
                 'n_epochs': n_epochs,
-                'max_elms': 10,
+                'max_elms': -1,
                 'fraction_valid': 0.25,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,

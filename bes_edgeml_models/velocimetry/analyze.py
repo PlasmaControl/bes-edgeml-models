@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 import seaborn as sns
 import torch
@@ -289,14 +290,16 @@ class Analysis(object):
         else:
             r2 = metrics.r2_score(targets[:, 2, 6], predictions[:, 2, 6])
             print(f"R2: {r2:.2f}")
-
+#%%
     def plot_full_inference(
             self,
             max_elms=None,
+            time_slice=None,
         ):
         if not self.vel_predictions:
             self._calc_inference_full(max_elms=max_elms)
-        _, axes = plt.subplots(ncols=1, nrows=2, figsize=(12, 6))
+        _, axes = plt.subplots(ncols=2, nrows=2, figsize=(12, 6))
+        axes = axes.flat
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
         signals = self.vel_predictions["signals"]
         vZ_labels = self.vel_predictions["vZ_labels"]
@@ -343,12 +346,28 @@ class Analysis(object):
         axes[1].legend(fontsize='small')
         axes[1].set_title(f'vR')
 
+        time_slice = time_slice if time_slice else len(signals)//2
+        axes[2].imshow(signals[time_slice], interpolation='hanning', cmap='gist_stern', alpha=0.8,
+                       norm=TwoSlopeNorm(vcenter=1.2))
+        Y, X = np.mgrid[0:8, 0:8]
+        axes[2].quiver(X, Y, vR_labels[time_slice], vZ_labels[time_slice])
+        axes[2].set_xlabel('R')
+        axes[2].set_ylabel('Z')
+        axes[2].set_title('ODP Calculated Velocity Field')
+
+        axes[3].imshow(signals[time_slice], interpolation='hanning', cmap='gist_stern', alpha=0.8,
+                       norm=TwoSlopeNorm(vcenter=1.2))
+        axes[3].quiver(X, Y, vR_predictions[time_slice], vZ_predictions[time_slice])
+        axes[3].set_xlabel('R')
+        axes[3].set_ylabel('Z')
+        axes[3].set_title('ML Calculated Velocity Field')
+
         plt.tight_layout()
         if self.save:
             filepath = self.analysis_dir / f'inference.pdf'
             print(f'Saving inference file: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-
+#%%
     def merge_all_pdfs(self):
         pdf_files = sorted(
             self.analysis_dir.glob('*.pdf'),
@@ -378,7 +397,7 @@ if __name__ == "__main__":
 
     for run_dir in [
         # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
-        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/vel_cnn_10e_sws256',
+        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/velocimetry/mf_20e_sws16',
     ]:
         run = Analysis(run_dir=run_dir)
         vpd = run.plot_all()

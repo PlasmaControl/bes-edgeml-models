@@ -14,9 +14,9 @@ try:
     from ..options.train_arguments import TrainArguments
     from ..src import utils
 except ImportError:
-    from models.bes_edgeml_models.data_preprocessing.base_data import BaseData
-    from models.bes_edgeml_models.options.train_arguments import TrainArguments
-    from models.bes_edgeml_models.src import utils
+    from bes_edgeml_models.base.data_preprocessing.base_data import BaseData
+    from bes_edgeml_models.base.options.train_arguments import TrainArguments
+    from bes_edgeml_models.base.src import utils
 
 
 class UnprocessedData(BaseData):

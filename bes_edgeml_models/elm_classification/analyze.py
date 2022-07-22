@@ -369,7 +369,7 @@ class Analysis(object):
             pdf_files = sorted(self.analysis_dir.glob('inference_*.pdf'))
             output = self.analysis_dir/'inference.pdf'
             utils.merge_pdfs(pdf_files, output, delete_inputs=True)
-
+#%%
     def plot_full_analysis(
             self,
             threshold: Union[float, None] = None,
@@ -418,6 +418,7 @@ class Analysis(object):
             if mode == 'micro':
                 bool_predictions = (predictions > threshold).astype(int)
                 cm = metrics.confusion_matrix(targets, bool_predictions)
+                print(cm)
             else:
                 cm = metrics.confusion_matrix(targets, predictions)
             # plt.figure(figsize=(4.5, 3.5))
@@ -439,7 +440,7 @@ class Analysis(object):
             filepath = self.analysis_dir / f"full_analysis.pdf"
             print(f'Saving full-data analysis: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
-
+#%%
     def merge_all_pdfs(self):
         pdf_files = sorted(
             self.analysis_dir.glob('*.pdf'),

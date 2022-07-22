@@ -127,6 +127,7 @@ class Analysis(object):
         self,
         threshold=None,
         max_elms=None,
+        elm_idx=None,
     ):
         if self.test_data is None:
             self._load_test_data()
@@ -147,6 +148,9 @@ class Analysis(object):
             for i_elm, elm_index in enumerate(elm_indices):
                 if max_elms and i_elm >= max_elms:
                     break
+                # Allow for selection of ELMs from elm_indices
+                if elm_index not in np.atleast_1d(np.array(elm_idx)):
+                    continue
                 i_start = window_start[i_elm]
                 if i_elm < n_elms - 1:
                     i_stop = window_start[i_elm + 1] - 1
@@ -350,7 +354,37 @@ class Analysis(object):
             filepath = self.analysis_dir / f"full_analysis.pdf"
             print(f'Saving full-data analysis: {filepath.as_posix()}')
             plt.savefig(filepath.as_posix(), format='pdf', transparent=True)
+#%%
+    def plot_sample_elm(self, elm_index: int):
+        if self.elm_predictions is None:
+            self._calc_inference_full(elm_idx=elm_index)
+        elm_data = self.elm_predictions[elm_index]
 
+        # Fix initial signal window showing
+        elm_data['predictions'][:self.args.signal_window_size] = elm_data['predictions'][self.args.signal_window_size]
+
+        fig, ax1 = plt.subplots(1, 1)
+        ax2 = ax1.twinx()
+
+        l1 = ax1.plot(elm_data['predictions'][::-1], color='tab:red', alpha=0.6, label='Model Prediction')
+        l2 = ax1.plot(elm_data['labels'][::-1], color='tab:red', label='Ground Truth')
+        ax1.set_ylabel(f'{"Log$_{10}$ " if self.args.regression=="log" else ""}Time to ELM')
+        ax1.yaxis.label.set_color('tab:red')
+        ax1.tick_params(axis='y', colors='tab:red')
+        ax1.invert_xaxis()
+
+        l3 = ax2.plot(elm_data['signals'][:, 2, 6][::-1], color='tab:blue', alpha=0.6, label='Ch. 22')
+        ax2.set_ylabel('BES Activation')
+        ax2.yaxis.label.set_color('tab:blue')
+        ax2.tick_params(axis='y', colors='tab:blue')
+
+        ax1.set_xlabel('Time to ELM ($\mu$s)')
+        # combine legends
+        lns = l1 + l2 + l3
+        labs = [l.get_label() for l in lns]
+        ax2.legend(lns, labs)
+        ax2.set_title(f'ELM Index {elm_index}')
+#%%
     def merge_all_pdfs(self):
         pdf_files = sorted(
             self.analysis_dir.glob('*.pdf'),
@@ -382,10 +416,8 @@ if __name__ == "__main__":
 
     for run_dir in [
         # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
-        '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_logreg_adam/trial_0006',
+        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_prediction/dsv2_reg/la200_sws64_ep20',
     ]:
         run = Analysis(run_dir=run_dir)
-        run.plot_training_epochs()
-        run.plot_valid_indices_analysis()
-
+        run.plot_sample_elm(4070)
     plt.show()

@@ -340,18 +340,22 @@ def train_loop(
 
 
 if __name__ == "__main__":
+    la = 200
+    ep = 20
+    sws = 64
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         input_args = {
             'model_name': 'multi_features_classification',
-            'output_dir': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_classification/dsv2_class',
-change            'input_data_file': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-models/data/labeled_elm_events_long_windows_20220602.hdf5',
-            'max_elms':-1,
-            'n_epochs':20,
+            'output_dir': f'/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/elm_prediction/dsv2_class/la{la}_sws{sws}_ep{ep}_balanced',
+            'input_data_file': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-models/data/labeled_elm_events_long_windows_20220602.hdf5',
+            'max_elms':100,
+            'n_epochs':ep,
             'fraction_valid':0.2,
             'fraction_test':0.2,
-            'signal_window_size':64,
-            'label_look_ahead':200,
+            'signal_window_size':sws,
+            'label_look_ahead':la,
+            'balance_data': True,
             'lr':1e-5,
             # 'cnn_layer1_num_filters':8,
             # 'cnn_layer2_num_filters':8,

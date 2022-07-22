@@ -317,20 +317,23 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         # input arguments if no command line arguments in `sys.argv`
         work_dir = Path(__file__).parents[3] / 'bes-edgeml-work/velocimetry/'
+        sws = 16
+        ep = 20
         args = {'model_name': 'multi_features_velocimetry',
+                'input_data_dir': '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/velocimetry/data',
                 'device': 'cuda',
                 'dry_run': False,
-                'batch_size': 16,
-                'n_epochs': 10,
+                'batch_size': 64,
+                'n_epochs': 20,
                 'max_elms': -1,
                 'fraction_valid': 0.15,
                 'dataset_to_ram': True,
                 'fft_num_filters': 16,
                 'dwt_num_filters': 16,
-                'signal_window_size': 64,
+                'signal_window_size': 16,
                 'fc1_size': 1024,
                 'fc2_size': 512,
-                'output_dir': work_dir / 'test_data_mf_10e_sws256'
+                'output_dir': work_dir / f'mf_{ep}e_sws{sws}'
             }
     else:
         # use command line arguments in `sys.argv`

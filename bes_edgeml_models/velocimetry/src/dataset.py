@@ -96,6 +96,7 @@ class VelocimetryDataset(MultiSourceDataset):
             sx_s_t_data = np.s_[:, i_start:n_indices-1]
 
             arr_len = sx_t_data.stop - sx_t_data.start
+            hf2np_t = np.empty((arr_len))
             hf2np_s = np.empty((64, arr_len))
             hf2np_vR = np.empty((arr_len, 8, 8))
             hf2np_vZ = np.empty((arr_len, 8, 8))
@@ -103,6 +104,7 @@ class VelocimetryDataset(MultiSourceDataset):
             hf['signals'].read_direct(hf2np_s, sx_s_t_data, np.s_[...])
             hf['vR'].read_direct(hf2np_vR, sx_t_data, np.s_[...])
             hf['vZ'].read_direct(hf2np_vZ, sx_t_data, np.s_[...])
+            hf['time'].read_direct(hf2np_t, sx_t_data, np.s_[...])
         else:
             return
 

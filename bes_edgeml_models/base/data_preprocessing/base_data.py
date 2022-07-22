@@ -301,7 +301,7 @@ class BaseData:
         new = [None, None, None]
 
         for x, old_set in enumerate(old):
-            signals, labels, idx, start_idx = old_set
+            signals, labels, idx, start_idx, elm_idx = old_set
             clipped = [[], [], []]
             for j, i in enumerate(start_idx, start=1):
 
