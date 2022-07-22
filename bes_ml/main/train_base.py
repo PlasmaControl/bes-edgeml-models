@@ -21,9 +21,9 @@ try:
     from ..main.models import Multi_Features_Model
     from ..main.data import ELM_Dataset
 except ImportError:
-    from bes_models_2 import sample_data_dir
-    from bes_models_2.main.models import Multi_Features_Model
-    from bes_models_2.main.data import ELM_Dataset
+    from bes_ml import sample_data_dir
+    from bes_ml.main.models import Multi_Features_Model
+    from bes_ml.main.data import ELM_Dataset
 
 
 default_data_file = sample_data_dir / 'sample_elm_events.hdf5'

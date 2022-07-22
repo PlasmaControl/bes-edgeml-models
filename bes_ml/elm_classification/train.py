@@ -4,7 +4,7 @@ import numpy as np
 try:
     from ..main.train_base import _Trainer
 except ImportError:
-    from bes_models_2.main.train_base import _Trainer
+    from bes_ml.main.train_base import _Trainer
 
 
 class ELM_Classification_Trainer(_Trainer):
