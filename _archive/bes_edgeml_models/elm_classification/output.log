@@ -1,0 +1,78 @@
+2022-07-18 13:44:46,739:__main__: INFO:
+------------- Parameters used: -------------
+           args_file: args.pkl        
+    automatic_labels: False           
+        balance_data: False           
+          batch_size: 64              
+     checkpoint_file: checkpoint.pytorch 
+cnn_layer1_kernel_spatial_size: 3               
+cnn_layer1_kernel_time_size: 5               
+cnn_layer1_maxpool_spatial_size: 1               
+cnn_layer1_maxpool_time_size: 4               
+cnn_layer1_num_filters: 0               
+cnn_layer2_kernel_spatial_size: 3               
+cnn_layer2_kernel_time_size: 5               
+cnn_layer2_maxpool_spatial_size: 1               
+cnn_layer2_maxpool_time_size: 4               
+cnn_layer2_num_filters: 0               
+           dampening: 0.0             
+        data_preproc: unprocessed     
+           dct_nbins: 1               
+     dct_num_filters: 0               
+              device: auto            
+         distributed: 1               
+         do_analysis: False           
+             dry_run: False           
+           dwt_level: -1              
+     dwt_num_filters: 0               
+         dwt_wavelet: db4             
+         export_onnx: False           
+            fc1_size: 128             
+            fc2_size: 32              
+           fft_nbins: 1               
+     fft_num_filters: 0               
+          focal_loss: False           
+       fraction_test: 0.2             	[default: 0.15]
+      fraction_valid: 0.2             	[default: 0.1]
+         hidden_size: None            
+     input_data_file: /Users/drsmith/Documents/repos/edgeml-models/data/sample-labeled-elm-events.hdf5 
+inverse_label_weight: False           
+    label_look_ahead: 200             
+            log_file: output.log      
+                  lr: 1e-05           	[default: 0.001]
+            max_elms: 10              
+     mf_dropout_rate: 0.2             
+     mf_maxpool_size: 1               
+   mf_negative_slope: 0.02            
+mf_time_slice_interval: 1               
+          model_name: multi_features_classification 	[default: multi_features_ds_v2]
+            momentum: 0.0             
+            n_epochs: 2               
+      normalize_data: False           
+         num_workers: 0               
+           optimizer: adam            
+          output_dir: /Users/drsmith/Documents/repos/edgeml-models/bes_edgeml_models/elm_classification 	[default: run_dir]
+         output_file: output.pkl      
+oversample_active_elm: False           
+     raw_num_filters: 8               
+          regression: False           
+           save_onnx: False           
+                seed: 0               
+shuffle_sample_indices: True            
+  signal_window_size: 64              	[default: 128]
+      subwindow_size: -1              
+      test_data_file: test_data.pkl   
+           threshold: 0.5             
+   train_print_every: 5000            
+     truncate_buffer: 75              
+     truncate_inputs: False           
+        use_all_data: False           
+valid_indices_method: 0               
+   valid_print_every: 2000            
+        weight_decay: 0.005           
+-------------- End ---------------
+
+2022-07-18 13:44:46,739:__main__: INFO:  Output directory: /Users/drsmith/Documents/repos/edgeml-models/bes_edgeml_models/elm_classification
+2022-07-18 13:44:46,739:__main__: INFO:  Saving argument file: /Users/drsmith/Documents/repos/edgeml-models/bes_edgeml_models/elm_classification/args.pkl
+2022-07-18 13:44:46,740:__main__: INFO:  File size: 1.7 kB
+2022-07-18 13:44:46,740:__main__: INFO:------>  Target device: cpu
