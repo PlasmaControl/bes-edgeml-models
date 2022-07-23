@@ -1,7 +1,7 @@
 # python library imports
+from ctypes import util
 from pathlib import Path
 import logging
-import inspect
 from typing import Union
 import time
 import sys
@@ -16,14 +16,15 @@ import torch
 import torchinfo
 
 # repo import
+from bes_data.sample_data import sample_elm_data_file
 try:
-    from ..main.models import Multi_Features_Model
-    from ..main.data import ELM_Dataset
+    from .models import Multi_Features_Model
+    from .data import ELM_Dataset
+    from . import utilities
 except ImportError:
     from bes_ml.main.models import Multi_Features_Model
     from bes_ml.main.data import ELM_Dataset
-
-from bes_data.sample_data import sample_elm_data_file
+    from bes_ml.main import utilities
 
 class _Trainer(object):
 
@@ -85,7 +86,17 @@ class _Trainer(object):
         self.logger = None
         self._create_logger()
 
-        self._print_kwargs(_Trainer, locals().copy())
+        utilities._print_kwargs(cls=_Trainer, locals_copy=locals().copy(), logger=self.logger)
+
+    def _validate_subclass_signature(self):
+        subclass_parameters = utilities._get_class_parameters_and_defaults(cls=self.__class__)
+        parent_class_parameters = utilities._get_class_parameters_and_defaults(cls=_Trainer)
+        # ensure subclass contains all parent class parameters and defaults
+        for p_name, parameter in parent_class_parameters.items():
+            assert p_name in subclass_parameters, \
+                f"Subclass {self.__class__.__name__} missing parameter {p_name}"
+            assert parameter.default == subclass_parameters[p_name].default, \
+                f"Parameter {p_name} in subclass {self.__class__.__name__} has wrong default"
 
     def _create_logger(self):
         """
@@ -105,32 +116,7 @@ class _Trainer(object):
 
         # logs to console
         s_handler = logging.StreamHandler()
-        # s_format = logging.Formatter("%(name)s:  %(message)s")
-        # s_handler.setFormatter(s_format)
         self.logger.addHandler(s_handler)
-
-    def _print_kwargs(
-        self,
-        cls,
-        locals_copy,
-    ):
-        # print kwargs from __init__
-        self.logger.info(f"Class `{cls.__name__}` keyword arguments:")
-        parent_kwargs = cls._get_init_kwargs_and_defaults()
-        for key, default_value in parent_kwargs.items():
-            if key == 'kwargs': continue
-            value = locals_copy[key]
-            if value == default_value:
-                self.logger.info(f"  {key:22s}:  {value}")
-            else:
-                self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
-
-    @classmethod
-    def _get_init_kwargs_and_defaults(cls) -> dict:
-        init_signature = inspect.signature(cls)
-        init_kwargs_and_defaults = {parameter.name: parameter.default 
-            for parameter in init_signature.parameters.values()}
-        return init_kwargs_and_defaults
 
     def _set_regression_or_classification_defaults(self):
         if self.regression:

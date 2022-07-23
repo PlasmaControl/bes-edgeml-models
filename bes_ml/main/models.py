@@ -10,8 +10,10 @@ from pytorch_wavelets.dwt.transform1d import DWT1DForward
 
 try:
     from . import dct
+    from . import utilities
 except ImportError:
     from bes_ml.main import dct
+    from bes_ml.main import utilities
 
 class _Base_Features(nn.Module):
 
@@ -34,7 +36,7 @@ class _Base_Features(nn.Module):
             self.logger.setLevel(logging.INFO)
             self.logger.addHandler(logging.StreamHandler())
 
-        self._print_kwargs(cls=_Base_Features, copy_locals=locals().copy())
+        utilities._print_kwargs(cls=_Base_Features, locals_copy=locals().copy(), logger=self.logger)
 
         # spatial maxpool
         self.spatial_maxpool_size = spatial_maxpool_size
@@ -69,29 +71,6 @@ class _Base_Features(nn.Module):
 
         self.num_kernels = None  # set in subclass
         self.conv = None  # set in subclass
-
-    @classmethod
-    def _get_init_kwargs_and_defaults(cls) -> dict:
-        init_signature = inspect.signature(cls)
-        init_kwargs_and_defaults = {parameter.name: parameter.default 
-            for parameter in init_signature.parameters.values()}
-        return init_kwargs_and_defaults
-
-    def _print_kwargs(
-        self, 
-        cls = None, 
-        copy_locals: dict = None,
-    ):
-        # print input keyword arguments
-        self.logger.info(f"Class `{cls.__name__}` keyword arguments:")
-        parent_kwargs = cls._get_init_kwargs_and_defaults()
-        for key, default_value in parent_kwargs.items():
-            if key in ['kwargs', 'logger']: continue
-            value = copy_locals[key]
-            if value == default_value:
-                self.logger.info(f"  {key:22s}:  {value}")
-            else:
-                self.logger.info(f"  {key:22s}:  {value} (default {default_value})")
 
     def _time_interval_and_maxpool(self, x: torch.Tensor) -> torch.Tensor:
         if self.time_interval > 1:
@@ -134,7 +113,7 @@ class Dense_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        self._print_kwargs(cls=self.__class__, copy_locals=locals().copy())
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # filters per subwindow
         self.num_kernels = dense_num_kernels
@@ -195,6 +174,8 @@ class CNN_Features(_Base_Features):
         **kwargs,
     ):
         super().__init__(**kwargs)
+
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # CNN only valid with subwindow_size == time_points == signal_window_size
         assert self.subwindow_size == self.signal_window_size
@@ -335,6 +316,8 @@ class FFT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+
         self.fft_nbins = fft_nbins
         assert np.log2(self.fft_nbins) % 1 == 0  # ensure power of 2
 
@@ -428,6 +411,8 @@ class DCT_Features(_Base_Features):
                 Defaults to 10.
         """
         super().__init__(**kwargs)
+
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dct_nbins = dct_nbins
         assert np.log2(self.dct_nbins) % 1 == 0  # ensure power of 2
@@ -524,6 +509,8 @@ class DWT_Features(_Base_Features):
                 Defaults to 10.
         """
         super().__init__(**kwargs)
+
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dwt_wavelet = dwt_wavelet
         self.dwt_level = dwt_level
@@ -644,6 +631,8 @@ class Multi_Features_Model(nn.Module):
             logger = logging.getLogger(__name__)
             logger.setLevel(logging.INFO)
             logger.addHandler(logging.StreamHandler())
+
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=logger)
 
         self.dense_features = (
             Dense_Features(

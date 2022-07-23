@@ -3,8 +3,10 @@ import numpy as np
 
 try:
     from ..main.train_base import _Trainer
+    from ..main import utilities
 except ImportError:
     from bes_ml.main.train_base import _Trainer
+    from bes_ml.main import utilities
 
 
 class ELM_Classification_Trainer(_Trainer):
@@ -21,7 +23,7 @@ class ELM_Classification_Trainer(_Trainer):
         # init parent class
         super().__init__(**kwargs)
 
-        self._print_kwargs(self.__class__, locals().copy())
+        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.regression = False
         self._set_regression_or_classification_defaults()
