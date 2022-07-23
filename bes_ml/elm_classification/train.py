@@ -1,6 +1,10 @@
-from typing import Tuple
+from typing import Tuple, Union
+from pathlib import Path
+import inspect
+
 import numpy as np
 
+from bes_data.sample_data import sample_elm_data_file
 try:
     from ..main.train_base import _Trainer
     from ..main import utilities
@@ -13,17 +17,51 @@ class ELM_Classification_Trainer(_Trainer):
 
     def __init__(
         self,
+        # subclass parameters
         max_elms: int = None,  # limit ELMs
         label_look_ahead: int = 200,  # prediction horizon in time samples
         threshold: float = 0.5,  # threshold for binary classification
         oversample_active_elm: bool = True,  # if True, oversample active ELMs to balance data
-        **kwargs,
+        # parent class parameters
+        input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
+        output_dir: Union[str,Path] = 'run_dir',  # path to output dir.
+        results_file: str = 'results.pkl',  # output training results
+        log_file: str = 'log.txt',  # output log file
+        args_file: str = 'args.pkl',  # output file containing kwargs
+        test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
+        checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
+        export_onnx: bool = False,  # export ONNX format
+        device: str = 'auto',  # auto (default), cpu, cuda, or cuda:X
+        num_workers: int = 1,  # number of subprocess workers for pytorch dataloader
+        n_epochs: int = 2,  # training epochs
+        batch_size: int = 64,  # power of 2, like 16-128
+        minibatch_interval: int = 2000,  # print minibatch info
+        signal_window_size: int = 128,  # power of 2, like 32-512
+        fraction_validation: float = 0.1,  # fraction of dataset for validation
+        fraction_test: float = 0.15,  # fraction of dataset for testing
+        optimizer_type: str = 'adam',  # adam (default) or sgd
+        sgd_momentum: float = 0.0,  # momentum for SGD optimizer
+        sgd_dampening: float = 0.0,  # dampening for SGD optimizer
+        learning_rate: float = 1e-3,  # optimizer learning rate
+        weight_decay: float = 5e-3,  # optimizer L2 regularization factor
+        batches_per_print: int = 5000,  # train/validation batches per print update
+        # kwargs for model
+        **model_kwargs,
     ) -> None:
 
+        # validate signature
+        self._validate_subclass_signature()
+        # construct kwargs for parent class
+        parent_class_parameters = inspect.signature(_Trainer).parameters
+        locals_copy = locals().copy()
+        kwargs_for_parent_class = {
+            p_name: locals_copy[p_name] for p_name in parent_class_parameters
+        }
+        kwargs_for_parent_class.update(model_kwargs)
         # init parent class
-        super().__init__(**kwargs)
+        super().__init__(**kwargs_for_parent_class)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.regression = False
         self._set_regression_or_classification_defaults()

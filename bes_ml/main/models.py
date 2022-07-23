@@ -19,14 +19,14 @@ class _Base_Features(nn.Module):
 
     def __init__(
         self,
-        signal_window_size: int = 64,
-        spatial_maxpool_size: int = 1,
-        time_interval: int = 1,  # time domain interval (i.e. time[::interval])
+        signal_window_size: int = 64,  # power of 2; ~16-512
+        spatial_maxpool_size: int = 1,  # 1 (default, no spatial maxpool), 2, or 4
+        time_interval: int = 1,  # time domain slice interval (i.e. time[::interval])
         subwindow_size: int = -1,  # power of 2, or -1 (default) for full signal window
-        negative_slope: float = 1e-3,
-        dropout_rate: float = 0.1,
+        negative_slope: float = 1e-3,  # relu negative slope; ~1e-3
+        dropout_rate: float = 0.1,  # ~0.1
         logger: logging.Logger = None,
-        **kwargs,
+        **kwargs,  # unused in `_Base_Features`, but needed to contain kwargs for multiple `Features` classes
     ):
         super().__init__()
 
@@ -36,7 +36,7 @@ class _Base_Features(nn.Module):
             self.logger.setLevel(logging.INFO)
             self.logger.addHandler(logging.StreamHandler())
 
-        utilities._print_kwargs(cls=_Base_Features, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=_Base_Features, locals_copy=locals().copy(), logger=self.logger)
 
         # spatial maxpool
         self.spatial_maxpool_size = spatial_maxpool_size
@@ -113,7 +113,7 @@ class Dense_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # filters per subwindow
         self.num_kernels = dense_num_kernels
@@ -175,7 +175,7 @@ class CNN_Features(_Base_Features):
     ):
         super().__init__(**kwargs)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # CNN only valid with subwindow_size == time_points == signal_window_size
         assert self.subwindow_size == self.signal_window_size
@@ -316,7 +316,7 @@ class FFT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.fft_nbins = fft_nbins
         assert np.log2(self.fft_nbins) % 1 == 0  # ensure power of 2
@@ -412,7 +412,7 @@ class DCT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dct_nbins = dct_nbins
         assert np.log2(self.dct_nbins) % 1 == 0  # ensure power of 2
@@ -510,7 +510,7 @@ class DWT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dwt_wavelet = dwt_wavelet
         self.dwt_level = dwt_level
@@ -612,7 +612,7 @@ class Multi_Features_Model(nn.Module):
         negative_slope: float = 1e-3,
         dropout_rate: float = 0.1,
         logger: logging.Logger = None,
-        **kwargs,
+        **kwargs,  # kwargs for `Features` classes
     ):
         """Encapsulate all the feature models to create a composite model that
         uses all the feature maps. It takes in the class instances of
@@ -632,7 +632,7 @@ class Multi_Features_Model(nn.Module):
             logger.setLevel(logging.INFO)
             logger.addHandler(logging.StreamHandler())
 
-        utilities._print_kwargs(cls=self.__class__, locals_copy=locals().copy(), logger=logger)
+        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=logger)
 
         self.dense_features = (
             Dense_Features(

@@ -1,5 +1,4 @@
 # python library imports
-from ctypes import util
 from pathlib import Path
 import logging
 from typing import Union
@@ -7,6 +6,7 @@ import time
 import sys
 import io
 import pickle
+import inspect
 
 # 3rd-party package imports
 import numpy as np
@@ -31,7 +31,7 @@ class _Trainer(object):
     def __init__(
         self,
         input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
-        output_dir: Union[str,Path] = Path('run_dir'),  # path to output dir.
+        output_dir: Union[str,Path] = 'run_dir',  # path to output dir.
         results_file: str = 'results.pkl',  # output training results
         log_file: str = 'log.txt',  # output log file
         args_file: str = 'args.pkl',  # output file containing kwargs
@@ -52,6 +52,8 @@ class _Trainer(object):
         learning_rate: float = 1e-3,  # optimizer learning rate
         weight_decay: float = 5e-3,  # optimizer L2 regularization factor
         batches_per_print: int = 5000,  # train/validation batches per print update
+        # kwargs for model
+        **model_kwargs,
     ) -> None:
 
         # input data file and output directory
@@ -81,16 +83,18 @@ class _Trainer(object):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.batches_per_print = batches_per_print
+        self.model_kwargs = model_kwargs
 
         # create logger (logs to file and terminal)
         self.logger = None
         self._create_logger()
 
-        utilities._print_kwargs(cls=_Trainer, locals_copy=locals().copy(), logger=self.logger)
+        # utilities._print_class_parameters(cls=_Trainer, locals_copy=locals().copy(), logger=self.logger)
 
     def _validate_subclass_signature(self):
-        subclass_parameters = utilities._get_class_parameters_and_defaults(cls=self.__class__)
-        parent_class_parameters = utilities._get_class_parameters_and_defaults(cls=_Trainer)
+        if self.__class__ is _Trainer: return
+        subclass_parameters = inspect.signature(self.__class__).parameters
+        parent_class_parameters = inspect.signature(_Trainer).parameters
         # ensure subclass contains all parent class parameters and defaults
         for p_name, parameter in parent_class_parameters.items():
             assert p_name in subclass_parameters, \
@@ -360,7 +364,10 @@ class _Trainer(object):
     )
 
     def _make_model(self):
-        self.model = Multi_Features_Model(logger=self.logger)
+        self.model = Multi_Features_Model(
+            logger=self.logger, 
+            **self.model_kwargs,
+        )
         self.model = self.model.to(self.device)
 
         self.logger.info("MODEL SUMMARY")
