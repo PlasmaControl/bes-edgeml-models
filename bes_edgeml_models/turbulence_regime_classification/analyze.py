@@ -20,6 +20,7 @@ import torch.nn
 import torch.utils.data
 from matplotlib.colors import LogNorm
 from sklearn import metrics
+from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 
 try:
@@ -385,60 +386,45 @@ class Analysis(object):
             threshold = self.args.threshold
         if self.elm_predictions is None:
             self._calc_inference_full(threshold=threshold, max_elms=max_elms)
-        _, axes = plt.subplots(nrows=2, ncols=2, figsize=(8,6))
-        plt.suptitle(f"{self.run_dir_short} | Test data (full)")
-        for mode in ['micro', 'macro']:
-            # gather micro/macro results
-            targets = []
-            predictions = []
-            for vals in self.elm_predictions.values():
-                predictions.append(vals[f"{mode}_predictions"])
-                label_key = 'labels' if mode == 'micro' else 'macro_labels'
-                targets.append(vals[label_key])
-            predictions = np.concatenate(predictions)
-            targets = np.concatenate(targets)
-            # plot ROC (micro only)
-            if mode == 'micro':
-                fpr, tpr, thresh = metrics.roc_curve(targets, predictions)
-                plt.sca(axes.flat[0])
-                plt.plot(fpr, tpr)
-                plt.xlabel('False positive rate')
-                plt.ylabel('True positive rate')
-                plt.title('ROC')
-                roc_auc = metrics.roc_auc_score(targets, predictions)
-                plt.annotate(
-                    f'ROC-AUC = {roc_auc:.2f}',
-                    xy=(0.5, 0.03),
-                    xycoords='axes fraction',
-                )
-                plt.sca(axes.flat[1])
-                plt.plot(thresh, tpr, label='True pos. rate')
-                plt.plot(thresh, fpr, label='False pos. rate')
-                plt.title('TPR/FPR')
-                plt.xlabel('Threshold')
-                plt.ylabel('Rate')
-                plt.xlim(0,1)
-                plt.legend()
-            # confusion matrix heatmaps
-            if mode == 'micro':
-                bool_predictions = (predictions > threshold).astype(int)
-                cm = metrics.confusion_matrix(targets, bool_predictions)
-            else:
-                cm = metrics.confusion_matrix(targets, predictions)
-            # plt.figure(figsize=(4.5, 3.5))
-            # ax = plt.subplot(111)
-            axis = axes.flat[2] if mode == 'micro' else axes.flat[3]
-            plt.sca(axis)
-            sns.heatmap(
-                cm,
-                annot=True,
-                norm=LogNorm() if mode=='micro' else None,
-                xticklabels=['No ELM', 'ELM'],
-                yticklabels=['No ELM', 'ELM'],
-            )
-            plt.title(f'Conf. matrix ({mode}, thr={threshold:.2f})')
-            plt.xlabel("Predicted label")
-            plt.ylabel("True label")
+
+
+
+        class_labels = ['L-Mode',
+                        'H-Mode',
+                        'QH-Mode',
+                        'WP QH-Mode'
+                        ]
+
+        fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(16, 9))
+        cm = confusion_matrix(valid_labels, preds.argmax(axis=1))
+        utils.plot_confusion_matrix(best_cm,
+                                    classes=class_labels,
+                                    ax=ax1)
+
+        ax1.text(-1.3, 0.5,
+                 f'{best_cr}\n'
+                 f'ROC: {best_score:0.2f} (epoch {best_score_epoch})    '
+                 f'Best Loss: {best_loss:0.2f} (epoch {best_loss_epoch})',
+                 transform=ax1.transAxes,
+                 ha='right', va='center', ma='left',
+                 bbox=dict(boxstyle="square", fc='w', lw=2))
+
+        ax2.plot(outputs['valid_loss'], label='valid. loss')
+        ax2.plot(outputs['train_loss'], label='training loss')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Loss')
+        ax2.set_title('Performance Metrics by Epoch')
+        ax2.legend()
+
+        ax3 = ax2.twinx()
+        ax3.plot(outputs['roc_scores'], label='ROC-AUC score', color='r')
+        ax3.set_ylabel('ROC-AUC Score')
+        ax3.legend()
+
+        fig.suptitle(f'Summary results of {type(model).__name__}')
+        plt.tight_layout()
+        plt.savefig(output_dir / 'summary.png')
+        plt.show()
         plt.tight_layout()
         if self.save:
             filepath = self.analysis_dir / f"full_analysis.pdf"
@@ -476,10 +462,10 @@ if __name__ == "__main__":
 
     for run_dir in [
         # '/home/dsmith/scratch/edgeml/work/study_05/s05_cnn_class_adam/trial_0003',
-        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/rc_10e_sws256_fft16_dwt16',
+        '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/regime_classification/rc_10e_sws256_fft16_dwt16',
     ]:
         run = Analysis(run_dir=run_dir)
-        run.plot_training_epochs()
+        run.plot_full_analysis()
         # run.plot_valid_indices_analysis()
 
     plt.show()

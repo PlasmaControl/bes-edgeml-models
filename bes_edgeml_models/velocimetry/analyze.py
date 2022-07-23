@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 import seaborn as sns
 import torch
@@ -298,6 +298,9 @@ class Analysis(object):
         ):
         if not self.vel_predictions:
             self._calc_inference_full(max_elms=max_elms)
+
+        plt.rcParams['axes.labelsize'] = 24
+        plt.rcParams['axes.titlesize'] = 18
         _, axes = plt.subplots(ncols=2, nrows=2, figsize=(12, 6))
         axes = axes.flat
         plt.suptitle(f"{self.run_dir_short} | Test data (full)")
@@ -346,21 +349,26 @@ class Analysis(object):
         axes[1].legend(fontsize='small')
         axes[1].set_title(f'vR')
 
+        fig2, axes2 = plt.subplots(1, 2)
+        axes = axes2.flat
         time_slice = time_slice if time_slice else len(signals)//2
-        axes[2].imshow(signals[time_slice], interpolation='hanning', cmap='gist_stern', alpha=0.8,
-                       norm=TwoSlopeNorm(vcenter=1.2))
+        tx = signals[time_slice]
+        tx[:4] = tx[:4] / 10
+        tx[4:] = tx[4:] / 5
+        axes[0].imshow(tx, interpolation='hanning', cmap='gist_stern', alpha=0.8,
+                       norm=TwoSlopeNorm(vcenter=.1))
         Y, X = np.mgrid[0:8, 0:8]
-        axes[2].quiver(X, Y, vR_labels[time_slice], vZ_labels[time_slice])
-        axes[2].set_xlabel('R')
-        axes[2].set_ylabel('Z')
-        axes[2].set_title('ODP Calculated Velocity Field')
+        axes[0].quiver(X, Y, vR_labels[time_slice], vZ_labels[time_slice])
+        axes[0].set_xlabel('R')
+        axes[0].set_ylabel('Z')
+        axes[0].set_title('ODP Calculated Velocity Field')
 
-        axes[3].imshow(signals[time_slice], interpolation='hanning', cmap='gist_stern', alpha=0.8,
-                       norm=TwoSlopeNorm(vcenter=1.2))
-        axes[3].quiver(X, Y, vR_predictions[time_slice], vZ_predictions[time_slice])
-        axes[3].set_xlabel('R')
-        axes[3].set_ylabel('Z')
-        axes[3].set_title('ML Calculated Velocity Field')
+        axes[1].imshow(tx, interpolation='hanning', cmap='gist_stern', alpha=0.8,
+                       norm=TwoSlopeNorm(vcenter=.1))
+        axes[1].quiver(X, Y, vR_predictions[time_slice], vZ_predictions[time_slice])
+        axes[1].set_xlabel('R')
+        axes[1].set_ylabel('Z')
+        axes[1].set_title('ML Calculated Velocity Field')
 
         plt.tight_layout()
         if self.save:
@@ -400,4 +408,4 @@ if __name__ == "__main__":
         '/home/jazimmerman/PycharmProjects/bes-edgeml-models/bes-edgeml-work/velocimetry/mf_20e_sws16',
     ]:
         run = Analysis(run_dir=run_dir)
-        vpd = run.plot_all()
+        run.plot_full_inference(time_slice=1000)

@@ -197,6 +197,9 @@ class Analysis(object):
         valid_loss = self.training_output['valid_loss']
         scores = self.training_output['scores']
         epochs = np.arange(scores.size) + 1
+
+        plt.rcParams['axes.labelsize'] = 24
+        plt.rcParams['axes.titlesize'] = 18
         _, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3))
         plt.suptitle(f"{self.run_dir_short}")
         plt.sca(axes.flat[0])
@@ -363,6 +366,8 @@ class Analysis(object):
         # Fix initial signal window showing
         elm_data['predictions'][:self.args.signal_window_size] = elm_data['predictions'][self.args.signal_window_size]
 
+        plt.rcParams['axes.labelsize'] = 24
+        plt.rcParams['axes.titlesize'] = 18
         fig, ax1 = plt.subplots(1, 1)
         ax2 = ax1.twinx()
 
