@@ -111,9 +111,9 @@ class _Trainer(object):
 
         # logs to log file
         log_file = self.output_dir / self.log_file
-        f_handler = logging.FileHandler(log_file.as_posix(), mode="a")
+        f_handler = logging.FileHandler(log_file.as_posix(), mode="w")
         # create formatters and add it to the handlers
-        f_format = logging.Formatter("%(asctime)s:%(name)s: %(levelname)s:  %(message)s")
+        f_format = logging.Formatter("%(asctime)s:  %(message)s")
         f_handler.setFormatter(f_format)
         # add handlers to the logger
         self.logger.addHandler(f_handler)
@@ -431,14 +431,14 @@ class _Trainer(object):
         # send model to device
         self.model = self.model.to(self.device)
 
-        self.logger.info(f"\nBegin training loop with {self.n_epochs} epochs")
         self.logger.info(f"Batches per epoch {len(self.train_data_loader)}")
+        self.logger.info(f"Begin training loop over {self.n_epochs} epochs")
         t_start_training = time.time()
         # loop over epochs
         for i_epoch in range(self.n_epochs):
             t_start_epoch = time.time()
 
-            self.logger.info(f"\nEp {i_epoch+1:03d}: begin")
+            self.logger.info(f"Ep {i_epoch+1:03d}: begin")
             
             train_loss = self._train_epoch()
             if self.regression:
@@ -501,7 +501,7 @@ class _Trainer(object):
             tmp += f"(total time {time.time()-t_start_training:.1f} s)"
             self.logger.info(tmp)
 
-        self.logger.info(f"\nEnd training loop")
+        self.logger.info(f"End training loop")
         self.logger.info(f"Elapsed time {time.time()-t_start_training:.1f} s")
 
     def _train_epoch(self):

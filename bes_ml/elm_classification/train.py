@@ -163,7 +163,7 @@ if __name__=='__main__':
     model = ELM_Classification_Trainer(
         batch_size=32, 
         minibatch_interval=50, 
-        fraction_validation=0.4,
-        fraction_test=0.0,
+        fraction_validation=0.2,
+        fraction_test=0.2,
     )
     model.train()
