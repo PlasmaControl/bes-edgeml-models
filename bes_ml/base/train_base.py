@@ -14,6 +14,7 @@ import h5py
 from sklearn import metrics
 import torch
 import torchinfo
+import yaml
 
 # repo import
 from bes_data.sample_data import sample_elm_data_file
@@ -32,9 +33,9 @@ class _Trainer(object):
         self,
         input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
         output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
-        results_file: str = 'results.pkl',  # output training results
+        results_file: str = 'results.yaml',  # output training results
         log_file: str = 'log.txt',  # output log file
-        args_file: str = 'args.pkl',  # output file containing kwargs
+        parameters_file: str = 'parameters.yaml',  # output file containing kwargs
         test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
         checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
         export_onnx: bool = False,  # export ONNX format
@@ -65,7 +66,7 @@ class _Trainer(object):
         self.output_dir = output_dir
         self.results_file = results_file
         self.log_file = log_file
-        self.args_file = args_file
+        self.parameters_file = parameters_file
         self.test_data_file = test_data_file
         self.checkpoint_file = checkpoint_file
         self.export_onnx = export_onnx
@@ -88,8 +89,6 @@ class _Trainer(object):
         # create logger (logs to file and terminal)
         self.logger = None
         self._create_logger()
-
-        # utilities._print_class_parameters(cls=_Trainer, locals_copy=locals().copy(), logger=self.logger)
 
     def _validate_subclass_signature(self):
         if self.__class__ is _Trainer: return
@@ -141,6 +140,24 @@ class _Trainer(object):
             self.threshold = None  # set with kwarg
             self.inverse_weight_label = None  # not applicable for classification
             self.log_time = None  # not applicable for classification
+
+    def _save_input_parameters(
+        self,
+        locals_copy: dict = None,
+    ):
+        parameters = inspect.signature(self.__class__).parameters
+        inputs = {}
+        for p_name in parameters:
+            value = locals_copy[p_name]
+            if isinstance(value, Path):
+                value = value.as_posix()
+            inputs[p_name] = value
+        with (self.output_dir/self.parameters_file).open('w') as parameters_file:
+            yaml.dump(
+                inputs,
+                parameters_file,
+                default_flow_style=False,
+            )
 
     def _finish_initialization(self):
 
@@ -482,6 +499,13 @@ class _Trainer(object):
                 self.results['roc_scores'] = np.append(
                     self.results['roc_scores'],
                     roc_score,
+                )
+
+            with (self.output_dir/self.results_file).open('w') as results_file:
+                yaml.dump(
+                    {key: self.results[key].tolist() for key in self.results},
+                    results_file,
+                    default_flow_style=False,
                 )
 
             # best score and save model

@@ -26,9 +26,9 @@ class ELM_Classification_Trainer(_Trainer):
         # parent class parameters
         input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
         output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
-        results_file: str = 'results.pkl',  # output training results
+        results_file: str = 'results.yaml',  # output training results
         log_file: str = 'log.txt',  # output log file
-        args_file: str = 'args.pkl',  # output file containing kwargs
+        parameters_file: str = 'parameters.yaml',  # output file containing kwargs
         test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
         checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
         export_onnx: bool = False,  # export ONNX format
@@ -61,6 +61,8 @@ class ELM_Classification_Trainer(_Trainer):
         kwargs_for_parent_class.update(model_kwargs)
         # init parent class
         super().__init__(**kwargs_for_parent_class)
+
+        self._save_input_parameters(locals_copy=locals().copy())
 
         utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
