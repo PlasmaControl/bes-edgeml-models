@@ -1,7 +1,7 @@
 try:
-    from ..main.train_base import _Trainer
+    from ..base.train_base import _Trainer
 except ImportError:
-    from bes_ml.main.train_base import _Model
+    from bes_ml.base.train_base import _Model
 
 
 class Velocimetry_Model(_Trainer):

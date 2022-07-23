@@ -12,8 +12,8 @@ try:
     from . import dct
     from . import utilities
 except ImportError:
-    from bes_ml.main import dct
-    from bes_ml.main import utilities
+    from bes_ml.base import dct
+    from bes_ml.base import utilities
 
 class _Base_Features(nn.Module):
 

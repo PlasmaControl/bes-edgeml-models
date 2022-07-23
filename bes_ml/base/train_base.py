@@ -22,16 +22,16 @@ try:
     from .data import ELM_Dataset
     from . import utilities
 except ImportError:
-    from bes_ml.main.models import Multi_Features_Model
-    from bes_ml.main.data import ELM_Dataset
-    from bes_ml.main import utilities
+    from bes_ml.base.models import Multi_Features_Model
+    from bes_ml.base.data import ELM_Dataset
+    from bes_ml.base import utilities
 
 class _Trainer(object):
 
     def __init__(
         self,
-        input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
-        output_dir: Union[str,Path] = 'run_dir',  # path to output dir.
+        input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
+        output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
         results_file: str = 'results.pkl',  # output training results
         log_file: str = 'log.txt',  # output log file
         args_file: str = 'args.pkl',  # output file containing kwargs
@@ -124,23 +124,23 @@ class _Trainer(object):
 
     def _set_regression_or_classification_defaults(self):
         if self.regression:
-            # time-to-ELM regression model
+            # regression model (e.g. time to ELM onset)
             self.loss_function = torch.nn.MSELoss(reduction="none")
             self.score_function = metrics.r2_score
-            self.oversample_active_elm = False  # required for regression
-            self.label_look_ahead = 0  # required for regression
+            self.oversample_active_elm = False  # not applicable for regression
+            self.prediction_horizon = 0  # not applicable for regression
+            self.threshold = None  # not applicable for regression
             self.inverse_weight_label = None  # set in kwarg
-            self.threshold = None  # required for regression
             self.log_time = None  # set in kwarg
         else:
-            # classification model for active ELM prediction for `label_look_ahead` horizon
+            # classification model (e.g. active ELM prediction for `prediction_horizon` horizon
             self.loss_function = torch.nn.BCEWithLogitsLoss(reduction="none")
             self.score_function = metrics.f1_score
             self.oversample_active_elm = None  # set by kwarg
-            self.label_look_ahead = None  # set with kwarg
-            self.inverse_weight_label = None  # required for classification
+            self.prediction_horizon = None  # set with kwarg
             self.threshold = None  # set with kwarg
-            self.log_time = None  # required for classification
+            self.inverse_weight_label = None  # not applicable for classification
+            self.log_time = None  # not applicable for classification
 
     def _finish_initialization(self):
 
@@ -324,12 +324,12 @@ class _Trainer(object):
         self.train_dataset = ELM_Dataset(
             *self.train_data[0:4], 
             self.signal_window_size,
-            self.label_look_ahead,
+            self.prediction_horizon,
         )
         self.validation_dataset = ELM_Dataset(
             *self.validation_data[0:4], 
             self.signal_window_size,
-            self.label_look_ahead,
+            self.prediction_horizon,
         )
 
     def _get_valid_indices(self):

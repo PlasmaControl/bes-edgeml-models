@@ -6,25 +6,26 @@ import numpy as np
 
 from bes_data.sample_data import sample_elm_data_file
 try:
-    from ..main.train_base import _Trainer
-    from ..main import utilities
+    from ..base.train_base import _Trainer
+    from ..base import utilities
 except ImportError:
-    from bes_ml.main.train_base import _Trainer
-    from bes_ml.main import utilities
+    from bes_ml.base.train_base import _Trainer
+    from bes_ml.base import utilities
 
 
 class ELM_Classification_Trainer(_Trainer):
 
+    # __init__ must have exact copy of all kwargs from parent class
     def __init__(
         self,
         # subclass parameters
         max_elms: int = None,  # limit ELMs
-        label_look_ahead: int = 200,  # prediction horizon in time samples
+        prediction_horizon: int = 200,  # prediction horizon in time samples
         threshold: float = 0.5,  # threshold for binary classification
         oversample_active_elm: bool = True,  # if True, oversample active ELMs to balance data
         # parent class parameters
-        input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
-        output_dir: Union[str,Path] = 'run_dir',  # path to output dir.
+        input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
+        output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
         results_file: str = 'results.pkl',  # output training results
         log_file: str = 'log.txt',  # output log file
         args_file: str = 'args.pkl',  # output file containing kwargs
@@ -68,7 +69,7 @@ class ELM_Classification_Trainer(_Trainer):
 
         # subclass attributes
         self.max_elms = max_elms
-        self.label_look_ahead = label_look_ahead
+        self.prediction_horizon = prediction_horizon
         self.threshold = threshold
         self.oversample_active_elm = oversample_active_elm
 
@@ -101,7 +102,7 @@ class ELM_Classification_Trainer(_Trainer):
         last_label_for_active_elm_in_pre_elm_signal = (
             largest_t0_index_for_pre_elm_period
             + (self.signal_window_size - 1)
-            + self.label_look_ahead
+            + self.prediction_horizon
         )
         labels[ active_elm_start_index : last_label_for_active_elm_in_pre_elm_signal+1 ] = 1
         assert labels[last_label_for_active_elm_in_pre_elm_signal] == 1
@@ -116,7 +117,7 @@ class ELM_Classification_Trainer(_Trainer):
         packaged_label_indices_for_valid_t0 = (
             packaged_valid_t0_indices 
             + (self.signal_window_size-1)
-            + self.label_look_ahead
+            + self.prediction_horizon
             )
         packaged_labels_for_valid_t0 = packaged_labels[packaged_label_indices_for_valid_t0]
         n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)
@@ -136,7 +137,7 @@ class ELM_Classification_Trainer(_Trainer):
             packaged_active_elm_valid_t0_indices = (
                 packaged_active_elm_label_indices_for_valid_t0
                 - (self.signal_window_size-1)
-                - self.label_look_ahead
+                - self.prediction_horizon
             )
             for i in np.arange(oversample_factor-1):
                 packaged_valid_t0_indices = np.append(
@@ -146,7 +147,7 @@ class ELM_Classification_Trainer(_Trainer):
             packaged_label_indices_for_valid_t0 = (
                 packaged_valid_t0_indices
                 + (self.signal_window_size-1)
-                + self.label_look_ahead
+                + self.prediction_horizon
                 )
             packaged_labels_for_valid_t0 = packaged_labels[packaged_label_indices_for_valid_t0]
             n_active_elm = np.count_nonzero(packaged_labels_for_valid_t0)

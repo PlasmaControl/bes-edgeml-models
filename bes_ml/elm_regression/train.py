@@ -6,15 +6,16 @@ import numpy as np
 
 from bes_data.sample_data import sample_elm_data_file
 try:
-    from ..main.train_base import _Trainer
-    from ..main import utilities
+    from ..base.train_base import _Trainer
+    from ..base import utilities
 except ImportError:
-    from bes_ml.main.train_base import _Trainer
-    from bes_ml.main import utilities
+    from bes_ml.base.train_base import _Trainer
+    from bes_ml.base import utilities
 
 
 class ELM_Regression_Trainer(_Trainer):
 
+    # __init__ must have exact copy of all kwargs from parent class
     def __init__(
         self,
         # subclass parameters
@@ -22,8 +23,8 @@ class ELM_Regression_Trainer(_Trainer):
         log_time: bool = False,  # if True, use log(time_to_elm_onset)
         inverse_weight_label: bool = False,  # must be False if log_time is False
         # parent class parameters
-        input_data_file: Union[str,Path] = sample_elm_data_file,  # path to data file
-        output_dir: Union[str,Path] = 'run_dir',  # path to output dir.
+        input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
+        output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
         results_file: str = 'results.pkl',  # output training results
         log_file: str = 'log.txt',  # output log file
         args_file: str = 'args.pkl',  # output file containing kwargs
