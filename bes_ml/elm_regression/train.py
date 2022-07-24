@@ -25,9 +25,10 @@ class ELM_Regression_Trainer(_Trainer):
         # parent class parameters
         input_data_file: Union[Path,str] = sample_elm_data_file,  # path to data file
         output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
-        results_file: str = 'results.pkl',  # output training results
+        results_file: str = 'results.yaml',  # output training results
         log_file: str = 'log.txt',  # output log file
-        args_file: str = 'args.pkl',  # output file containing kwargs
+        trainer_inputs_file: str = 'trainer_inputs.yaml',  # save inputs to yaml
+        model_inputs_file: str = 'model_inputs.yaml',  # save inputs to yaml
         test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
         checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
         export_onnx: bool = False,  # export ONNX format
@@ -49,20 +50,26 @@ class ELM_Regression_Trainer(_Trainer):
         **model_kwargs,
     ) -> None:
 
-        # validate signature
+        # ensure subclass implements all parent class inputs
         self._validate_subclass_signature()
-        # construct kwargs for parent class
+
+        # __init__ parent class
         parent_class_parameters = inspect.signature(_Trainer).parameters
         locals_copy = locals().copy()
         kwargs_for_parent_class = {
             p_name: locals_copy[p_name] for p_name in parent_class_parameters
         }
+        kwargs_for_parent_class.pop('model_kwargs') # remove kwargs dict and replace with items
         kwargs_for_parent_class.update(model_kwargs)
-        # init parent class
         super().__init__(**kwargs_for_parent_class)
 
-        # print kwargs
-        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        # save and print inputs
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals_copy, logger=self.logger)
+        utilities._save_inputs_to_yaml(
+            cls=self.__class__, 
+            locals_copy=locals_copy,
+            filename=self.output_dir/self.trainer_inputs_file,
+        )
 
         self.regression = True
         self._set_regression_or_classification_defaults()
