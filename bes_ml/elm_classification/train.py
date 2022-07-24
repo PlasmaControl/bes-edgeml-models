@@ -28,7 +28,8 @@ class ELM_Classification_Trainer(_Trainer):
         output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
         results_file: str = 'results.yaml',  # output training results
         log_file: str = 'log.txt',  # output log file
-        parameters_file: str = 'parameters.yaml',  # output file containing kwargs
+        trainer_inputs_file: str = 'trainer_inputs.yaml',  # save inputs to yaml
+        model_inputs_file: str = 'model_inputs.yaml',  # save inputs to yaml
         test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
         checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
         export_onnx: bool = False,  # export ONNX format
@@ -50,21 +51,26 @@ class ELM_Classification_Trainer(_Trainer):
         **model_kwargs,
     ) -> None:
 
-        # validate signature
+        # ensure subclass implements all parent class inputs
         self._validate_subclass_signature()
-        # construct kwargs for parent class
+
+        # __init__ parent class
         parent_class_parameters = inspect.signature(_Trainer).parameters
         locals_copy = locals().copy()
         kwargs_for_parent_class = {
             p_name: locals_copy[p_name] for p_name in parent_class_parameters
         }
+        kwargs_for_parent_class.pop('model_kwargs') # remove kwargs dict and replace with items
         kwargs_for_parent_class.update(model_kwargs)
-        # init parent class
         super().__init__(**kwargs_for_parent_class)
 
-        self._save_input_parameters(locals_copy=locals().copy())
-
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        # save and print inputs
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals_copy, logger=self.logger)
+        utilities._save_inputs_to_yaml(
+            cls=self.__class__, 
+            locals_copy=locals_copy,
+            filename=self.output_dir/self.trainer_inputs_file,
+        )
 
         self.regression = False
         self._set_regression_or_classification_defaults()
@@ -75,7 +81,7 @@ class ELM_Classification_Trainer(_Trainer):
         self.threshold = threshold
         self.oversample_active_elm = oversample_active_elm
 
-        self._finish_initialization()
+        self._finish_subclass_initialization()
 
     def _get_valid_indices(
         self,

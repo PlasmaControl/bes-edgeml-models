@@ -1,7 +1,7 @@
 # python library imports
 from pathlib import Path
 import logging
-from typing import Union
+from typing import Union, Iterable, Tuple
 import time
 import sys
 import io
@@ -35,7 +35,8 @@ class _Trainer(object):
         output_dir: Union[Path,str] = 'run_dir',  # path to output dir.
         results_file: str = 'results.yaml',  # output training results
         log_file: str = 'log.txt',  # output log file
-        parameters_file: str = 'parameters.yaml',  # output file containing kwargs
+        trainer_inputs_file: str = 'trainer_inputs.yaml',  # save inputs to yaml
+        model_inputs_file: str = 'model_inputs.yaml',  # save inputs to yaml
         test_data_file: str = 'test_data.pkl',  # if None, do not save test data (can be large)
         checkpoint_file: str = 'checkpoint.pytorch',  # pytorch save file; if None, do not save
         export_onnx: bool = False,  # export ONNX format
@@ -66,7 +67,8 @@ class _Trainer(object):
         self.output_dir = output_dir
         self.results_file = results_file
         self.log_file = log_file
-        self.parameters_file = parameters_file
+        self.trainer_inputs_file = trainer_inputs_file
+        self.model_inputs_file = model_inputs_file
         self.test_data_file = test_data_file
         self.checkpoint_file = checkpoint_file
         self.export_onnx = export_onnx
@@ -90,20 +92,21 @@ class _Trainer(object):
         self.logger = None
         self._create_logger()
 
-    def _validate_subclass_signature(self):
+    def _validate_subclass_signature(self) -> None:
+        """
+        Ensure subclass call signature contains all parameters in
+        parent class call signature.
+        """
         if self.__class__ is _Trainer: return
         subclass_parameters = inspect.signature(self.__class__).parameters
         parent_class_parameters = inspect.signature(_Trainer).parameters
-        # ensure subclass contains all parent class parameters and defaults
-        for p_name, parameter in parent_class_parameters.items():
+        for p_name in parent_class_parameters:
             assert p_name in subclass_parameters, \
-                f"Subclass {self.__class__.__name__} missing parameter {p_name}"
-            assert parameter.default == subclass_parameters[p_name].default, \
-                f"Parameter {p_name} in subclass {self.__class__.__name__} has wrong default"
+                f"Subclass {self.__class__.__name__} missing parameter {p_name} from parent class"
 
-    def _create_logger(self):
+    def _create_logger(self) -> None:
         """
-        Use python's logging to allow simultaneous print to log file and console.
+        Use python's logging to allow simultaneous print to console and log file.
         """
         self.logger = logging.getLogger(name=__name__)
         self.logger.setLevel(logging.INFO)
@@ -121,7 +124,10 @@ class _Trainer(object):
         s_handler = logging.StreamHandler()
         self.logger.addHandler(s_handler)
 
-    def _set_regression_or_classification_defaults(self):
+    def _set_regression_or_classification_defaults(self) -> None:
+        """
+        Set defaults for regression or classification tasks.
+        """
         if self.regression:
             # regression model (e.g. time to ELM onset)
             self.loss_function = torch.nn.MSELoss(reduction="none")
@@ -141,25 +147,10 @@ class _Trainer(object):
             self.inverse_weight_label = None  # not applicable for classification
             self.log_time = None  # not applicable for classification
 
-    def _save_input_parameters(
-        self,
-        locals_copy: dict = None,
-    ):
-        parameters = inspect.signature(self.__class__).parameters
-        inputs = {}
-        for p_name in parameters:
-            value = locals_copy[p_name]
-            if isinstance(value, Path):
-                value = value.as_posix()
-            inputs[p_name] = value
-        with (self.output_dir/self.parameters_file).open('w') as parameters_file:
-            yaml.dump(
-                inputs,
-                parameters_file,
-                default_flow_style=False,
-            )
-
-    def _finish_initialization(self):
+    def _finish_subclass_initialization(self) -> None:
+        """
+        Finalize subclass initialization.
+        """
 
         if self.log_time is False and self.inverse_weight_label is True:
             self.inverse_weight_label = False
@@ -184,6 +175,7 @@ class _Trainer(object):
         self._make_data_loaders()
 
         self.model = None
+        self.input_size = None
         self._make_model()
 
         self.optimizer = None
@@ -192,7 +184,7 @@ class _Trainer(object):
 
         self.results = None
 
-    def _get_data(self):
+    def _get_data(self) -> None:
 
         self.input_data_file = self.input_data_file.resolve()
         assert self.input_data_file.exists(), f"{self.input_data_file} does not exist"
@@ -245,7 +237,10 @@ class _Trainer(object):
             self.logger.info("Skipping test data")
             self.test_data = None
 
-    def _save_test_data(self):
+    def _save_test_data(self) -> None:
+        """
+        Save test data to pickle file.
+        """
         test_data_file = self.output_dir / self.test_data_file
         self.logger.info(f"Test data file: {test_data_file}")
         with test_data_file.open('wb') as f:
@@ -263,7 +258,7 @@ class _Trainer(object):
 
     def _preprocess_data(
         self,
-        elm_indices,
+        elm_indices: Iterable = None,
         shuffle_indices: bool = False,
         oversample_active_elm: bool = False,
     ) -> None:
@@ -333,11 +328,11 @@ class _Trainer(object):
             elm_indices,
         )
 
-    def _check_for_balanced_data(self):
+    def _check_for_balanced_data(self) -> None:
         # must implement in subclass
         raise NotImplementedError
 
-    def _make_datasets(self):
+    def _make_datasets(self) -> None:
         self.train_dataset = ELM_Dataset(
             *self.train_data[0:4], 
             self.signal_window_size,
@@ -349,19 +344,17 @@ class _Trainer(object):
             self.prediction_horizon,
         )
 
-    def _get_valid_indices(self):
+    def _get_valid_indices(self) -> None:
         # must implement in subclass
         raise NotImplementedError
 
-    def _setup_device(self):
-
-        # setup device
+    def _setup_device(self) -> None:
         if self.device == 'auto':
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(self.device)
         self.logger.info(f"Device: {self.device}")
 
-    def _make_data_loaders(self):
+    def _make_data_loaders(self) -> None:
         self.train_data_loader = torch.utils.data.DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
@@ -370,7 +363,6 @@ class _Trainer(object):
             pin_memory=True,
             drop_last=True,
         )
-
         self.validation_data_loader = torch.utils.data.DataLoader(
             self.validation_dataset,
             batch_size=self.batch_size,
@@ -380,9 +372,11 @@ class _Trainer(object):
             drop_last=True,
     )
 
-    def _make_model(self):
+    def _make_model(self) -> None:
         self.model = Multi_Features_Model(
             logger=self.logger, 
+            model_inputs_file=self.output_dir/self.model_inputs_file,
+            signal_window_size=self.signal_window_size,
             **self.model_kwargs,
         )
         self.model = self.model.to(self.device)
@@ -391,26 +385,26 @@ class _Trainer(object):
 
         n_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        input_size = (
+        self.input_size = (
             self.batch_size,
             1,
             self.signal_window_size,
             8,
             8,
         )
-        x = torch.rand(*input_size)
+        x = torch.rand(*self.input_size)
         x = x.to(self.device)
         tmp_io = io.StringIO()
         sys.stdout = tmp_io
         print()
-        torchinfo.summary(self.model, input_size=input_size, device=self.device)
+        torchinfo.summary(self.model, input_size=self.input_size, device=self.device)
         sys.stdout = sys.__stdout__
         self.logger.info(tmp_io.getvalue())
         self.logger.info(f"Model contains {n_params} trainable parameters")
         self.logger.info(f'Batched input size: {x.shape}')
         self.logger.info(f"Batched output size: {self.model(x).shape}")
 
-    def _make_optimizer_scheduler_loss(self):
+    def _make_optimizer_scheduler_loss(self) -> None:
         if self.optimizer_type.lower() == 'adam':
             self.optimizer = torch.optim.Adam(
                 self.model.parameters(), 
@@ -434,13 +428,14 @@ class _Trainer(object):
             verbose=True,
         )
 
-    def train(self):
+    def train(self) -> None:
         best_score = -np.inf
         self.results = {
             'train_loss': np.empty(0),
             'valid_loss': np.empty(0),
             'scores': np.empty(0),
         }
+        checkpoint_file = self.output_dir / self.checkpoint_file
 
         if not self.regression:
             self.results['roc_scores'] = np.empty(0)
@@ -512,8 +507,22 @@ class _Trainer(object):
             if score > best_score:
                 best_score = score
                 self.logger.info(f"Ep {i_epoch+1:03d}: Best score {best_score:.3f}, saving model...")
-                # save pytorch checkpoint ...
-                # save onnx format ...
+                self.logger.info(f"Saving model to: {checkpoint_file.as_posix()}")
+                torch.save(self.model.state_dict(), checkpoint_file.as_posix())
+                self.logger.info(f"  File size: {checkpoint_file.stat().st_size/1e3:.1f} kB")                
+                if self.export_onnx:
+                    onnx_file = self.output_dir / 'checkpoint.onnx'
+                    self.logger.info(f"Saving to ONNX: {onnx_file.as_posix()}")
+                    torch.onnx.export(
+                        self.model, 
+                        torch.rand(*self.input_size)[0].unsqueeze(0),
+                        onnx_file.as_posix(),
+                        input_names=['signal_window'],
+                        output_names=['micro_prediction'],
+                        verbose=True,
+                        opset_version=11
+                    )
+                    self.logger.info(f"  File size: {onnx_file.stat().st_size/1e3:.1f} kB")                
 
             tmp =  f"Ep {i_epoch+1:03d}: "
             tmp += f"train loss {train_loss:.3f}  "
@@ -528,7 +537,7 @@ class _Trainer(object):
         self.logger.info(f"End training loop")
         self.logger.info(f"Elapsed time {time.time()-t_start_training:.1f} s")
 
-    def _train_epoch(self):
+    def _train_epoch(self) -> float:
         # train mode
         self.model.train()
         # accumulate batch-wise losses
@@ -565,9 +574,8 @@ class _Trainer(object):
                 self.logger.info(tmp)
         return losses.mean()  # return avg. batch loss
 
-    def evaluate(self):
+    def evaluate(self) -> Tuple:
         # evaluate mode
-        t_start = time.time()
         losses = np.array(0)
         all_predictions = []
         all_labels = []

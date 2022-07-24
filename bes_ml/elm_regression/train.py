@@ -62,7 +62,7 @@ class ELM_Regression_Trainer(_Trainer):
         super().__init__(**kwargs_for_parent_class)
 
         # print kwargs
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.regression = True
         self._set_regression_or_classification_defaults()
@@ -72,7 +72,7 @@ class ELM_Regression_Trainer(_Trainer):
         self.log_time = log_time
         self.inverse_weight_label = inverse_weight_label
 
-        self._finish_initialization()
+        self._finish_subclass_initialization()
 
     def _get_valid_indices(
         self,

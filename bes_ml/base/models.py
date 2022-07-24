@@ -1,9 +1,11 @@
-import numpy as np
-from pytest import param
-import torch
-import torch.nn as nn
 import logging
 import inspect
+from typing import Union
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
 
 import pywt
 from pytorch_wavelets.dwt.transform1d import DWT1DForward
@@ -36,7 +38,7 @@ class _Base_Features(nn.Module):
             self.logger.setLevel(logging.INFO)
             self.logger.addHandler(logging.StreamHandler())
 
-        utilities._print_class_parameters(cls=_Base_Features, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=_Base_Features, locals_copy=locals().copy(), logger=self.logger)
 
         # spatial maxpool
         self.spatial_maxpool_size = spatial_maxpool_size
@@ -113,7 +115,7 @@ class Dense_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # filters per subwindow
         self.num_kernels = dense_num_kernels
@@ -161,21 +163,21 @@ class CNN_Features(_Base_Features):
 
     def __init__(
         self, 
-        layer1_num_kernels: int = 8,
-        layer1_kernel_time_size: int = 8,
-        layer1_kernel_spatial_size: int = 3,
-        layer1_maxpool_time_size: int = 1,
-        layer1_maxpool_spatial_size: int = 2,
-        layer2_num_kernels: int = 8,
-        layer2_kernel_time_size: int = 8,
-        layer2_kernel_spatial_size: int = 3,
-        layer2_maxpool_time_size: int = 1,
-        layer2_maxpool_spatial_size: int = 2,
+        cnn_layer1_num_kernels: int = 8,
+        cnn_layer1_kernel_time_size: int = 8,
+        cnn_layer1_kernel_spatial_size: int = 3,
+        cnn_layer1_maxpool_time_size: int = 1,
+        cnn_layer1_maxpool_spatial_size: int = 1,
+        cnn_layer2_num_kernels: int = 8,
+        cnn_layer2_kernel_time_size: int = 8,
+        cnn_layer2_kernel_spatial_size: int = 3,
+        cnn_layer2_maxpool_time_size: int = 1,
+        cnn_layer2_maxpool_spatial_size: int = 2,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         # CNN only valid with subwindow_size == time_points == signal_window_size
         assert self.subwindow_size == self.signal_window_size
@@ -187,18 +189,18 @@ class CNN_Features(_Base_Features):
         input_shape = (1, self.signal_window_size, 8, 8)
 
         def test_bad_shape(shape):
-            assert np.any(np.array(shape)<1), f"Bad shape: {shape}"
+            assert np.all(np.array(shape)>=1), f"Bad shape: {shape}"
 
-        self.layer1_num_kernels = layer1_num_kernels
-        self.layer1_kernel_time_size = layer1_kernel_time_size
-        self.layer1_kernel_spatial_size = layer1_kernel_spatial_size
-        self.layer1_maxpool_time_size = layer1_maxpool_time_size
-        self.layer1_maxpool_spatial_size = layer1_maxpool_spatial_size
-        self.layer2_num_kernels = layer2_num_kernels
-        self.layer2_kernel_time_size = layer2_kernel_time_size
-        self.layer2_kernel_spatial_size = layer2_kernel_spatial_size
-        self.layer2_maxpool_time_size = layer2_maxpool_time_size
-        self.layer2_maxpool_spatial_size = layer2_maxpool_spatial_size
+        self.layer1_num_kernels = cnn_layer1_num_kernels
+        self.layer1_kernel_time_size = cnn_layer1_kernel_time_size
+        self.layer1_kernel_spatial_size = cnn_layer1_kernel_spatial_size
+        self.layer1_maxpool_time_size = cnn_layer1_maxpool_time_size
+        self.layer1_maxpool_spatial_size = cnn_layer1_maxpool_spatial_size
+        self.layer2_num_kernels = cnn_layer2_num_kernels
+        self.layer2_kernel_time_size = cnn_layer2_kernel_time_size
+        self.layer2_kernel_spatial_size = cnn_layer2_kernel_spatial_size
+        self.layer2_maxpool_time_size = cnn_layer2_maxpool_time_size
+        self.layer2_maxpool_spatial_size = cnn_layer2_maxpool_spatial_size
 
         self.layer1_conv = nn.Conv3d(
             in_channels=1,
@@ -273,6 +275,7 @@ class CNN_Features(_Base_Features):
         test_bad_shape(output_shape)
 
         self.num_kernels = np.prod(output_shape, dtype=int)
+        self.logger.info(f"CNN output shape: {output_shape}")
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -287,8 +290,8 @@ class CNN_Features(_Base_Features):
 class FFT_Features(_Base_Features):
     def __init__(
         self, 
-        fft_nbins: int = 4,
         fft_num_kernels: int = 8,
+        fft_nbins: int = 4,
         **kwargs,
     ):
         """
@@ -316,7 +319,7 @@ class FFT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.fft_nbins = fft_nbins
         assert np.log2(self.fft_nbins) % 1 == 0  # ensure power of 2
@@ -383,8 +386,8 @@ class FFT_Features(_Base_Features):
 class DCT_Features(_Base_Features):
     def __init__(
         self, 
-        dct_nbins: int = 2,
         dct_num_kernels: int = 8,
+        dct_nbins: int = 2,
         **kwargs,
     ):
         """
@@ -412,7 +415,7 @@ class DCT_Features(_Base_Features):
         """
         super().__init__(**kwargs)
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dct_nbins = dct_nbins
         assert np.log2(self.dct_nbins) % 1 == 0  # ensure power of 2
@@ -476,41 +479,14 @@ class DCT_Features(_Base_Features):
 class DWT_Features(_Base_Features):
     def __init__(
         self, 
+        dwt_num_kernels: int = 8,
         dwt_wavelet: str = 'db4',
         dwt_level: int = -1,
-        dwt_num_kernels: int = 8,
         **kwargs,
     ):
-        """
-        Use features from the output of 1D discrete wavelet transform. Based on:
-        https://github.com/fbcotter/pytorch_wavelets
-        The model architecture is similar to the `RawFeatureModel`. This model takes in a 6-dimensional
-        tensor of size: `(N, 1, signal_window_size, n_scales, 8, 8)`, where `N`=batch_size, and
-        `n_scales`=number of different scales used (which are equal to `signal_window_size`).
-        For each signal block, only the scales and BES channels for the leading time
-        steps are used as model input which is a 5-dimensional tensor of size (`N, 1, n_scales, 8, 8)`.
-        The model then performs a 3-d convolution with a filter size identical to
-        the spatial dimensions of the input so that the receptive field is the same
-        size as input in both spatial and temporal axes. In the end, we will have
-        a feature map that can be concatenated with other features.
-
-        Args:
-        -----
-            args (argparse.Namespace): Command line arguments containing the information
-                about signal_window.
-            dropout_rate (float, optional): Fraction of total hidden units that will
-                be turned off for drop out. Defaults to 0.2.
-            negative_slope (float, optional): Slope of LeakyReLU activation for negative
-                `x`. Defaults to 0.02.
-            maxpool_size (int, optional): Size of the kernel used for maxpooling. Use
-                0 to skip maxpooling. Defaults to 2.
-            num_kernels (int, optional): Dimensionality of the output space.
-                Essentially, it gives the number of output kernels after convolution.
-                Defaults to 10.
-        """
         super().__init__(**kwargs)
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals().copy(), logger=self.logger)
 
         self.dwt_wavelet = dwt_wavelet
         self.dwt_level = dwt_level
@@ -600,31 +576,38 @@ class DWT_Features(_Base_Features):
 class Multi_Features_Model(nn.Module):
     def __init__(
         self,
-        dense_num_kernels: int = 8,
-        fft_num_kernels: int = 0,
-        dct_num_kernels: int = 0,
-        dwt_num_kernels: int = 0,
-        cnn_layer1_num_kernels: int = 0,
-        cnn_layer2_num_kernels: int = 0,
-        mlp_layer1_size: int = 32,
+        # inputs for `Multi_Features_Model` class`
+        mlp_layer1_size: int = 32,  # multi-layer perceptron (mlp)
         mlp_layer2_size: int = 16,
         mlp_output_size: int = 1,
-        negative_slope: float = 1e-3,
+        negative_slope: float = 1e-3,  # relu negatuve slope
         dropout_rate: float = 0.1,
         logger: logging.Logger = None,
-        **kwargs,  # kwargs for `Features` classes
+        model_inputs_file: Union[str, Path] = 'model_inputs.yaml',
+        # inputs for `*Features` classes
+        signal_window_size: int = 64,  # power of 2; ~16-512
+        spatial_maxpool_size: int = 1,  # 1 (default, no spatial maxpool), 2, or 4
+        time_interval: int = 1,  # time domain slice interval (i.e. time[::interval])
+        subwindow_size: int = -1,  # power of 2, or -1 (default) for full signal window
+        dense_num_kernels: int = 8,
+        cnn_layer1_num_kernels: int = 8,
+        cnn_layer1_kernel_time_size: int = 7,
+        cnn_layer1_kernel_spatial_size: int = 3,
+        cnn_layer1_maxpool_time_size: int = 2,
+        cnn_layer1_maxpool_spatial_size: int = 2,
+        cnn_layer2_num_kernels: int = 8,
+        cnn_layer2_kernel_time_size: int = 7,
+        cnn_layer2_kernel_spatial_size: int = 3,
+        cnn_layer2_maxpool_time_size: int = 2,
+        cnn_layer2_maxpool_spatial_size: int = 1,
+        fft_num_kernels: int = 0,
+        fft_nbins: int = 4,
+        dct_num_kernels: int = 0,
+        dct_nbins: int = 2,
+        dwt_num_kernels: int = 0,
+        dwt_wavelet: str = 'db4',
+        dwt_level: int = -1,
     ):
-        """Encapsulate all the feature models to create a composite model that
-        uses all the feature maps. It takes in the class instances of
-        `RawFeatureModel`, `FFTFeatureModel` and `CWTFeatureModel` along with the
-        dropout rate and negative slope of the LeakyReLU activation. Once all
-        the feature maps are computed, it concatenates them together and pass them
-        through a couple of fully connected layers wich act as the classifier.
-
-        Args:
-        -----
-            args (argparse.Namespace): Command line arguments.
-        """
         super().__init__()
 
         if logger is None:
@@ -632,61 +615,40 @@ class Multi_Features_Model(nn.Module):
             logger.setLevel(logging.INFO)
             logger.addHandler(logging.StreamHandler())
 
-        utilities._print_class_parameters(cls=self.__class__, locals_copy=locals().copy(), logger=logger)
+        feature_kwargs = {
+            'negative_slope': negative_slope,
+            'dropout_rate': dropout_rate,
+            'logger': logger,
+        }
+        class_parameters = inspect.signature(self.__class__).parameters
+        locals_copy = locals().copy()
+        for feature_class in [
+            _Base_Features, 
+            Dense_Features, 
+            CNN_Features, 
+            FFT_Features, 
+            DCT_Features, 
+            DWT_Features,
+        ]:
+            feature_class_parameters = inspect.signature(feature_class).parameters
+            for p_name in feature_class_parameters:
+                if p_name == 'kwargs': continue
+                assert p_name in class_parameters, f"{self.__class__.__name__} is missing parameter {p_name}"
+                feature_kwargs[p_name] = locals_copy[p_name]
 
-        self.dense_features = (
-            Dense_Features(
-                dense_num_kernels=dense_num_kernels, 
-                negative_slope=negative_slope,
-                dropout_rate=dropout_rate,
-                logger=logger, 
-                **kwargs,
-            )
-            if dense_num_kernels > 0
-            else None
+        # save and print inputs
+        utilities._print_inputs(cls=self.__class__, locals_copy=locals_copy, logger=logger)
+        utilities._save_inputs_to_yaml(
+            cls=self.__class__, 
+            locals_copy=locals_copy,
+            filename=Path(model_inputs_file),
         )
-        self.fft_features = (
-            FFT_Features(
-                fft_num_kernels=fft_num_kernels, 
-                negative_slope=negative_slope,
-                dropout_rate=dropout_rate,
-                logger=logger, 
-                **kwargs,
-            )
-            if fft_num_kernels > 0
-            else None
-        )
-        self.dct_features = (
-            DCT_Features(
-                dct_num_kernels=dct_num_kernels, 
-                negative_slope=negative_slope,
-                dropout_rate=dropout_rate,
-                logger=logger, 
-                **kwargs,
-            )
-            if dct_num_kernels > 0
-            else None
-        )
-        self.dwt_features = (
-            DWT_Features(
-                dwt_num_kernels=dwt_num_kernels, 
-                negative_slope=negative_slope,
-                dropout_rate=dropout_rate,
-                logger=logger, 
-                **kwargs,
-            )
-            if dwt_num_kernels > 0
-            else None
-        )
-        self.cnn_features = (
-            CNN_Features(
-                layer1_num_kernels=cnn_layer1_num_kernels,
-                layer2_num_kernels=cnn_layer2_num_kernels,
-                negative_slope=negative_slope,
-                dropout_rate=dropout_rate,
-                logger=logger, 
-                **kwargs,
-            )
+
+        self.dense_features = Dense_Features(**feature_kwargs) if dense_num_kernels > 0 else None
+        self.fft_features = FFT_Features(**feature_kwargs) if fft_num_kernels > 0 else None
+        self.dct_features = DCT_Features(**feature_kwargs) if dct_num_kernels > 0 else None
+        self.dwt_features = DWT_Features(**feature_kwargs) if dwt_num_kernels > 0 else None
+        self.cnn_features = (CNN_Features(**feature_kwargs) 
             if cnn_layer1_num_kernels > 0 and cnn_layer2_num_kernels > 0
             else None
         )
@@ -731,8 +693,6 @@ class Multi_Features_Model(nn.Module):
         x = self.relu(self.dropout(self.mlp_layer1(x)))
         x = self.relu(self.dropout(self.mlp_layer2(x)))
         x = self.mlp_layer3(x)
-
-        assert not torch.any(torch.isnan(x)), f"NaN in result"
 
         return x
 
