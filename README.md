@@ -13,4 +13,6 @@ model = ELM_Classification_Trainer()
 model.train()
 ```
 
-`bes_data/` contains small sample datasets (~10 MB HDF5 files) to assist with code development and tools to package BES data on the GA cluster.  `test/` contains pytest tests, and additional usage examples can be inferred from the test scripts.
+Other exmaples are in `if __name__ ...` blocks in `train.py` modules.
+
+`bes_data/` contains small sample datasets (~10 MB HDF5 files) to assist with code development and tools to package BES data on the GA cluster.  `test/` contains pytest tests, and additional examples can be inferred from the test scripts.
