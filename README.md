@@ -1,4 +1,7 @@
 # BES EdgeML project
+
+**[This repo is archived.  The active version is at [https://github.com/PlasmaControl/bes-ml](https://github.com/PlasmaControl/bes-ml).]**
+
 BES EdgeML project is an effort to develop machine learning (ML) models for the real-time identification of edge-localized-mode (ELM) events and the turbulence properties of confinement regimes using the 2D Beam Emission Spectroscopy (BES) system at DIII-D. The “edge ML” models will be deployed on a high-throughput FPGA accelerator for integration in the real-time plasma control system (PCS).
 
 The whole project can be structured as follows:
